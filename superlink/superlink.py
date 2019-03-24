@@ -14,7 +14,6 @@ class SuperLink():
         self._ik = links.index.values
         self._Ik = links['j_0'].values.astype(int)
         self._Ip1k = links['j_1'].values.astype(int)
-        # TODO: Change this to match nodes specified in superlinks
         self.start_nodes = superlinks['j_0'].values.astype(int)
         self.end_nodes = superlinks['j_1'].values.astype(int)
         self._is_start = np.zeros(self._I.size, dtype=bool)
@@ -87,8 +86,6 @@ class SuperLink():
         self._chi_ukl = np.zeros(self.M)
         self._chi_dkm = np.zeros(self.M)
         self._k = superlinks.index.values
-        # self._Juk = self.superlinks['sj_1'].values
-        # self._Jdk = self.superlinks['sj_0'].values
         self._A_sj = self.superjunctions['A_sj'].values.astype(float)
         self._Q_0j = 0
         # Set upstream and downstream superlink variables
@@ -98,12 +95,9 @@ class SuperLink():
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Initialize to stable state
         self.step(_dt=1e-6, first_time=True)
-        # self.step(_dt=1e-6)
 
     # Node velocities
     def A_ik(self, h_Ik, h_Ip1k, w):
-        # TODO: Not sure if this is the correct approach
-        # Assume rectangular for now and use linear interpolation
         y = (h_Ik + h_Ip1k) / 2
         y[y < 0] = 0
         r = w / 2
@@ -126,8 +120,6 @@ class SuperLink():
         return R
 
     def B_ik(self, h_Ik, h_Ip1k, w):
-        # TODO: Not sure if this is correct
-        # return np.where((h_Ik == 0) | (h_Ip1k == 0), 0, w)
         y = (h_Ik + h_Ip1k) / 2
         y[y < 0] = 0
         r = w / 2
@@ -193,7 +185,6 @@ class SuperLink():
         t_2 = B_im1k * dx_im1k / 2
         t_3 = A_SIk
         t_4 = h_Ik_t / dt
-        # TODO: True divide error
         cond = t_4 != 0
         result = np.zeros(cond.size)
         result += t_0
@@ -291,7 +282,6 @@ class SuperLink():
         return t_0 + t_1 / t_2
 
     # Coefficients for head at upstream and downstream ends of superlink k
-
     def dH_uk(self, H_juk, zinv_uk, h_uk):
         return H_juk - zinv_uk - h_uk
 
@@ -487,12 +477,10 @@ class SuperLink():
         # Compute E_Ik and D_Ik
         backward = self.backward_I_i[middle_nodes].values
         forward = self.forward_I_i[middle_nodes].values
-        # TODO: Not really sure what to do with the start nodes
         _E_Ik[start_nodes] = 0
         _E_Ik[end_nodes] = 0
         _E_Ik[middle_nodes] = self.E_Ik(_B_ik[forward], _dx_ik[forward],
                                         _B_ik[backward], _dx_ik[backward], _A_SIk[middle_nodes], _dt)
-        # TODO: Not really sure what to do with the start nodes
         _D_Ik[start_nodes] = 0
         _D_Ik[end_nodes] = 0
         _D_Ik[middle_nodes] = self.D_Ik(_Q_0Ik[middle_nodes], _B_ik[forward], _dx_ik[forward],
@@ -653,7 +641,6 @@ class SuperLink():
         _H_jdk = H_j[_J_dk]
         _dH_dk = self.dH_dk(_H_jdk, _z_inv_dk, _h_Ik[_I_dk])
         # Compute superlink downstream coefficients
-        # TODO: Something is wrong with kappa_dk
         _kappa_dk = self.kappa_dk(_A_ik[_i_dk], _dH_dk, _B_ik[_i_dk], _Q_ik[_i_dk])
         _lambda_dk = self.lambda_dk(_A_ik[_i_dk], _dH_dk, _B_ik[_i_dk])
         _mu_dk = self.mu_dk(_A_ik[_i_dk], _dH_dk, _B_ik[_i_dk], _H_jdk, _h_Ik[_I_dk])
@@ -743,7 +730,6 @@ class SuperLink():
         self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = _beta_uk[~bc_uk]
         self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = -_alpha_dk[~bc_dk]
         # Compute G_j
-        # TODO: Check this
         _chi_ukl_J = pd.Series(_chi_uk, index=_J_uk).groupby(level=0).sum()
         _chi_dkm_J = pd.Series(_chi_dk, index=_J_dk).groupby(level=0).sum()
         _chi_ukl[_chi_ukl_J.index.values] = _chi_ukl_J.values
@@ -842,7 +828,6 @@ class SuperLink():
         _I_Nk_next = _I_Nk_next[keep]
         _I_Np1k_next = _I_Np1k_next[keep]
         _im1_next = forward_I_i[_Im1_next].values
-        # TODO: Not checked
         # Loop from 1 -> Nk
         while _I_next.size:
             _i_next = forward_I_i[_I_next].values
@@ -899,7 +884,6 @@ class SuperLink():
         _I_1k_next = _I_1k[keep]
         _I_2k_next = _I_2k[keep]
         _I_Np1k_next = _I_Np1k[keep]
-        # TODO: Not checked
         # Loop from Nk -> 1
         while _I_next.size:
             _i_next = forward_I_i[_I_next].values
