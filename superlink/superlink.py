@@ -97,7 +97,7 @@ class SuperLink():
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Initialize to stable state
-        # self.step(_dt=1e-6, first_time=True)
+        self.step(_dt=1e-6, first_time=True)
         # self.step(_dt=1e-6)
 
     # Node velocities
@@ -394,7 +394,8 @@ class SuperLink():
         t_1 = Q_0j
         t_2 = chi_ukl
         t_3 = chi_dkm
-        return t_0 + t_1 + t_2 - t_3
+        # chi signs are switched in original paper
+        return t_0 + t_1 - t_2 + t_3
 
     def node_velocities(self):
         # Import instance variables for better readability
@@ -488,6 +489,7 @@ class SuperLink():
         forward = self.forward_I_i[middle_nodes].values
         # TODO: Not really sure what to do with the start nodes
         _E_Ik[start_nodes] = 0
+        # TODO: I think end nodes should be included too
         _E_Ik[end_nodes] = 0
         _E_Ik[middle_nodes] = self.E_Ik(_B_ik[forward], _dx_ik[forward],
                                         _B_ik[backward], _dx_ik[backward], _A_SIk[middle_nodes], _dt)
@@ -739,12 +741,12 @@ class SuperLink():
         # Compute off-diagonals
         bc_uk = bc[_J_uk]
         bc_dk = bc[_J_dk]
-        self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = _beta_uk[_k][~bc_uk]
-        self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = - _alpha_dk[_k][~bc_dk]
+        self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = _beta_uk[~bc_uk]
+        self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = -_alpha_dk[~bc_dk]
         # Compute G_j
         # TODO: Check this
-        _chi_ukl_J = pd.Series(_chi_uk, index=_J_dk).groupby(level=0).sum()
-        _chi_dkm_J = pd.Series(_chi_dk, index=_J_uk).groupby(level=0).sum()
+        _chi_ukl_J = pd.Series(_chi_uk, index=_J_uk).groupby(level=0).sum()
+        _chi_dkm_J = pd.Series(_chi_dk, index=_J_dk).groupby(level=0).sum()
         _chi_ukl[_chi_ukl_J.index.values] = _chi_ukl_J.values
         _chi_dkm[_chi_dkm_J.index.values] = _chi_dkm_J.values
         b = self.G_j(_A_sj, _dt, H_j, _Q_0j, _chi_ukl, _chi_dkm)
@@ -846,7 +848,6 @@ class SuperLink():
         while _I_next.size:
             _i_next = forward_I_i[_I_next].values
             _Ip1_next = forward_I_I[_I_next].values
-            # TODO: This is producing large depths (999.999...)
             _h_Ik[_I_next] = (_Q_ik[_im1_next] - _V_Ik[_Im1_next]
                               - _W_Ik[_Im1_next] * _h_Ik[_I_1k_next]) / _U_Ik[_Im1_next]
             _Q_ik[_i_next] = (_X_Ik[_I_next] * _h_Ik[_I_next] + _Y_Ik[_I_next]
@@ -897,6 +898,7 @@ class SuperLink():
         _Im1_next = _I_1k[keep]
         _I_next = _I_Nk[keep]
         _I_1k_next = _I_1k[keep]
+        _I_2k_next = _I_2k[keep]
         _I_Np1k_next = _I_Np1k[keep]
         # TODO: Not checked
         # Loop from Nk -> 1
@@ -904,7 +906,6 @@ class SuperLink():
             _i_next = forward_I_i[_I_next].values
             _Im1_next = backward_I_I[_I_next].values
             _im1_next = forward_I_i[_Im1_next].values
-            # TODO: This is producing large depths (999.999...)
             _h_Ik[_I_next] = (_Q_ik[_i_next] - _Y_Ik[_I_next]
                               - _Z_Ik[_I_next] * _h_Ik[_I_Np1k_next]) / _X_Ik[_I_next]
             _Q_ik[_im1_next] = (_U_Ik[_Im1_next] * _h_Ik[_I_next] + _V_Ik[_Im1_next]
