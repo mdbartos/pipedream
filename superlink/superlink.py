@@ -489,7 +489,6 @@ class SuperLink():
         forward = self.forward_I_i[middle_nodes].values
         # TODO: Not really sure what to do with the start nodes
         _E_Ik[start_nodes] = 0
-        # TODO: I think end nodes should be included too
         _E_Ik[end_nodes] = 0
         _E_Ik[middle_nodes] = self.E_Ik(_B_ik[forward], _dx_ik[forward],
                                         _B_ik[backward], _dx_ik[backward], _A_SIk[middle_nodes], _dt)
