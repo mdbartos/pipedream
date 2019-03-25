@@ -68,14 +68,10 @@ class SuperLink():
         self.H_j = self.superjunctions['h_0'].values + self.superjunctions['z_inv'].values
         # Coefficients for head at upstream ends of superlink k
         self._J_uk = self.superlinks['sj_0'].values.astype(int)
-        self._I_uk = self.superlinks['j_0'].values.astype(int)
-        self._i_uk = self.forward_I_i[self._I_uk].values
-        self._z_inv_uk = self._z_inv_Ik[self._I_uk]
+        self._z_inv_uk = self._z_inv_Ik[self._I_1k]
         # Coefficients for head at downstream ends of superlink k
         self._J_dk = self.superlinks['sj_1'].values.astype(int)
-        self._I_dk = self.superlinks['j_1'].values.astype(int)
-        self._i_dk = self.backward_I_i[self._I_dk].values
-        self._z_inv_dk = self._z_inv_Ik[self._I_dk]
+        self._z_inv_dk = self._z_inv_Ik[self._I_Np1k]
         # Sparse matrix coefficients
         self.M = len(superjunctions)
         self.A = scipy.sparse.lil_matrix((self.M, self.M))
@@ -185,11 +181,7 @@ class SuperLink():
         t_2 = B_im1k * dx_im1k / 2
         t_3 = A_SIk
         t_4 = h_Ik_t / dt
-        cond = t_4 != 0
-        result = np.zeros(cond.size)
-        result += t_0
-        result[cond] += (t_1[cond] + t_2[cond] + t_3[cond]) / t_4[cond]
-        return result
+        return t_0 + ((t_1 + t_2 + t_3) * t_4)
 
     # Forward recurrence relation coefficients
     def U_1k(self, E_2k, c_1k, A_1k, T_1k, g=9.81):
@@ -605,8 +597,8 @@ class SuperLink():
 
     def superlink_upstream_head_coefficients(self):
         # Import instance variables
-        _I_uk = self._I_uk
-        _i_uk = self._i_uk
+        _I_1k = self._I_1k
+        _i_1k = self._i_1k
         _h_Ik = self._h_Ik
         _J_uk = self._J_uk
         _z_inv_uk = self._z_inv_uk
@@ -616,11 +608,11 @@ class SuperLink():
         H_j = self.H_j
         # Compute superjunction head
         _H_juk = H_j[_J_uk]
-        _dH_uk = self.dH_uk(_H_juk, _z_inv_uk, _h_Ik[_I_uk])
+        _dH_uk = self.dH_uk(_H_juk, _z_inv_uk, _h_Ik[_I_1k])
         # Compute superlink upstream coefficients
-        _kappa_uk = self.kappa_uk(_A_ik[_i_uk], _dH_uk, _B_ik[_i_uk], _Q_ik[_i_uk])
-        _lambda_uk = self.lambda_uk(_A_ik[_i_uk], _dH_uk, _B_ik[_i_uk])
-        _mu_uk = self.mu_uk(_A_ik[_i_uk], _dH_uk, _B_ik[_i_uk], _H_juk, _h_Ik[_I_uk])
+        _kappa_uk = self.kappa_uk(_A_ik[_i_1k], _dH_uk, _B_ik[_i_1k], _Q_ik[_i_1k])
+        _lambda_uk = self.lambda_uk(_A_ik[_i_1k], _dH_uk, _B_ik[_i_1k])
+        _mu_uk = self.mu_uk(_A_ik[_i_1k], _dH_uk, _B_ik[_i_1k], _H_juk, _h_Ik[_I_1k])
         # Export instance variables
         self._kappa_uk = _kappa_uk
         self._lambda_uk = _lambda_uk
@@ -628,8 +620,8 @@ class SuperLink():
 
     def superlink_downstream_head_coefficients(self):
         # Import instance variables
-        _I_dk = self._I_dk
-        _i_dk = self._i_dk
+        _I_Np1k = self._I_Np1k
+        _i_nk = self._i_nk
         _h_Ik = self._h_Ik
         _J_dk = self._J_dk
         _z_inv_dk = self._z_inv_dk
@@ -639,11 +631,11 @@ class SuperLink():
         H_j = self.H_j
         # Compute superjunction head
         _H_jdk = H_j[_J_dk]
-        _dH_dk = self.dH_dk(_H_jdk, _z_inv_dk, _h_Ik[_I_dk])
+        _dH_dk = self.dH_dk(_H_jdk, _z_inv_dk, _h_Ik[_I_Np1k])
         # Compute superlink downstream coefficients
-        _kappa_dk = self.kappa_dk(_A_ik[_i_dk], _dH_dk, _B_ik[_i_dk], _Q_ik[_i_dk])
-        _lambda_dk = self.lambda_dk(_A_ik[_i_dk], _dH_dk, _B_ik[_i_dk])
-        _mu_dk = self.mu_dk(_A_ik[_i_dk], _dH_dk, _B_ik[_i_dk], _H_jdk, _h_Ik[_I_dk])
+        _kappa_dk = self.kappa_dk(_A_ik[_i_nk], _dH_dk, _B_ik[_i_nk], _Q_ik[_i_nk])
+        _lambda_dk = self.lambda_dk(_A_ik[_i_nk], _dH_dk, _B_ik[_i_nk])
+        _mu_dk = self.mu_dk(_A_ik[_i_nk], _dH_dk, _B_ik[_i_nk], _H_jdk, _h_Ik[_I_Np1k])
         # Export instance variables
         self._kappa_dk = _kappa_dk
         self._lambda_dk = _lambda_dk
