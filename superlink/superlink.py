@@ -92,6 +92,13 @@ class SuperLink():
         # Initialize to stable state
         self.step(_dt=1e-6, first_time=True)
 
+    def safe_divide(function):
+        def inner(*args, **kwargs):
+            num, den = function(*args, **kwargs)
+            result = np.divide(num, den, where=(den != 0))
+            return result
+        return inner
+
     # Node velocities
     def A_ik(self, h_Ik, h_Ip1k, w):
         y = (h_Ik + h_Ip1k) / 2
@@ -126,21 +133,23 @@ class SuperLink():
         B[cond] = 2 * r[cond] * np.sin(theta[cond])
         return B
 
+    @safe_divide
     def u_ik(self, Q_ik, A_ik):
-        _u_ik = np.zeros(A_ik.size)
-        cond = A_ik > 0
-        _u_ik[cond] = Q_ik[cond] / A_ik[cond]
-        return _u_ik
+        num = Q_ik
+        den = np.where(A_ik > 0, A_ik, 0)
+        return num, den
 
+    @safe_divide
     def u_Ip1k(self, dx_ik, u_ip1k, dx_ip1k, u_ik):
         num = dx_ik * u_ip1k + dx_ip1k * u_ik
         den = dx_ik + dx_ip1k
-        return num / den
+        return num, den
 
+    @safe_divide
     def u_Ik(self, dx_ik, u_im1k, dx_im1k, u_ik):
         num = dx_ik * u_im1k + dx_im1k * u_ik
         den = dx_ik + dx_im1k
-        return num / den
+        return num, den
 
     # Link coefficients for superlink k
     def a_ik(self, u_Ik):
@@ -150,6 +159,7 @@ class SuperLink():
         return -np.maximum(-u_Ip1k, 0)
 
     def b_ik(self, dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik, A_c_ik, C_ik, a_ik, c_ik, ctrl, g=9.81):
+        # TODO: Clean up
         t_0 = dx_ik / dt
         t_1 = np.zeros(Q_ik_t.size)
         cond = A_ik > 0
@@ -184,29 +194,34 @@ class SuperLink():
         return t_0 + ((t_1 + t_2 + t_3) * t_4)
 
     # Forward recurrence relation coefficients
+    @safe_divide
     def U_1k(self, E_2k, c_1k, A_1k, T_1k, g=9.81):
         num = E_2k * c_1k - g * A_1k
         den = T_1k
-        return num / den
+        return num, den
 
+    @safe_divide
     def V_1k(self, P_1k, D_2k, c_1k, T_1k):
         num = P_1k - D_2k * c_1k
         den = T_1k
-        return num / den
+        return num, den
 
+    @safe_divide
     def W_1k(self, A_1k, T_1k, g=9.81):
         num = g * A_1k
         den = T_1k
-        return num / den
+        return num, den
 
     def T_1k(self, a_1k, b_1k, c_1k):
         return a_1k + b_1k + c_1k
 
+    @safe_divide
     def U_Ik(self, E_Ip1k, c_ik, A_ik, T_ik, g=9.81):
         num = E_Ip1k * c_ik - g * A_ik
         den = T_ik
-        return num / den
+        return num, den
 
+    @safe_divide
     def V_Ik(self, P_ik, a_ik, D_Ik, D_Ip1k, c_ik, A_ik, E_Ik, V_Im1k, U_Im1k, T_ik, g=9.81):
         t_0 = P_ik
         t_1 = a_ik * D_Ik
@@ -215,43 +230,57 @@ class SuperLink():
         t_4 = V_Im1k + D_Ik
         t_5 = U_Im1k - E_Ik
         t_6 = T_ik
-        return (t_0 + t_1 - t_2 - t_3 * t_4 / t_5) / t_6
+        # TODO: There is still a divide by zero here
+        num = (t_0 + t_1 - t_2 - t_3 * t_4 / t_5)
+        den = t_6
+        return  num, den
 
+    @safe_divide
     def W_Ik(self, A_ik, E_Ik, a_ik, W_Im1k, U_Im1k, T_ik, g=9.81):
         num = -(g * A_ik - E_Ik * a_ik) * W_Im1k
         den = (U_Im1k - E_Ik) * T_ik
-        return num / den
+        return num, den
 
     def T_ik(self, a_ik, b_ik, c_ik, A_ik, E_Ik, U_Im1k, g=9.81):
         t_0 = a_ik + b_ik + c_ik
         t_1 = g * A_ik - E_Ik * a_ik
         t_2 = U_Im1k - E_Ik
-        return t_0 - (t_1 / t_2)
+        # TODO: Can't use decorator here
+        cond = t_2 != 0
+        result = np.zeros(t_0.size)
+        # TODO: Not sure if ~cond should be zero
+        result[cond] = t_0[cond] - (t_1[cond] / t_2[cond])
+        return result
 
     # Reverse recurrence relation coefficients
+    @safe_divide
     def X_Nk(self, A_nk, E_Nk, a_nk, O_nk, g=9.81):
         num = g * A_nk - E_Nk * a_nk
         den = O_nk
-        return num / den
+        return num, den
 
+    @safe_divide
     def Y_Nk(self, P_nk, D_Nk, a_nk, O_nk):
         num = P_nk + D_Nk * a_nk
         den = O_nk
-        return num / den
+        return num, den
 
+    @safe_divide
     def Z_Nk(self, A_nk, O_nk, g=9.81):
         num = - g * A_nk
         den = O_nk
-        return num / den
+        return num, den
 
     def O_nk(self, a_nk, b_nk, c_nk):
         return a_nk + b_nk + c_nk
 
+    @safe_divide
     def X_Ik(self, A_ik, E_Ik, a_ik, O_ik, g=9.81):
         num = g * A_ik - E_Ik * a_ik
         den = O_ik
-        return num / den
+        return num, den
 
+    @safe_divide
     def Y_Ik(self, P_ik, a_ik, D_Ik, D_Ip1k, c_ik, A_ik, E_Ip1k, Y_Ip1k, X_Ip1k, O_ik, g=9.81):
         t_0 = P_ik
         t_1 = a_ik * D_Ik
@@ -260,73 +289,68 @@ class SuperLink():
         t_4 = D_Ip1k - Y_Ip1k
         t_5 = X_Ip1k + E_Ip1k
         t_6 = O_ik
-        return (t_0 + t_1 - t_2 - t_3 * t_4 / t_5) / t_6
+        num = (t_0 + t_1 - t_2 - t_3 * t_4 / t_5)
+        den = t_6
+        return num, den
 
+    @safe_divide
     def Z_Ik(self, A_ik, E_Ip1k, c_ik, Z_Ip1k, X_Ip1k, O_ik, g=9.81):
         num = (g * A_ik - E_Ip1k * c_ik) * Z_Ip1k
         den = (X_Ip1k + E_Ip1k) * O_ik
-        return num / den
+        return num, den
 
     def O_ik(self, a_ik, b_ik, c_ik, A_ik, E_Ip1k, X_Ip1k, g=9.81):
         t_0 = a_ik + b_ik + c_ik
         t_1 = g * A_ik - E_Ip1k * c_ik
         t_2 = X_Ip1k + E_Ip1k
-        return t_0 + t_1 / t_2
+        cond = t_2 != 0
+        result = np.zeros(t_0.size)
+        # TODO: Not sure if ~cond should be zero
+        result[cond] = t_0[cond] - (t_1[cond] / t_2[cond])
+        return result
 
     # Coefficients for head at upstream and downstream ends of superlink k
     def dH_uk(self, H_juk, zinv_uk, h_uk):
         return H_juk - zinv_uk - h_uk
 
+    @safe_divide
     def kappa_uk(self, A_uk, dH_uk, B_uk, Q_uk):
         num = 2 * A_uk * dH_uk
         den = Q_uk * (2 * dH_uk * B_uk - A_uk)
-        cond = (den != 0)
-        result = np.zeros(den.size)
-        result[cond] = num[cond] / den[cond]
-        return result
+        return num, den
 
+    @safe_divide
     def lambda_uk(self, A_uk, dH_uk, B_uk):
         num = -A_uk
         den = 2 * dH_uk * B_uk - A_uk
-        cond = (den != 0)
-        result = np.zeros(den.size)
-        result[cond] = num[cond] / den[cond]
-        return result
+        return num, den
 
+    @safe_divide
     def mu_uk(self, A_uk, dH_uk, B_uk, H_juk, h_uk):
         num = A_uk * (H_juk - h_uk)
         den = 2 * dH_uk * B_uk - A_uk
-        cond = (den != 0)
-        result = np.zeros(den.size)
-        result[cond] = num[cond] / den[cond]
-        return result
+        return num, den
 
     def dH_dk(self, H_jdk, zinv_dk, h_dk):
         return zinv_dk + h_dk - H_jdk
 
+    @safe_divide
     def kappa_dk(self, A_dk, dH_dk, B_dk, Q_dk):
         num = 2 * A_dk * dH_dk
         den = Q_dk * (2 * dH_dk * B_dk + A_dk)
-        cond = (den != 0)
-        result = np.zeros(den.size)
-        result[cond] = num[cond] / den[cond]
-        return result
+        return num, den
 
+    @safe_divide
     def lambda_dk(self, A_dk, dH_dk, B_dk):
         num = A_dk
         den = 2 * dH_dk * B_dk + A_dk
-        cond = (den != 0)
-        result = np.zeros(den.size)
-        result[cond] = num[cond] / den[cond]
-        return result
+        return num, den
 
+    @safe_divide
     def mu_dk(self, A_dk, dH_dk, B_dk, H_jdk, h_dk):
         num = A_dk * (h_dk - H_jdk)
         den = 2 * dH_dk * B_dk + A_dk
-        cond = (den != 0)
-        result = np.zeros(den.size)
-        result[cond] = num[cond] / den[cond]
-        return result
+        return num, den
 
     # Coefficients for flow at upstream and downstream ends of superlink k
     def D_k_star(self, X_1k, kappa_uk, Z_1k, kappa_dk, W_Nk, U_Nk):
@@ -334,30 +358,34 @@ class SuperLink():
         t_1 = (-Z_1k * kappa_dk) * (- W_Nk * kappa_uk)
         return t_0 - t_1
 
+    @safe_divide
     def alpha_uk(self, U_Nk, kappa_dk, X_1k, lambda_uk, Z_1k, W_Nk, D_k_star):
         num = (1 - U_Nk * kappa_dk) * X_1k * lambda_uk + Z_1k * kappa_dk * W_Nk * lambda_uk
         den = D_k_star
-        return num / den
+        return num, den
 
+    @safe_divide
     def beta_uk(self, U_Nk, kappa_dk, lambda_dk, Z_1k, W_Nk, D_k_star):
         num = (1 - U_Nk * kappa_dk) * Z_1k * lambda_dk + Z_1k * kappa_dk * U_Nk * lambda_dk
         den = D_k_star
-        return num / den
+        return num, den
 
     def chi_uk(self, U_Nk, kappa_dk, X_1k, mu_uk, Y_1k, Z_1k, mu_dk, W_Nk, V_Nk, D_k_star):
         t_0 = (1 - U_Nk * kappa_dk) * (X_1k * mu_uk + Y_1k + Z_1k * mu_dk)
         t_1 = Z_1k * kappa_dk * (W_Nk * mu_uk + V_Nk + U_Nk * mu_dk) / D_k_star
         return t_0 + t_1
 
+    @safe_divide
     def alpha_dk(self, X_1k, kappa_uk, W_Nk, lambda_uk, D_k_star):
         num = (1 - X_1k * kappa_uk) * W_Nk * lambda_uk + X_1k * kappa_uk * W_Nk * lambda_uk
         den = D_k_star
-        return num / den
+        return num, den
 
+    @safe_divide
     def beta_dk(self, X_1k, kappa_uk, U_Nk, lambda_dk, W_Nk, Z_1k, D_k_star):
         num = (1 - X_1k * kappa_uk) * U_Nk * lambda_dk + W_Nk * kappa_uk * Z_1k * lambda_dk
         den = D_k_star
-        return num / den
+        return num, den
 
     def chi_dk(self, X_1k, kappa_uk, W_Nk, mu_uk, V_Nk, U_Nk, mu_dk, Y_1k, Z_1k, D_k_star):
         t_0 = (1 - X_1k * kappa_uk) * (W_Nk * mu_uk + V_Nk + U_Nk * mu_dk)
@@ -472,11 +500,13 @@ class SuperLink():
         _E_Ik[start_nodes] = 0
         _E_Ik[end_nodes] = 0
         _E_Ik[middle_nodes] = self.E_Ik(_B_ik[forward], _dx_ik[forward],
-                                        _B_ik[backward], _dx_ik[backward], _A_SIk[middle_nodes], _dt)
+                                        _B_ik[backward], _dx_ik[backward],
+                                        _A_SIk[middle_nodes], _dt)
         _D_Ik[start_nodes] = 0
         _D_Ik[end_nodes] = 0
-        _D_Ik[middle_nodes] = self.D_Ik(_Q_0Ik[middle_nodes], _B_ik[forward], _dx_ik[forward],
-                                        _B_ik[backward], _dx_ik[backward], _A_SIk[middle_nodes],
+        _D_Ik[middle_nodes] = self.D_Ik(_Q_0Ik[middle_nodes], _B_ik[forward],
+                                        _dx_ik[forward], _B_ik[backward],
+                                        _dx_ik[backward], _A_SIk[middle_nodes],
                                         _h_Ik[middle_nodes], _dt)
         # Export instance variables
         self._E_Ik = _E_Ik
@@ -881,16 +911,30 @@ class SuperLink():
             _i_next = forward_I_i[_I_next].values
             _Im1_next = backward_I_I[_I_next].values
             _im1_next = forward_I_i[_Im1_next].values
-            _h_Ik[_I_next] = (_Q_ik[_i_next] - _Y_Ik[_I_next]
-                              - _Z_Ik[_I_next] * _h_Ik[_I_Np1k_next]) / _X_Ik[_I_next]
-            _Q_ik[_im1_next] = (_U_Ik[_Im1_next] * _h_Ik[_I_next] + _V_Ik[_Im1_next]
-                                + _W_Ik[_Im1_next] * _h_Ik[_I_1k_next])
+            _h_Ik[_I_next] = self._h_Ik_next(_Q_ik[_i_next], _Y_Ik[_I_next],
+                                             _Z_Ik[_I_next], _h_Ik[_I_Np1k_next],
+                                             _X_Ik[_I_next])
+            _Q_ik[_im1_next] = self._Q_im1k_next(_U_Ik[_Im1_next], _h_Ik[_I_next],
+                                                 _V_Ik[_Im1_next], _W_Ik[_Im1_next],
+                                                 _h_Ik[_I_1k_next])
             keep = (_Im1_next != _I_1k_next)
             _I_next = _Im1_next[keep]
             _I_1k_next = _I_1k_next[keep]
             _I_Np1k_next = _I_Np1k_next[keep]
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
+
+    @safe_divide
+    def _h_Ik_next(self, Q_ik, Y_Ik, Z_Ik, h_Np1k, X_Ik):
+        num = Q_ik - Y_Ik - Z_Ik * h_Np1k
+        den = X_Ik
+        return num, den
+
+    def _Q_im1k_next(self, U_Im1k, h_Ik, V_Im1k, W_Im1k, h_1k):
+        t_0 = U_Im1k * h_Ik
+        t_1 = V_Im1k
+        t_2 = W_Im1k * h_1k
+        return t_0 + t_1 + t_2
 
     def step(self, H_bc=None, _dt=None, first_time=False):
         self.node_velocities()
@@ -906,4 +950,3 @@ class SuperLink():
         self.solve_superlink_flows()
         self.solve_superlink_depths()
         self.solve_internals_backwards()
-
