@@ -65,7 +65,8 @@ class SuperLink():
         self._Y_Ik = np.zeros(self._I.size)
         self._Z_Ik = np.zeros(self._I.size)
         # Head at superjunctions
-        self.H_j = self.superjunctions['h_0'].values + self.superjunctions['z_inv'].values
+        self._z_inv_j = self.superjunctions['z_inv'].values
+        self.H_j = self.superjunctions['h_0'].values + self._z_inv_j
         # Coefficients for head at upstream ends of superlink k
         self._J_uk = self.superlinks['sj_0'].values.astype(int)
         self._z_inv_uk = self._z_inv_Ik[self._I_1k]
@@ -789,13 +790,19 @@ class SuperLink():
         b[bc] = H_bc[bc]
         # Export instance variables
         self.b = b
+        self._beta_dkl = _beta_dkl
+        self._alpha_ukm = _alpha_ukm
+        self._chi_ukl = _chi_ukl
+        self._chi_dkm = _chi_dkm
         if first_time:
             self.A = self.A.tocsr()
 
     def solve_sparse_matrix(self):
         A = self.A
         b = self.b
+        _z_inv_j = self._z_inv_j
         H_j_next = scipy.sparse.linalg.spsolve(A, b)
+        H_j_next = np.maximum(H_j_next, _z_inv_j)
         self.H_j = H_j_next
 
     def solve_superlink_flows(self):
@@ -950,8 +957,11 @@ class SuperLink():
             _I_next = _Im1_next[keep]
             _I_1k_next = _I_1k_next[keep]
             _I_Np1k_next = _I_Np1k_next[keep]
+        # Set upstream flow
+        # TODO: May want to delete where this is set earlier
+        _Q_ik[_i_1k] = _Q_uk
         # Ensure non-negative depths?
-        # _h_Ik[_h_Ik < 0] = 0
+        _h_Ik[_h_Ik < 0] = 0
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
 
