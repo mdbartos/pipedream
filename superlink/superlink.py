@@ -90,13 +90,17 @@ class SuperLink():
         self._Q_dk = self._Q_ik[self._i_nk]
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
+        # Other parameters
+        self.min_depth = 1e-5
         # Initialize to stable state
         self.step(_dt=1e-6, first_time=True)
 
     def safe_divide(function):
         def inner(*args, **kwargs):
             num, den = function(*args, **kwargs)
-            result = np.divide(num, den, where=(den != 0))
+            cond = (den != 0)
+            result = np.zeros(num.size)
+            result[cond] = num[cond] / den[cond]
             return result
         return inner
 
@@ -104,6 +108,7 @@ class SuperLink():
     def A_ik(self, h_Ik, h_Ip1k, w):
         y = (h_Ik + h_Ip1k) / 2
         y[y < 0] = 0
+        y[y > w] = w[y > w]
         r = w / 2
         theta = np.arccos(1 - y / r)
         A = r**2 * (theta - np.cos(theta) * np.sin(theta))
@@ -112,6 +117,7 @@ class SuperLink():
     def Pe_ik(self, h_Ik, h_Ip1k, w):
         y = (h_Ik + h_Ip1k) / 2
         y[y < 0] = 0
+        y[y > w] = w[y > w]
         r = w / 2
         theta = np.arccos(1 - y / r)
         Pe = 2 * r * theta
@@ -162,9 +168,9 @@ class SuperLink():
     def b_ik(self, dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
              A_c_ik, C_ik, a_ik, c_ik, ctrl, g=9.81):
         # TODO: Clean up
+        cond = A_ik > 0
         t_0 = dx_ik / dt
         t_1 = np.zeros(Q_ik_t.size)
-        cond = A_ik > 0
         t_1[cond] = (g * n_ik[cond]**2 * np.abs(Q_ik_t[cond]) * dx_ik[cond]
                     / A_ik[cond] / R_ik[cond]**(4/3))
         t_2 = np.zeros(ctrl.size)
@@ -233,7 +239,7 @@ class SuperLink():
         t_5 = U_Im1k - E_Ik
         t_6 = T_ik
         # TODO: There is still a divide by zero here
-        num = (t_0 + t_1 - t_2 - t_3 * t_4 / t_5)
+        num = (t_0 + t_1 - t_2 - (t_3 * t_4 / t_5))
         den = t_6
         return  num, den
 
@@ -291,7 +297,7 @@ class SuperLink():
         t_4 = D_Ip1k - Y_Ip1k
         t_5 = X_Ip1k + E_Ip1k
         t_6 = O_ik
-        num = (t_0 + t_1 - t_2 - t_3 * t_4 / t_5)
+        num = (t_0 + t_1 - t_2 - (t_3 * t_4 / t_5))
         den = t_6
         return num, den
 
@@ -308,91 +314,74 @@ class SuperLink():
         cond = t_2 != 0
         result = np.zeros(t_0.size)
         # TODO: Not sure if ~cond should be zero
-        result[cond] = t_0[cond] - (t_1[cond] / t_2[cond])
+        result[cond] = t_0[cond] + (t_1[cond] / t_2[cond])
         return result
 
     # Coefficients for head at upstream and downstream ends of superlink k
     def dH_uk(self, H_juk, zinv_uk, h_uk):
         return H_juk - zinv_uk - h_uk
 
-    @safe_divide
-    def kappa_uk(self, A_uk, dH_uk, B_uk, Q_uk):
-        num = 2 * A_uk * dH_uk
-        den = Q_uk * (2 * dH_uk * B_uk - A_uk)
-        return num, den
-
-    @safe_divide
-    def lambda_uk(self, A_uk, dH_uk, B_uk):
-        num = -A_uk
-        den = 2 * dH_uk * B_uk - A_uk
-        return num, den
-
-    @safe_divide
-    def mu_uk(self, A_uk, dH_uk, B_uk, H_juk, h_uk):
-        num = A_uk * (H_juk - h_uk)
-        den = 2 * dH_uk * B_uk - A_uk
-        return num, den
-
     def dH_dk(self, H_jdk, zinv_dk, h_dk):
         return zinv_dk + h_dk - H_jdk
 
     @safe_divide
-    def kappa_dk(self, A_dk, dH_dk, B_dk, Q_dk):
-        num = 2 * A_dk * dH_dk
-        den = Q_dk * (2 * dH_dk * B_dk + A_dk)
+    def gamma_uk(self, Q_uk_t, C_uk, A_uk, g=9.81):
+        num = np.abs(Q_uk_t)
+        den = (C_uk**2) * (A_uk**2) * g
         return num, den
 
     @safe_divide
-    def lambda_dk(self, A_dk, dH_dk, B_dk):
-        num = A_dk
-        den = 2 * dH_dk * B_dk + A_dk
+    def gamma_dk(self, Q_dk_t, C_dk, A_dk, g=9.81):
+        num = -np.abs(Q_dk_t)
+        den = (C_dk**2) * (A_dk**2) * g
         return num, den
 
-    @safe_divide
-    def mu_dk(self, A_dk, dH_dk, B_dk, H_jdk, h_dk):
-        num = A_dk * (h_dk - H_jdk)
-        den = 2 * dH_dk * B_dk + A_dk
-        return num, den
-
-    # Coefficients for flow at upstream and downstream ends of superlink k
-    def D_k_star(self, X_1k, kappa_uk, Z_1k, kappa_dk, W_Nk, U_Nk):
-        t_0 = (1 - X_1k * kappa_uk) * (1 - U_Nk * kappa_dk)
-        t_1 = (-Z_1k * kappa_dk) * (- W_Nk * kappa_uk)
+    def D_k_star(self, X_1k, gamma_uk, U_Nk, gamma_dk, Z_1k, W_Nk):
+        t_0 = (X_1k * gamma_uk - 1) * (U_Nk * gamma_dk - 1)
+        t_1 = (Z_1k * gamma_dk) * (W_Nk * gamma_uk)
         return t_0 - t_1
 
     @safe_divide
-    def alpha_uk(self, U_Nk, kappa_dk, X_1k, lambda_uk, Z_1k, W_Nk, D_k_star):
-        num = (1 - U_Nk * kappa_dk) * X_1k * lambda_uk + Z_1k * kappa_dk * W_Nk * lambda_uk
+    def alpha_uk(self, U_Nk, gamma_dk, X_1k, Z_1k, W_Nk, D_k_star):
+        num = (1 - U_Nk * gamma_dk) * X_1k + (Z_1k * gamma_dk * W_Nk)
         den = D_k_star
         return num, den
 
     @safe_divide
-    def beta_uk(self, U_Nk, kappa_dk, lambda_dk, Z_1k, W_Nk, D_k_star):
-        num = (1 - U_Nk * kappa_dk) * Z_1k * lambda_dk + Z_1k * kappa_dk * U_Nk * lambda_dk
-        den = D_k_star
-        return num, den
-
-    def chi_uk(self, U_Nk, kappa_dk, X_1k, mu_uk, Y_1k, Z_1k, mu_dk, W_Nk, V_Nk, D_k_star):
-        t_0 = (1 - U_Nk * kappa_dk) * (X_1k * mu_uk + Y_1k + Z_1k * mu_dk)
-        t_1 = Z_1k * kappa_dk * (W_Nk * mu_uk + V_Nk + U_Nk * mu_dk) / D_k_star
-        return t_0 + t_1
-
-    @safe_divide
-    def alpha_dk(self, X_1k, kappa_uk, W_Nk, lambda_uk, D_k_star):
-        num = (1 - X_1k * kappa_uk) * W_Nk * lambda_uk + X_1k * kappa_uk * W_Nk * lambda_uk
+    def beta_uk(self, U_Nk, gamma_dk, Z_1k, W_Nk, D_k_star):
+        num = (1 - U_Nk * gamma_dk) * Z_1k + (Z_1k * gamma_dk * U_Nk)
         den = D_k_star
         return num, den
 
     @safe_divide
-    def beta_dk(self, X_1k, kappa_uk, U_Nk, lambda_dk, W_Nk, Z_1k, D_k_star):
-        num = (1 - X_1k * kappa_uk) * U_Nk * lambda_dk + W_Nk * kappa_uk * Z_1k * lambda_dk
+    def chi_uk(self, U_Nk, gamma_dk, Y_1k, X_1k, z_inv_uk, Z_1k,
+               z_inv_dk, V_Nk, W_Nk, D_k_star):
+        t_0 = (1 - U_Nk * gamma_dk) * (Y_1k - X_1k * z_inv_uk - Z_1k * z_inv_dk)
+        t_1 = (Z_1k * gamma_dk) * (V_Nk - W_Nk * z_inv_uk - U_Nk * z_inv_dk)
+        num = t_0 + t_1
         den = D_k_star
         return num, den
 
-    def chi_dk(self, X_1k, kappa_uk, W_Nk, mu_uk, V_Nk, U_Nk, mu_dk, Y_1k, Z_1k, D_k_star):
-        t_0 = (1 - X_1k * kappa_uk) * (W_Nk * mu_uk + V_Nk + U_Nk * mu_dk)
-        t_1 = W_Nk * kappa_uk * (X_1k * mu_uk + Y_1k + Z_1k * mu_dk) / D_k_star
-        return t_0 + t_1
+    @safe_divide
+    def alpha_dk(self, X_1k, gamma_uk, W_Nk, D_k_star):
+        num = (1 - X_1k * gamma_uk) * W_Nk + (W_Nk * gamma_uk * X_1k)
+        den = D_k_star
+        return num, den
+
+    @safe_divide
+    def beta_dk(self, X_1k, gamma_uk, U_Nk, W_Nk, Z_1k, D_k_star):
+        num = (1 - X_1k * gamma_uk) * U_Nk + (W_Nk * gamma_uk * Z_1k)
+        den = D_k_star
+        return num, den
+
+    @safe_divide
+    def chi_dk(self, X_1k, gamma_uk, V_Nk, W_Nk, z_inv_uk, U_Nk,
+               z_inv_dk, Y_1k, Z_1k, D_k_star):
+        t_0 = (1 - X_1k * gamma_uk) * (V_Nk - W_Nk * z_inv_uk - U_Nk * z_inv_dk)
+        t_1 = (W_Nk * gamma_uk) * (Y_1k - X_1k * z_inv_uk - Z_1k * z_inv_dk)
+        num = t_0 + t_1
+        den = D_k_star
+        return num, den
 
     # Sparse matrix coefficients
     def F_jj(self, A_sj, dt, beta_dkl, alpha_ukm):
@@ -578,6 +567,11 @@ class SuperLink():
             _W_Ik[_I_next] = self.W_Ik(_A_ik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
                                        _W_Ik[_Im1_next], _U_Ik[_Im1_next], _T_ik[_i_next])
             _I_next = _Ip1_next[~_I_end[_Ip1_next]]
+        # Try resetting
+        _T_ik[_i_1k] = _T_1k
+        _U_Ik[_I_1k] = _U_1k
+        _V_Ik[_I_1k] = _V_1k
+        _W_Ik[_I_1k] = _W_1k
         # Export instance variables
         self._T_ik = _T_ik
         self._U_Ik = _U_Ik
@@ -632,6 +626,11 @@ class SuperLink():
             _Z_Ik[_I_next] = self.Z_Ik(_A_ik[_i_next], _E_Ik[_Ip1_next], _c_ik[_i_next],
                                        _Z_Ik[_Ip1_next], _X_Ik[_Ip1_next], _O_ik[_i_next])
             _I_next = backward_I_I[_I_next[~_I_start[_I_next]]].values
+        # Try resetting
+        _O_ik[_i_nk] = _O_nk
+        _X_Ik[_I_Nk] = _X_Nk
+        _Y_Ik[_I_Nk] = _Y_Nk
+        _Z_Ik[_I_Nk] = _Z_Nk
         # Export instance variables
         self._O_ik = _O_ik
         self._X_Ik = _X_Ik
@@ -646,28 +645,25 @@ class SuperLink():
         _J_uk = self._J_uk
         _z_inv_uk = self._z_inv_uk
         _A_ik = self._A_ik
-        _B_ik = self._B_ik
+        # _B_ik = self._B_ik
         _Q_ik = self._Q_ik
         _w_ik = self._w_ik
         H_j = self.H_j
+        # Placeholder discharge coefficient
+        _C_uk = 0.67
+        # Current upstream flows
+        _Q_uk_t = _Q_ik[_i_1k]
         # Compute superjunction head
         _H_juk = H_j[_J_uk]
         _dH_uk = self.dH_uk(_H_juk, _z_inv_uk, _h_Ik[_I_1k])
         # Compute flow area
         _h_juk = _H_juk - _z_inv_uk
         _A_juk = self.A_ik(_h_juk, _h_juk, _w_ik[_i_1k])
-        _A_uk = (_A_juk + _A_ik[_i_1k]) / 2
-        # Compute top width
-        _B_juk = self.B_ik(_h_juk, _h_juk, _w_ik[_i_1k])
-        _B_uk = (_B_juk + _B_ik[_i_1k]) / 2
+        # _A_uk = (_A_juk + _A_ik[_i_1k]) / 2
+        _A_uk = _A_ik[_i_1k]
         # Compute superlink upstream coefficients
-        _kappa_uk = self.kappa_uk(_A_uk, _dH_uk, _B_uk, _Q_ik[_i_1k])
-        _lambda_uk = self.lambda_uk(_A_uk, _dH_uk, _B_uk)
-        _mu_uk = self.mu_uk(_A_uk, _dH_uk, _B_uk, _H_juk, _h_Ik[_I_1k])
-        # Export instance variables
-        self._kappa_uk = _kappa_uk
-        self._lambda_uk = _lambda_uk
-        self._mu_uk = _mu_uk
+        _gamma_uk = self.gamma_uk(_Q_uk_t, _C_uk, _A_uk)
+        self._gamma_uk = _gamma_uk
 
     def superlink_downstream_head_coefficients(self):
         # Import instance variables
@@ -677,28 +673,25 @@ class SuperLink():
         _J_dk = self._J_dk
         _z_inv_dk = self._z_inv_dk
         _A_ik = self._A_ik
-        _B_ik = self._B_ik
+        # _B_ik = self._B_ik
         _Q_ik = self._Q_ik
         _w_ik = self._w_ik
         H_j = self.H_j
+        # Placeholder discharge coefficient
+        _C_dk = 0.67
+        # Current upstream flows
+        _Q_dk_t = _Q_ik[_i_nk]
         # Compute superjunction head
         _H_jdk = H_j[_J_dk]
         _dH_dk = self.dH_dk(_H_jdk, _z_inv_dk, _h_Ik[_I_Np1k])
         # Compute flow area
         _h_jdk = _H_jdk - _z_inv_dk
         _A_jdk = self.A_ik(_h_jdk, _h_jdk, _w_ik[_i_nk])
-        _A_dk = (_A_jdk + _A_ik[_i_nk]) / 2
-        # Compute top width
-        _B_jdk = self.B_ik(_h_jdk, _h_jdk, _w_ik[_i_nk])
-        _B_dk = (_B_jdk + _B_ik[_i_nk]) / 2
+        # _A_dk = (_A_jdk + _A_ik[_i_nk]) / 2
+        _A_dk = _A_ik[_i_nk]
         # Compute superlink downstream coefficients
-        _kappa_dk = self.kappa_dk(_A_dk, _dH_dk, _B_dk, _Q_ik[_i_nk])
-        _lambda_dk = self.lambda_dk(_A_dk, _dH_dk, _B_dk)
-        _mu_dk = self.mu_dk(_A_dk, _dH_dk, _B_dk, _H_jdk, _h_Ik[_I_Np1k])
-        # Export instance variables
-        self._kappa_dk = _kappa_dk
-        self._lambda_dk = _lambda_dk
-        self._mu_dk = _mu_dk
+        _gamma_dk = self.gamma_dk(_Q_dk_t, _C_dk, _A_dk)
+        self._gamma_dk = _gamma_dk
 
     def superlink_flow_coefficients(self):
         # Import instance variables
@@ -710,29 +703,31 @@ class SuperLink():
         _U_Ik = self._U_Ik
         _V_Ik = self._V_Ik
         _W_Ik = self._W_Ik
-        _kappa_uk = self._kappa_uk
-        _kappa_dk = self._kappa_dk
-        _lambda_uk = self._lambda_uk
-        _lambda_dk = self._lambda_dk
-        _mu_uk = self._mu_uk
-        _mu_dk = self._mu_dk
+        _gamma_uk = self._gamma_uk
+        _gamma_dk = self._gamma_dk
+        _z_inv_uk = self._z_inv_uk
+        _z_inv_dk = self._z_inv_dk
         # Compute D_k_star
-        _D_k_star = self.D_k_star(_X_Ik[_I_1k], _kappa_uk, _Z_Ik[_I_1k],
-                                  _kappa_dk, _W_Ik[_I_Nk], _U_Ik[_I_Nk])
+        _D_k_star = self.D_k_star(_X_Ik[_I_1k], _gamma_uk, _U_Ik[_I_Nk],
+                                  _gamma_dk, _Z_Ik[_I_1k], _W_Ik[_I_Nk])
         # Compute upstream superlink flow coefficients
-        _alpha_uk = self.alpha_uk(_U_Ik[_I_Nk], _kappa_dk, _X_Ik[_I_1k], _lambda_uk,
+        _alpha_uk = self.alpha_uk(_U_Ik[_I_Nk], _gamma_dk, _X_Ik[_I_1k],
                                   _Z_Ik[_I_1k], _W_Ik[_I_Nk], _D_k_star)
-        _beta_uk = self.beta_uk(_U_Ik[_I_Nk], _kappa_dk, _lambda_dk, _Z_Ik[_I_1k],
+        _beta_uk = self.beta_uk(_U_Ik[_I_Nk], _gamma_dk, _Z_Ik[_I_1k],
                                 _W_Ik[_I_Nk], _D_k_star)
-        _chi_uk = self.chi_uk(_U_Ik[_I_Nk], _kappa_dk, _X_Ik[_I_1k], _mu_uk, _Y_Ik[_I_1k],
-                              _Z_Ik[_I_1k], _mu_dk, _W_Ik[_I_Nk], _V_Ik[_I_Nk], _D_k_star)
+        _chi_uk = self.chi_uk(_U_Ik[_I_Nk], _gamma_dk, _Y_Ik[_I_1k],
+                              _X_Ik[_I_1k], _z_inv_uk, _Z_Ik[_I_1k],
+                              _z_inv_dk, _V_Ik[_I_Nk], _W_Ik[_I_Nk],
+                              _D_k_star)
         # Compute downstream superlink flow coefficients
-        _alpha_dk = self.alpha_dk(_X_Ik[_I_1k], _kappa_uk, _W_Ik[_I_Nk],
-                                  _lambda_uk, _D_k_star)
-        _beta_dk = self.beta_dk(_X_Ik[_I_1k], _kappa_uk, _U_Ik[_I_Nk], _lambda_dk,
+        _alpha_dk = self.alpha_dk(_X_Ik[_I_1k], _gamma_uk, _W_Ik[_I_Nk],
+                                  _D_k_star)
+        _beta_dk = self.beta_dk(_X_Ik[_I_1k], _gamma_uk, _U_Ik[_I_Nk],
                                 _W_Ik[_I_Nk], _Z_Ik[_I_1k], _D_k_star)
-        _chi_dk = self.chi_dk(_X_Ik[_I_1k], _kappa_uk, _W_Ik[_I_Nk], _mu_uk, _V_Ik[_I_Nk],
-                              _U_Ik[_I_Nk], _mu_dk, _Y_Ik[_I_1k], _Z_Ik[_I_1k], _D_k_star)
+        _chi_dk = self.chi_dk(_X_Ik[_I_1k], _gamma_uk, _V_Ik[_I_Nk],
+                              _W_Ik[_I_Nk], _z_inv_uk, _U_Ik[_I_Nk],
+                              _z_inv_dk, _Y_Ik[_I_1k], _Z_Ik[_I_1k],
+                              _D_k_star)
         # Export instance variables
         self._D_k_star = _D_k_star
         self._alpha_uk = _alpha_uk
@@ -801,7 +796,9 @@ class SuperLink():
         A = self.A
         b = self.b
         _z_inv_j = self._z_inv_j
+        min_depth = self.min_depth
         H_j_next = scipy.sparse.linalg.spsolve(A, b)
+        # H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
         H_j_next = np.maximum(H_j_next, _z_inv_j)
         self.H_j = H_j_next
 
@@ -827,18 +824,39 @@ class SuperLink():
         # Import instance variables
         _J_uk = self._J_uk
         _J_dk = self._J_dk
-        _kappa_uk = self._kappa_uk
-        _kappa_dk = self._kappa_dk
-        _lambda_uk = self._lambda_uk
-        _lambda_dk = self._lambda_dk
-        _mu_uk = self._mu_uk
-        _mu_dk = self._mu_dk
+        _gamma_uk = self._gamma_uk
+        _gamma_dk = self._gamma_dk
+        _z_inv_uk = self._z_inv_uk
+        _z_inv_dk = self._z_inv_dk
         _Q_uk = self._Q_uk
         _Q_dk = self._Q_dk
         H_j = self.H_j
         # Compute flow at next time step
-        _h_uk_next = _kappa_uk * _Q_uk + _lambda_uk * H_j[_J_uk] + _mu_uk
-        _h_dk_next = _kappa_dk * _Q_dk + _lambda_dk * H_j[_J_dk] + _mu_dk
+        _h_uk_next = _gamma_uk * _Q_uk + H_j[_J_uk] - _z_inv_uk
+        _h_dk_next = _gamma_dk * _Q_dk + H_j[_J_dk] - _z_inv_dk
+        # Export instance variables
+        self._h_uk = _h_uk_next
+        self._h_dk = _h_dk_next
+
+    def solve_superlink_depths_alt(self):
+        # Import instance variables
+        _I_1k = self._I_1k
+        _I_Nk = self._I_Nk
+        _U_Ik = self._U_Ik
+        _V_Ik = self._V_Ik
+        _W_Ik = self._W_Ik
+        _X_Ik = self._X_Ik
+        _Y_Ik = self._Y_Ik
+        _Z_Ik = self._Z_Ik
+        _Q_uk = self._Q_uk
+        _Q_dk = self._Q_dk
+        H_j = self.H_j
+        # Compute flow at next time step
+        det = (_X_Ik[_I_1k] * _U_Ik[_I_Nk]) - (_Z_Ik[_I_1k] * _W_Ik[_I_Nk])
+        _h_uk_next = (_U_Ik[_I_Nk] * (_Q_uk - _Y_Ik[_I_1k])
+                      - _Z_Ik[_I_1k] * (_Q_dk - _V_Ik[_I_Nk])) / det
+        _h_dk_next = (-_W_Ik[_I_Nk] * (_Q_uk - _Y_Ik[_I_1k])
+                      + _X_Ik[_I_1k] * (_Q_dk - _V_Ik[_I_Nk])) / det
         # Export instance variables
         self._h_uk = _h_uk_next
         self._h_dk = _h_dk_next
@@ -930,6 +948,7 @@ class SuperLink():
         _Q_dk = self._Q_dk
         _h_uk = self._h_uk
         _h_dk = self._h_dk
+        min_depth = self.min_depth
         # Set first elements
         _Q_ik[_i_1k] = _Q_uk
         _Q_ik[_i_nk] = _Q_dk
@@ -950,6 +969,8 @@ class SuperLink():
             _h_Ik[_I_next] = self._h_Ik_next(_Q_ik[_i_next], _Y_Ik[_I_next],
                                              _Z_Ik[_I_next], _h_Ik[_I_Np1k_next],
                                              _X_Ik[_I_next])
+            # Ensure non-negative depths?
+            # _h_Ik[_I_next[_h_Ik[_I_next] < min_depth]] = min_depth
             _Q_ik[_im1_next] = self._Q_im1k_next(_U_Ik[_Im1_next], _h_Ik[_I_next],
                                                  _V_Ik[_Im1_next], _W_Ik[_Im1_next],
                                                  _h_Ik[_I_1k_next])
@@ -960,8 +981,11 @@ class SuperLink():
         # Set upstream flow
         # TODO: May want to delete where this is set earlier
         _Q_ik[_i_1k] = _Q_uk
+        _Q_ik[_i_nk] = _Q_dk
+        _h_Ik[_I_1k] = _h_uk
+        _h_Ik[_I_Np1k] = _h_dk
         # Ensure non-negative depths?
-        _h_Ik[_h_Ik < 0] = 0
+        # _h_Ik[_h_Ik < min_depth] = min_depth
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
 
