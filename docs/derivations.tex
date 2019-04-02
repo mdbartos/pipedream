@@ -10,17 +10,54 @@
 
 \begin{document}
 
+\section*{Glossary}
+
+\begin{table}[!htb]
+  \centering
+  \begin{tabular}{l | l}
+    \hline
+    Variable & Description \\
+    \hline
+    $Q_{uk}$ & Discharge at upstream end of superlink k \\
+    $C_{uk}$ & Coefficient of discharge at upstream end of superlink k \\
+    $A_{uk}$ & Area at upstream end of superlink k \\
+    $\Delta H_{uk}$ & Head difference at upstream end of superlink k \\
+    $H_{juk}$ & Head at junction upstream of superlink k (ground elevation + water depth) \\
+    $h_{uk}$ & Water depth at upstream of superlink k \\
+    $z_{inv, uk}$ & Invert elevation at upstream end of superlink k \\
+    $Q_{dk}$ & Discharge at downstream end of superlink k \\
+    $C_{dk}$ & Coefficient of discharge at downstream end of superlink k \\
+    $A_{dk}$ & Area at downstream end of superlink k \\
+    $\Delta H_{dk}$ & Head difference at downstream end of superlink k \\
+    $H_{jdk}$ & Head at junction downstream of superlink k (ground elevation + water depth) \\
+    $h_{dk}$ & Water depth at downstream of superlink k \\
+    $z_{inv, dk}$ & Invert elevation at downstream end of superlink k \\
+    $NBDj$ & Number of superlinks with downstream end attached to superjunction $j$ \\
+    $NBUj$ & Number of superlinks with upstream end attached to superjunction $j$ \\
+    $H_j$ & Head at junction $j$ \\
+    $U_{Ik}, V_{Ik}, W_{Ik}$ & Coefficients \\
+    $X_{Ik}, Y_{Ik}, Z_{Ik}$ & Coefficients \\
+    \hline
+  \end{tabular}
+\end{table}
+
 \section*{Inlet hydraulics}
 
 \subsection*{Depth at upstream end of superlink}
+
+The discharge at the upstream end of a superlink is given by:
 
 \begin{equation}
  Q_{uk} = C_{uk} A_{uk} \sqrt{2 g \Delta H_{uk}} 
 \end{equation}
 
+Where:
+
 \begin{equation}
  \Delta H_{uk} = H_{juk} - h_{uk} - z_{inv, uk}
 \end{equation}
+
+Squaring and rearranging provides the depth boundary condition at the upstream end:
 
 \begin{equation}
  Q_{uk}^2 = C_{uk}^2 A_{uk}^2 g (H_{juk} - h_{uk} - z_{inv, uk})
@@ -36,13 +73,20 @@
 
 \subsection*{Depth at downstream end of superlink}
 
+The discharge at the downstream end of a superlink is given by:
+
 \begin{equation}
  Q_{dk} = C_{dk} A_{dk} \sqrt{2 g \Delta H_{dk}} 
 \end{equation}
 
+Where:
+
 \begin{equation}
  \Delta H_{dk} = h_{dk} + z_{inv, dk} - H_{jdk}
 \end{equation}
+
+Squaring and rearranging provides the depth boundary condition at the downstream
+end:
 
 \begin{equation}
  Q_{dk}^2 = C_{dk}^2 A_{dk}^2 g (h_{dk} + z_{inv, dk} - H_{jdk})
@@ -58,14 +102,14 @@
 
 \subsection*{Superlink boundary conditions}
 
-From recurrence relations:
+From the recurrence relations:
 
 \begin{align}
   Q_{uk}^{t + \Delta t} = X_{1k} h_{uk}^{t + \Delta t} + Y_{1k} + Z_{1k} h_{dk}^{t + \Delta t} \\
   Q_{dk}^{t + \Delta t} = U_{Nk} h_{dk}^{t + \Delta t} + V_{Nk} + W_{Nk} h_{uk}^{t + \Delta t}
 \end{align}
 
-From depth boundary conditions:
+From the depth boundary conditions at the ends of each superlink:
 
 \begin{align}
   h_{uk} = \gamma_{uk} Q_{uk}^{t + \Delta t} + H_{juk} - z_{inv, uk} \\
@@ -238,7 +282,7 @@ Where:
 The equations for the flows at the ends of each superlink is given by:
 
 \begin{equation}
-  \sum_{l=1}^{NBDj} Q_{dkl}^{t + \Delta t} - \sum_{m=1}^{NBUj} Q_{ukm}^{t + \Delta t} + Q_{o,j} = \frac{A_{sj} (H_j^{t + \Delta t} - H_j)}{\Delta t}
+  \sum_{l=1}^{NBDj} Q_{dk_l}^{t + \Delta t} - \sum_{m=1}^{NBUj} Q_{uk_m}^{t + \Delta t} + Q_{o,j} = \frac{A_{sj} (H_j^{t + \Delta t} - H_j)}{\Delta t}
 \end{equation}
 
 Substituting the linear expressions for the upstream and downstream flow:
