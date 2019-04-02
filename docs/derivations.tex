@@ -1,0 +1,312 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1.0in]{geometry}
+\usepackage{amsmath}
+\linespread{1.15} 
+\setlength{\parskip}{1em}
+
+\title{Superlink derivations}
+\author{Matt Bartos}
+\date{}
+
+\begin{document}
+
+\section*{Inlet hydraulics}
+
+\subsection*{Depth at upstream end of superlink}
+
+\begin{equation}
+ Q_{uk} = C_{uk} A_{uk} \sqrt{2 g \Delta H_{uk}} 
+\end{equation}
+
+\begin{equation}
+ \Delta H_{uk} = H_{juk} - h_{uk} - z_{inv, uk}
+\end{equation}
+
+\begin{equation}
+ Q_{uk}^2 = C_{uk}^2 A_{uk}^2 g (H_{juk} - h_{uk} - z_{inv, uk})
+\end{equation}
+
+\begin{equation}
+ |Q_{uk}^{t}| Q_{uk}^{t + \Delta t} = C_{uk}^2 A_{uk}^2 g (H_{juk} - h_{uk} - z_{inv, uk})
+\end{equation}
+
+\begin{equation}
+  h_{uk} = -\frac{|Q_{uk}^{t}| Q_{uk}^{t + \Delta t}}{C_{uk}^2 A_{uk}^2 g} + H_{juk} - z_{inv, uk}
+\end{equation}
+
+\subsection*{Depth at downstream end of superlink}
+
+\begin{equation}
+ Q_{dk} = C_{dk} A_{dk} \sqrt{2 g \Delta H_{dk}} 
+\end{equation}
+
+\begin{equation}
+ \Delta H_{dk} = h_{dk} + z_{inv, dk} - H_{jdk}
+\end{equation}
+
+\begin{equation}
+ Q_{dk}^2 = C_{dk}^2 A_{dk}^2 g (h_{dk} + z_{inv, dk} - H_{jdk})
+\end{equation}
+
+\begin{equation}
+ |Q_{dk}^{t}| Q_{dk}^{t + \Delta t} = C_{dk}^2 A_{dk}^2 g (h_{dk} + z_{inv, dk} - H_{jdk})
+\end{equation}
+
+\begin{equation}
+  h_{dk} = \frac{|Q_{dk}^{t}| Q_{dk}^{t + \Delta t}}{C_{dk}^2 A_{dk}^2 g} + H_{jdk} - z_{inv, dk}
+\end{equation}
+
+\subsection*{Superlink boundary conditions}
+
+From recurrence relations:
+
+\begin{align}
+  Q_{uk}^{t + \Delta t} = X_{1k} h_{uk}^{t + \Delta t} + Y_{1k} + Z_{1k} h_{dk}^{t + \Delta t} \\
+  Q_{dk}^{t + \Delta t} = U_{Nk} h_{dk}^{t + \Delta t} + V_{Nk} + W_{Nk} h_{uk}^{t + \Delta t}
+\end{align}
+
+From depth boundary conditions:
+
+\begin{align}
+  h_{uk} = \gamma_{uk} Q_{uk}^{t + \Delta t} + H_{juk} - z_{inv, uk} \\
+  h_{dk} = \gamma_{dk} Q_{dk}^{t + \Delta t} + H_{jdk} - z_{inv, dk}
+\end{align}
+
+Where:
+
+\begin{align}
+  \gamma_{uk} = -\frac{|Q_{uk}^{t}|}{C_{uk}^2 A_{uk}^2 g} \\
+  \gamma_{dk} = \frac{|Q_{dk}^{t}|}{C_{dk}^2 A_{dk}^2 g}
+\end{align}
+
+Substituting into the recurrence relations:
+
+\begin{equation}
+  Q_{uk}^{t + \Delta t} = X_{1k} (\gamma_{uk} Q_{uk}^{t + \Delta t} + H_{juk} - z_{inv, uk})
+  + Y_{1k} + Z_{1k} (\gamma_{dk} Q_{dk}^{t + \Delta t} + H_{jdk} - z_{inv, dk})
+\end{equation}
+
+\begin{equation}
+  Q_{dk}^{t + \Delta t} = U_{Nk} (\gamma_{dk} Q_{dk}^{t + \Delta t} + H_{jdk} - z_{inv, dk})
+  + V_{Nk} + W_{Nk} (\gamma_{uk} Q_{uk}^{t + \Delta t} + H_{juk} - z_{inv, uk})
+\end{equation}
+
+Expanding:
+
+\begin{equation}
+   Q_{uk}^{t + \Delta t} = X_{1k} \gamma_{uk} Q_{uk}^{t + \Delta t} + X_{1k} H_{juk}^{t + \Delta t} - X_{1k} z_{inv, uk} + Y_{1k} + Z_{1k} \gamma_{dk} Q_{dk}^{t + \Delta t} + Z_{1k} H_{jdk}^{t + \Delta t} - Z_{1k} z_{inv, dk}
+\end{equation}
+
+\begin{equation}
+  Q_{dk}^{t + \Delta t} = U_{Nk} \gamma_{dk} Q_{dk}^{t + \Delta t} + U_{Nk} H_{jdk} - U_{Nk} z_{inv, dk}
+  + V_{Nk} + W_{Nk} \gamma_{uk} Q_{uk}^{t + \Delta t} + W_{Nk} H_{juk} - W_{Nk} z_{inv, uk}
+\end{equation}
+
+Rearranging:
+
+\begin{align}
+   0 = ( X_{1k} \gamma_{uk} - 1) Q_{uk}^{t + \Delta t} + Z_{1k} \gamma_{dk} Q_{dk}^{t + \Delta t} + X_{1k} H_{juk}^{t + \Delta t} + Z_{1k} H_{jdk}^{t + \Delta t} + \pi_1 \\
+   0 = W_{Nk} \gamma_{uk} Q_{uk}^{t + \Delta t} + (U_{Nk} \gamma_{dk} - 1) Q_{dk}^{t + \Delta t} + W_{Nk} H_{juk} + U_{Nk} H_{jdk} + \pi_2
+\end{align}
+
+Where:
+
+\begin{align}
+ \pi_1 = Y_{1k} - X_{1k} z_{inv, uk} - Z_{1k} z_{inv, dk} \\ 
+ \pi_2 = V_{Nk} - W_{Nk} z_{inv, uk} - U_{Nk} z_{inv, dk} \\ 
+\end{align}
+
+Writing as a matrix equation:
+
+\begin{equation}
+  \begin{bmatrix}
+    (X_{1k} \gamma_{uk} - 1) & Z_{1k} \gamma_{dk} \\
+    W_{Nk} \gamma_{uk} & (U_{Nk} \gamma_{dk} - 1)
+  \end{bmatrix}
+  \begin{bmatrix}
+   Q_{uk}^{t + \Delta t} \\ Q_{dk}^{t + \Delta t} 
+  \end{bmatrix}
+  =
+  \begin{bmatrix}
+   - X_{1k} H_{juk}^{t + \Delta t} - Z_{1k} H_{jdk}^{t + \Delta t} - \pi_1 \\ 
+   - W_{Nk} H_{juk}^{t + \Delta t} - U_{Nk} H_{jdk}^{t + \Delta t} - \pi_2
+  \end{bmatrix}
+\end{equation}
+
+Taking the matrix inverse:
+
+\begin{equation}
+  \begin{bmatrix}
+   Q_{uk}^{t + \Delta t} \\ Q_{dk}^{t + \Delta t} 
+  \end{bmatrix}
+  =
+  \frac{1}{D_k^*}
+  \begin{bmatrix}
+    (U_{Nk} \gamma_{dk} - 1) & -Z_{1k} \gamma_{dk} \\
+    -W_{Nk} \gamma_{uk} & (X_{1k} \gamma_{uk} - 1)
+  \end{bmatrix}
+  \begin{bmatrix}
+   - X_{1k} H_{juk}^{t + \Delta t} - Z_{1k} H_{jdk}^{t + \Delta t} - \pi_1 \\ 
+   - W_{Nk} H_{juk}^{t + \Delta t} - U_{Nk} H_{jdk}^{t + \Delta t} - \pi_2
+  \end{bmatrix}
+\end{equation}
+
+Where:
+
+\begin{equation}
+  D_k^* = (X_{1k} \gamma_{uk} - 1)(U_{Nk} \gamma_{dk} - 1) - (Z_{1k} \gamma_{dk})(W_{Nk} \gamma_{uk})
+\end{equation}
+
+Expanding:
+
+\begin{equation}
+  \begin{bmatrix}
+   Q_{uk}^{t + \Delta t} \\ Q_{dk}^{t + \Delta t} 
+  \end{bmatrix}
+  =
+  \frac{1}{D_k^*}
+  \begin{bmatrix}
+   (U_{Nk} \gamma_{dk} - 1)(- X_{1k} H_{juk}^{t + \Delta t} - Z_{1k} H_{jdk}^{t + \Delta t} - \pi_1) + (-Z_{1k} \gamma_{dk})(- W_{Nk} H_{juk}^{t + \Delta t} - U_{Nk} H_{jdk}^{t + \Delta t} - \pi_2) \\ 
+   (-W_{Nk} \gamma_{uk})(- X_{1k} H_{juk}^{t + \Delta t} - Z_{1k} H_{jdk}^{t + \Delta t} - \pi_1) + (X_{1k} \gamma_{uk} - 1)(- W_{Nk} H_{juk}^{t + \Delta t} - U_{Nk} H_{jdk}^{t + \Delta t} - \pi_2) \\ 
+  \end{bmatrix}
+\end{equation}
+
+Arranging in terms of the unknown heads:
+
+\begin{equation}
+  \begin{split}
+    Q_{uk}^{t + \Delta t} = 
+    [(U_{Nk} \gamma_{dk} - 1)(-X_{1k}) + (-Z_{1k} \gamma_{dk})(-W_{Nk})] H_{juk}^{t + \Delta t} + \\
+    [(U_{Nk} \gamma_{dk} - 1)(-Z_{1k}) + (-Z_{1k} \gamma_{dk})(-U_{Nk})] H_{jdk}^{t + \Delta t} + \\
+    [(U_{Nk} \gamma_{dk} - 1)(- \pi_1) + (-Z_{1k} \gamma_{dk})(-\pi_2)]
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    Q_{dk}^{t + \Delta t} = 
+    [(-W_{Nk} \gamma_{uk})(X_{1k}) + (X_{1k} \gamma_{uk} - 1)(-W_{Nk})] H_{juk}^{t + \Delta t} + \\
+    [(-W_{Nk} \gamma_{uk})(-Z_{1k}) + (X_{1k} \gamma_{uk} - 1)(-U_{Nk})] H_{jdk}^{t + \Delta t} + \\
+    [(-W_{Nk} \gamma_{uk})(- \pi_1) + (X_{1k} \gamma_{uk} - 1)(-\pi_2)]
+  \end{split}
+\end{equation}
+
+Finally, the upstream and downstream flows can be expressed as:
+
+\begin{align}
+ Q_{uk}^{t + \Delta t} = \alpha_{uk} H_{juk}^{t + \Delta t} + \beta_{uk} H_{jdk}^{t + \Delta t} + \chi_{uk} \\ 
+ Q_{dk}^{t + \Delta t} = \alpha_{dk} H_{juk}^{t + \Delta t} + \beta_{dk} H_{jdk}^{t + \Delta t} + \chi_{dk} 
+\end{align}
+
+Where:
+
+\begin{equation}
+  \alpha_{uk} = \frac{(1 - U_{Nk} \gamma_{dk}) X_{1k} + Z_{1k} \gamma_{dk} W_{Nk}}{D_k^*}
+\end{equation}
+
+\begin{equation}
+  \beta_{uk} = \frac{(1 - U_{Nk} \gamma_{dk}) Z_{1k} + Z_{1k} \gamma_{dk} U_{Nk}}{D_k^*}
+\end{equation}
+
+\begin{equation}
+  \chi_{uk} = \frac{(1 - U_{Nk} \gamma_{dk})(Y_{1k} - X_{1k} z_{inv, uk} - Z_{1k} z_{inv, dk})  + (Z_{1k} \gamma_{dk})(V_{Nk} - W_{Nk} z_{inv, uk} - U_{Nk} z_{inv, dk})}{D_k^*}
+\end{equation}
+
+\begin{equation}
+  \alpha_{dk} = \frac{(1 - X_{1k} \gamma_{uk}) W_{Nk} + W_{Nk} \gamma_{uk} X_{1k}}{D_k^*}
+\end{equation}
+
+\begin{equation}
+  \beta_{dk} = \frac{(1 - X_{1k} \gamma_{uk}) U_{Nk} + W_{Nk} \gamma_{uk} Z_{1k}}{D_k^*}
+\end{equation}
+
+\begin{equation}
+  \chi_{dk} = \frac{(1 - X_{1k} \gamma_{uk})(V_{Nk} - W_{Nk} z_{inv, uk} - U_{Nk} z_{inv, dk})  + (W_{Nk} \gamma_{uk})(Y_{1k} - X_{1k} z_{inv, uk} - Z_{1k} z_{inv, dk})}{D_k^*}
+\end{equation}
+
+\begin{equation}
+  D_k^* = (X_{1k} \gamma_{uk} - 1)(U_{Nk} \gamma_{dk} - 1) - (Z_{1k} \gamma_{dk})(W_{Nk} \gamma_{uk})
+\end{equation}
+
+\begin{align}
+  \gamma_{uk} = -\frac{|Q_{uk}^{t}|}{C_{uk}^2 A_{uk}^2 g} \\
+  \gamma_{dk} = \frac{|Q_{dk}^{t}|}{C_{dk}^2 A_{dk}^2 g}
+\end{align}
+
+\section*{Forming the solution matrix}
+
+The equations for the flows at the ends of each superlink is given by:
+
+\begin{equation}
+  \sum_{l=1}^{NBDj} Q_{dkl}^{t + \Delta t} - \sum_{m=1}^{NBUj} Q_{ukm}^{t + \Delta t} + Q_{o,j} = \frac{A_{sj} (H_j^{t + \Delta t} - H_j)}{\Delta t}
+\end{equation}
+
+Substituting the linear expressions for the upstream and downstream flow:
+
+\begin{equation}
+  \begin{split}
+    \frac{A_{sj} (H_j^{t + \Delta t} - H_j^t)}{\Delta t} =
+    \sum_{l=1}^{NBDj} (\alpha_{dk_l} H_{juk_l}^{t + \Delta t} + \beta_{dk_l}
+    H_{jdk_l}^{t + \Delta t} + \chi_{dk_l}) \\
+    - \sum_{m=1}^{NBUj} (\alpha_{uk_m}
+    H_{juk_m}^{t + \Delta t} + \beta_{uk_m} H_{jdk_m}^{t + \Delta t} + \chi_{uk_m}) +
+    Q_{o,j}
+  \end{split}
+\end{equation}
+
+Because $H_{jdk_l} = H_j$ and $H_{juk_m} = H_j$:
+
+\begin{equation}
+  \begin{split}
+    \frac{A_{sj} (H_j^{t + \Delta t} - H_j^t)}{\Delta t} =
+    \sum_{l=1}^{NBDj} (\alpha_{dk_l} H_{juk_l}^{t + \Delta t} + \beta_{dk_l}
+    H_{j}^{t + \Delta t} + \chi_{dk_l})\\
+    - \sum_{m=1}^{NBUj} (\alpha_{uk_m}
+    H_{j}^{t + \Delta t} + \beta_{uk_m} H_{jdk_m}^{t + \Delta t} + \chi_{uk_m}) +
+    Q_{o,j}
+  \end{split}
+\end{equation}
+
+Rearranging:
+
+\begin{equation}
+  \begin{split}
+    \frac{A_{sj} (H_j^t)}{\Delta t} + \sum_{l=1}^{NBDj} \chi_{dk_l} - \sum_{m=1}^{NBUj} \chi_{uk_m} + Q_{o,j} \\
+    =
+    \biggl( \frac{A_{sj}}{\Delta t} + \sum_{m=1}^{NBUj} \alpha_{uk_m} - \sum_{l=1}^{NBDj} \beta_{dk_l} \biggr) H_j^{t + \Delta t} \\
+    - \sum_{l=1}^{NBDj} \alpha_{dk_l} H_{juk_l}^{t + \Delta t} + \sum_{m=1}^{NBUj} \beta_{uk_m} H_{jdk_m}^{t + \Delta t}
+  \end{split}
+\end{equation}
+
+For the example network in Ji (1998):
+
+\begin{equation}
+  A x = b
+\end{equation}
+
+\begin{equation}
+  A = 
+  \begin{bmatrix}
+   ( \frac{A_{s0}}{\Delta t} + \alpha_{u0} ) & \beta_{u0} & 0 & 0 & 0 & 0 \\ 
+   - \alpha_{d0} & ( \frac{A_{s1}}{\Delta t} + \alpha_{u1} + \alpha_{u3} - \beta_{d0} ) & \beta_{u1} & 0 & \beta_{u3} & 0 \\
+   0 & - \alpha_{d1} & ( \frac{A_{s2}}{\Delta t} + \alpha_{u2} - \beta_{d1} - \beta_{d5} ) & \beta_{u2} & - \alpha_{d5} & 0 \\
+   0 & 0 & 0 & 1 & 0 & 0 \\
+   0 & - \alpha_{d3} & \beta_{u5} & 0 & ( \frac{A_{s4}}{\Delta t} + \alpha_{u4} + \alpha_{u5} - \beta_{d3} ) & \beta_{u4} \\
+   0 & 0 & 0 & 0 & 0 & 1 \\
+  \end{bmatrix}
+\end{equation}
+
+\begin{equation}
+  b = 
+  \begin{bmatrix}
+    \frac{A_{s0} H_0^t}{\Delta t} - \chi_{u0} + Q_{o0} \\
+    \frac{A_{s1} H_1^t}{\Delta t} + \chi_{d0} - (\chi_{u1} + \chi_{u3}) + Q_{o1} \\
+    \frac{A_{s2} H_2^t}{\Delta t} + (\chi_{d1} + \chi_{d5}) - \chi_{u2} + Q_{02} \\
+    H_{3,bc} \\
+    \frac{A_{s4} H_4^t}{\Delta t} + \chi_{d3} - (\chi_{u4} + \chi_{u5}) + Q_{04} \\
+    H_{5,bc}
+  \end{bmatrix}
+\end{equation}
+
+
+\end{document}
