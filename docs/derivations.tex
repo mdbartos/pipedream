@@ -60,15 +60,15 @@ Where:
 Squaring and rearranging provides the depth boundary condition at the upstream end:
 
 \begin{equation}
- Q_{uk}^2 = C_{uk}^2 A_{uk}^2 g (H_{juk} - h_{uk} - z_{inv, uk})
+ Q_{uk}^2 = 2 C_{uk}^2 A_{uk}^2 g (H_{juk} - h_{uk} - z_{inv, uk})
 \end{equation}
 
 \begin{equation}
- |Q_{uk}^{t}| Q_{uk}^{t + \Delta t} = C_{uk}^2 A_{uk}^2 g (H_{juk} - h_{uk} - z_{inv, uk})
+ |Q_{uk}^{t}| Q_{uk}^{t + \Delta t} = 2 C_{uk}^2 A_{uk}^2 g (H_{juk} - h_{uk} - z_{inv, uk})
 \end{equation}
 
 \begin{equation}
-  h_{uk} = -\frac{|Q_{uk}^{t}| Q_{uk}^{t + \Delta t}}{C_{uk}^2 A_{uk}^2 g} + H_{juk} - z_{inv, uk}
+  h_{uk} = -\frac{|Q_{uk}^{t}| Q_{uk}^{t + \Delta t}}{ 2 C_{uk}^2 A_{uk}^2 g} + H_{juk} - z_{inv, uk}
 \end{equation}
 
 \subsection*{Depth at downstream end of superlink}
@@ -89,15 +89,15 @@ Squaring and rearranging provides the depth boundary condition at the downstream
 end:
 
 \begin{equation}
- Q_{dk}^2 = C_{dk}^2 A_{dk}^2 g (h_{dk} + z_{inv, dk} - H_{jdk})
+ Q_{dk}^2 = 2 C_{dk}^2 A_{dk}^2 g (h_{dk} + z_{inv, dk} - H_{jdk})
 \end{equation}
 
 \begin{equation}
- |Q_{dk}^{t}| Q_{dk}^{t + \Delta t} = C_{dk}^2 A_{dk}^2 g (h_{dk} + z_{inv, dk} - H_{jdk})
+ |Q_{dk}^{t}| Q_{dk}^{t + \Delta t} = 2 C_{dk}^2 A_{dk}^2 g (h_{dk} + z_{inv, dk} - H_{jdk})
 \end{equation}
 
 \begin{equation}
-  h_{dk} = \frac{|Q_{dk}^{t}| Q_{dk}^{t + \Delta t}}{C_{dk}^2 A_{dk}^2 g} + H_{jdk} - z_{inv, dk}
+  h_{dk} = \frac{|Q_{dk}^{t}| Q_{dk}^{t + \Delta t}}{2 C_{dk}^2 A_{dk}^2 g} + H_{jdk} - z_{inv, dk}
 \end{equation}
 
 \subsection*{Superlink boundary conditions}
