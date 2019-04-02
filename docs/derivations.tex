@@ -229,7 +229,7 @@ Arranging in terms of the unknown heads:
 \begin{equation}
   \begin{split}
     Q_{dk}^{t + \Delta t} = 
-    [(-W_{Nk} \gamma_{uk})(X_{1k}) + (X_{1k} \gamma_{uk} - 1)(-W_{Nk})] H_{juk}^{t + \Delta t} + \\
+    [(-W_{Nk} \gamma_{uk})(-X_{1k}) + (X_{1k} \gamma_{uk} - 1)(-W_{Nk})] H_{juk}^{t + \Delta t} + \\
     [(-W_{Nk} \gamma_{uk})(-Z_{1k}) + (X_{1k} \gamma_{uk} - 1)(-U_{Nk})] H_{jdk}^{t + \Delta t} + \\
     [(-W_{Nk} \gamma_{uk})(- \pi_1) + (X_{1k} \gamma_{uk} - 1)(-\pi_2)]
   \end{split}
@@ -279,13 +279,13 @@ Where:
 
 \section*{Forming the solution matrix}
 
-The equations for the flows at the ends of each superlink is given by:
+The equations for the flows at the ends of each superlink are given by:
 
 \begin{equation}
   \sum_{l=1}^{NBDj} Q_{dk_l}^{t + \Delta t} - \sum_{m=1}^{NBUj} Q_{uk_m}^{t + \Delta t} + Q_{o,j} = \frac{A_{sj} (H_j^{t + \Delta t} - H_j)}{\Delta t}
 \end{equation}
 
-Substituting the linear expressions for the upstream and downstream flow:
+Substituting the linear expressions for the upstream and downstream flows:
 
 \begin{equation}
   \begin{split}
