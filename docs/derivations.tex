@@ -10,7 +10,12 @@
 
 \begin{document}
 
-\section*{Glossary}
+\maketitle
+\tableofcontents
+
+\clearpage
+
+\section{Glossary}
 
 \begin{table}[!htb]
   \centering
@@ -41,7 +46,9 @@
   \end{tabular}
 \end{table}
 
-\section*{Basic equations}
+\section{Basic equations}
+
+The two governing equations for SUPERLINK are continuity and conservation of momentum.
 
 Continuity:
 
@@ -55,7 +62,7 @@ Conservation of momentum:
   \frac{\partial Q}{\partial t} + \frac{\partial}{\partial x} (Q u) + g A \biggl(\frac{\partial h}{\partial x} - S_0 + S_f + S_L \biggr) = 0
 \end{equation}
 
-\section*{Discretization of momentum}
+\section{Discretization of momentum}
 
 Discretizing the momentum equation:
 
@@ -167,9 +174,9 @@ Alternatively, assuming $u_{ik} < 0$ and $u_{i-1k} \approx u_{ik} \approx u_{i+1
   \end{split}
 \end{equation}
 
-\section*{Recurrence relationships}
+\section{Recurrence relationships}
 
-\subsection*{Forward recurrence}
+\subsection{Forward recurrence}
 
 Starting at the upstream end of superlink k:
 
@@ -364,7 +371,7 @@ Where:
 
 \clearpage
 
-\subsection*{Backward recurrence}
+\subsection{Backward recurrence}
 
 Starting at the downstream end of superlink k:
 
@@ -556,9 +563,9 @@ Where:
 
 \clearpage
 
-\section*{Inlet hydraulics}
+\section{Inlet hydraulics}
 
-\subsection*{Depth at upstream end of superlink}
+\subsection{Depth at upstream end of superlink}
 
 The discharge at the upstream end of a superlink is given by:
 
@@ -586,7 +593,7 @@ Squaring and rearranging provides the depth boundary condition at the upstream e
   h_{uk} = -\frac{|Q_{uk}^{t}| Q_{uk}^{t + \Delta t}}{ 2 C_{uk}^2 A_{uk}^2 g} + H_{juk} - z_{inv, uk}
 \end{equation}
 
-\subsection*{Depth at downstream end of superlink}
+\subsection{Depth at downstream end of superlink}
 
 The discharge at the downstream end of a superlink is given by:
 
@@ -615,7 +622,7 @@ end:
   h_{dk} = \frac{|Q_{dk}^{t}| Q_{dk}^{t + \Delta t}}{2 C_{dk}^2 A_{dk}^2 g} + H_{jdk} - z_{inv, dk}
 \end{equation}
 
-\subsection*{Superlink boundary conditions}
+\subsection{Superlink boundary conditions}
 
 From the recurrence relations:
 
@@ -792,7 +799,7 @@ Where:
   \gamma_{dk} = \frac{|Q_{dk}^{t}|}{2 C_{dk}^2 A_{dk}^2 g}
 \end{align}
 
-\section*{Forming the solution matrix}
+\section{Forming the solution matrix}
 
 The equations for the flows at the ends of each superlink are given by:
 
