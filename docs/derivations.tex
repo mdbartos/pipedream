@@ -169,6 +169,201 @@ Alternatively, assuming $u_{ik} < 0$ and $u_{i-1k} \approx u_{ik} \approx u_{i+1
 
 \section*{Recurrence relationships}
 
+\subsection*{Forward recurrence}
+
+Starting at the upstream end of superlink k:
+
+\begin{equation}
+  Q_{2k}^{t + \Delta t} - Q_{1k}^{t + \Delta t} + E_{2k} h_{2k}^{t + \Delta t} = D_{2k}
+\end{equation}
+
+
+\begin{equation}
+   a_{1k} Q_{0k}^{t + \Delta t} + b_{1k} Q_{1k}^{t + \Delta t} + c_{1k} Q_{2k}^{t + \Delta t} = P_{1k} + g A_{1k} (h_{1k}^{t + \Delta t} - h_{2k}^{t + \Delta t})
+\end{equation}
+
+Assuming $Q_{0k}^{t + \Delta t} = Q_{1k}^{t + \Delta t}$:
+
+\begin{equation}
+  a_{1k} Q_{1k}^{t + \Delta t} + b_{1k} Q_{1k}^{t + \Delta t} + c_{1k} (Q_{1k}^{t + \Delta t} - E_{2k} h_{2k}^{t + \Delta t} + D_{2k}) = P_{1k} + g A_{1k} (h_{1k}^{t + \Delta t} - h_{2k}^{t + \Delta t})
+\end{equation}
+
+\begin{equation}
+  (a_{1k} + b_{1k} + c_{1k}) Q_{1k}^{t + \Delta t} = E_{2k} c_{2k} h_{2k}^{t + \Delta t} + (P_{1k} + c_{1k} D_{2k}) + g A_{1k} (h_{1k}^{t + \Delta t} - h_{2k}^{t + \Delta t})
+\end{equation}
+
+\begin{equation}
+  (a_{1k} + b_{1k} + c_{1k}) Q_{1k}^{t + \Delta t} = ( E_{2k} c_{1k} - g A_{1k} ) h_{2k}^{t + \Delta t} + (P_{1k} -  D_{2k} c_{1k}) + g A_{1k} h_{1k}^{t + \Delta t}
+\end{equation}
+
+
+\begin{equation}
+   Q_{1k}^{t + \Delta t} = \frac{( E_{2k} c_{1k} - g A_{1k} ) h_{2k}^{t + \Delta t} + (P_{1k} -  D_{2k} c_{1k}) + g A_{1k} h_{1k}^{t + \Delta t}}{a_{1k} + b_{1k} + c_{1k}}
+\end{equation}
+
+Thus for the upstream end of superlink k:
+
+\begin{equation}
+  \boxed{
+  Q_{1k}^{t + \Delta t} = U_{1k} h_{2k}^{t + \Delta t} + Y_{1k} + Z_{1k} h_{1k}^{t + \Delta t}
+  }
+\end{equation}
+
+Where:
+
+\begin{equation}
+  \boxed{
+  T_{1k} = a_{1k} + b_{1k} + c_{1k}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  U_{1k} = \frac{E_{2k} c_{1k} - g A_{1k}}{T_{1k}}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  V_{1k} = \frac{P_{1k} -  D_{2k} c_{1k}}{T_{1k}}
+  } 
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  W_{1k} = \frac{g A_{1k}}{T_{1k}}
+  } 
+\end{equation}
+
+For the next element downstream:
+
+\begin{equation}
+  Q_{3k}^{t + \Delta t} - Q_{2k}^{t + \Delta t} + E_{3k} h_{3k}^{t + \Delta t} = D_{3k}
+\end{equation}
+
+
+\begin{equation}
+   a_{2k} Q_{1k}^{t + \Delta t} + b_{2k} Q_{2k}^{t + \Delta t} + c_{2k} Q_{3k}^{t + \Delta t} = P_{2k} + g A_{2k} (h_{2k}^{t + \Delta t} - h_{3k}^{t + \Delta t})
+\end{equation}
+
+Substituting:
+
+\begin{equation}
+  \begin{split}
+    a_{2k} (Q_{2k}^{t + \Delta t} + E_{2k} h_{2k}^{t + \Delta t}
+    - D_{2k}) + (b_{2k}) Q_{2k}^{t + \Delta t} + c_{2k} (Q_{2k} - E_{3k} h_{3k}^{t + \Delta t} + D_{3k}) \\ - P_{2k} - g A_{2k}
+    (h_{2k}^{t + \Delta t} - h_{3k}^{t + \Delta t}) = 0
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    (a_{2k} + b_{2k} + c_{2k})  Q_{2k}^{t + \Delta t} + ( E_{2k} a_{2k} - g A_{2k}) h_{2k}^{t + \Delta t} \\ + (g A_{2k} - c_{2k} E_{3k}) h_{3k}^{t + \Delta t}   
+    + (- D_{2k} a_{2k}   + D_{3k} c_{2k} - P_{2k}) = 0 
+  \end{split}
+\end{equation}
+
+Multiplying $h_{2k}^{t + \Delta t}$ by $(U_{1k} - E_{2k}) / (U_{1k} - E_{2k})$
+and rearranging:
+
+\begin{equation}
+  \begin{split}
+    (a_{2k} + b_{2k} + c_{2k})  Q_{2k}^{t + \Delta t} + \frac{( E_{2k} a_{2k} - g A_{2k})(U_{1k} - E_{2k})}{(U_{1k} - E_{2k})} h_{2k}^{t + \Delta t} \\ + (g A_{2k} - c_{2k} E_{3k}) h_{3k}^{t + \Delta t}   
+    + (- P_{2k} - D_{2k} a_{2k}   + D_{3k} c_{2k} ) = 0 
+  \end{split}
+\end{equation}
+
+Note that:
+
+\begin{equation}
+U_{1k} h_{2k}^{t + \Delta t} = (Q_{1k}^{t + \Delta t} - V_{1k} - W_{1k}
+h_{1k}^{t + \Delta t})
+\end{equation}
+
+\begin{equation}
+E_{2k} h_{2k}^{t + \Delta t} = (D_{2k} -
+Q_{2k}^{t + \Delta t} + Q_{1k}^{t + \Delta t})
+\end{equation}
+
+Thus:
+
+\begin{equation}
+  \begin{split}
+    (a_{2k} + b_{2k} + c_{2k})  Q_{2k}^{t + \Delta t} \\ + \frac{(E_{2k} a_{2k} - g A_{2k})}{(U_{1k} - E_{2k})} [(Q_{1k}^{t + \Delta t} - V_{1k} - W_{1k} h_{1k}^{t + \Delta t}) - (D_{2k} - Q_{2k}^{t + \Delta t} + Q_{1k}^{t + \Delta t})] \\ + (g A_{2k} - c_{2k} E_{3k}) h_{3k}^{t + \Delta t}   
+    + (- P_{2k} - D_{2k} a_{2k}   + D_{3k} c_{2k} ) = 0 
+  \end{split}
+\end{equation}
+
+Allowing $Q_{1k}^{t + \Delta t}$ to be eliminated:
+
+\begin{equation}
+  \begin{split}
+    (a_{2k} + b_{2k} + c_{2k})  Q_{2k}^{t + \Delta t} + \frac{(E_{2k} a_{2k} - g A_{2k})}{U_{1k} - E_{2k}} Q_{2k}^{t + \Delta t} \\ + \frac{(E_{2k} a_{2k} - g A_{2k}) ( - W_{1k} )}{U_{1k} - E_{2k}} h_{1k}^{t + \Delta} + (g A_{2k} - c_{2k} E_{3k}) h_{3k}^{t + \Delta t}   
+   \\ + (- P_{2k} - D_{2k} a_{2k}   + D_{3k} c_{2k} + (E_{2k} a_{2k} - g A_{2k}) \frac{ ( - V_{1k} - D_{2k} )}{( U_{1k} - E_{2k} )} ) = 0 
+  \end{split}
+\end{equation}
+
+Rearranging:
+
+\begin{equation}
+  \begin{split}
+    \biggl( a_{2k} + b_{2k} + c_{2k} - \frac{g A_{2k} - E_{2k} a_{2k}}{U_{1k} - E_{2k}} \biggr)  Q_{2k}^{t + \Delta t} \\ + \frac{(g A_{2k} - E_{2k} a_{2k}) W_{1k} }{U_{1k} - E_{2k}} h_{1k}^{t + \Delta} + (g A_{2k} - c_{2k} E_{3k}) h_{3k}^{t + \Delta t}   
+   \\ + \biggl(- P_{2k} - D_{2k} a_{2k}   + D_{3k} c_{2k} + (g A_{2k} - E_{2k} a_{2k}) \frac{ V_{1k} + D_{2k} }{ U_{1k} - E_{2k} } \biggr) = 0 
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    \biggl( a_{2k} + b_{2k} + c_{2k} - \frac{g A_{2k} - E_{2k} a_{2k}}{U_{1k} - E_{2k}} \biggr)  Q_{2k}^{t + \Delta t} \\ =  ( E_{3k} c_{2k} - g A_{2k}) h_{3k}^{t + \Delta t}   
+   \\ + \biggl( P_{2k} + D_{2k} a_{2k}   - D_{3k} c_{2k} - (g A_{2k} - E_{2k} a_{2k}) \frac{ V_{1k} + D_{2k} }{( U_{1k} - E_{2k} )} \biggr) \\ - \frac{(g A_{2k} - E_{2k} a_{2k}) W_{1k} }{U_{1k} - E_{2k}} h_{1k}^{t + \Delta} 
+  \end{split}
+\end{equation}
+
+Generalizing for $i = 2$, $I = 2$:
+
+\begin{equation}
+  \begin{split}
+    \biggl( a_{ik} + b_{ik} + c_{ik} - \frac{g A_{ik} - E_{Ik} a_{ik}}{U_{I - 1k} - E_{Ik}} \biggr)  Q_{ik}^{t + \Delta t} \\ =  ( E_{I + 1k} c_{ik} - g A_{ik}) h_{I + 1k}^{t + \Delta t}   
+   \\ + \biggl( P_{ik} + D_{Ik} a_{ik}   - D_{I+1k} c_{ik} - (g A_{ik} - E_{ik} a_{ik}) \frac{ V_{I-1k} + D_{Ik} }{ U_{I-1k} - E_{Ik} } \biggr) \\ - \frac{(g A_{ik} - E_{Ik} a_{ik}) W_{I - 1k} }{U_{I - 1k} - E_{Ik}} h_{1k}^{t + \Delta} 
+  \end{split}
+\end{equation}
+
+Condensing in terms of coefficients:
+
+\begin{equation}
+  \boxed{
+ Q_{ik}^{t + \Delta t} = U_{Ik} h_{I + 1k}^{t + \Delta t} + V_{Ik} + W_{Ik} h_{1k}^{t + \Delta t} 
+ }
+\end{equation}
+
+Where:
+
+\begin{equation}
+  \boxed{
+    U_{Ik} = \frac{E_{I + 1k} c_{ik} - g A_{ik}}{T_{ik}}
+ }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+    V_{Ik} = \frac{ P_{ik} + D_{Ik} a_{ik} - D_{I + 1k} c_{ik} - (g A_{ik} - E_{Ik} a_{ik}) \frac{ V_{I-1k} + D_{Ik} }{ U_{I-1k} - E_{Ik} }}{T_{ik}}
+ }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+    W_{Ik} = \frac{(g A_{ik} - E_{Ik} a_{ik}) W_{I - 1k} }{U_{I - 1k} - E_{Ik}}
+ }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+ T_{ik} = \biggl(a_{ik} + b_{ik} + c_{ik} - \frac{ g A_{ik} - E_{Ik} a_{ik} }{U_{I-1k} - E_{Ik}} \biggr) 
+ }
+\end{equation}
+
+\clearpage
+
 \subsection*{Backward recurrence}
 
 Starting at the downstream end of superlink k:
@@ -280,7 +475,7 @@ h_{Nk + 1}^{t + \Delta t})
 \end{equation}
 
 \begin{equation}
-E_{Nk} h_{Nk^{t + \Delta t}} = (D_{Nk} -
+E_{Nk} h_{Nk}^{t + \Delta t} = (D_{Nk} -
 Q_{nk}^{t + \Delta t} + Q_{nk - 1}^{t + \Delta t})
 \end{equation}
 
@@ -288,7 +483,7 @@ Thus:
 
 \begin{equation}
   \begin{split}
-    (a_{nk - 1} + b_{nk - 1} + c_{nk - 1})  Q_{nk - 1}^{t + \Delta t} \\ + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} )}{(X_{Nk} + E_{Nk})} [(Q_{nk}^{t + \Delta t} - Y_{Nk} - Z_{Nk} h_{Nk + 1}^{t + \Delta t}) - (D_{Nk} - Q_{nk}^{t + \Delta t} + Q_{nk - 1}^{t + \Delta t})] \\ + (E_{Nk - 1} a_{nk - 1} - g A_{nk -1}) h_{Nk - 1}^{t + \Delta t}   
+    (a_{nk - 1} + b_{nk - 1} + c_{nk - 1})  Q_{nk - 1}^{t + \Delta t} \\ + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} )}{(X_{Nk} + E_{Nk})} [(Q_{nk}^{t + \Delta t} - Y_{Nk} - Z_{Nk} h_{Nk + 1}^{t + \Delta t}) + (D_{Nk} - Q_{nk}^{t + \Delta t} + Q_{nk - 1}^{t + \Delta t})] \\ + (E_{Nk - 1} a_{nk - 1} - g A_{nk -1}) h_{Nk - 1}^{t + \Delta t}   
     + ( - P_{nk - 1} - D_{Nk - 1} a_{nk - 1}   + D_{Nk} c_{nk - 1} ) = 0 
   \end{split}
 \end{equation}
