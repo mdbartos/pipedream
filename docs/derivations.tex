@@ -41,6 +41,326 @@
   \end{tabular}
 \end{table}
 
+\section*{Basic equations}
+
+Continuity:
+
+\begin{equation}
+  \frac{\partial A}{\partial t} + \frac{\partial Q}{\partial x} = q_0
+\end{equation}
+
+Conservation of momentum:
+
+\begin{equation}
+  \frac{\partial Q}{\partial t} + \frac{\partial}{\partial x} (Q u) + g A \biggl(\frac{\partial h}{\partial x} - S_0 + S_f + S_L \biggr) = 0
+\end{equation}
+
+\section*{Discretization of momentum}
+
+Discretizing the momentum equation:
+
+\begin{equation}
+  \begin{split}
+    (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + u_{I+1k}
+    Q_{I + 1k}^{t + \Delta t} - u_{Ik} Q_{Ik}^{t + \Delta t} \\
+    + g A (h_{I+1k}^{t + \Delta t} - h_{Ik}^{t + \Delta t}) 
+    - g A_{ik} S_{o,ik} \Delta x_{ik} + g
+    A_{ik} (S_{f,ik} + S_{L,ik}) \Delta x = 0
+  \end{split}
+\end{equation}
+
+This equation can be written in terms of the following coefficient equation:
+
+\begin{equation}
+  \begin{split}
+    a_{ik} Q_{i - 1k}^{t + \Delta t} + b_{ik} Q_{ik}^{t + \Delta t} + c_{ik} Q_{i + 1k}^{t + \Delta t} =
+    P_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
+  \end{split}
+\end{equation}
+
+Where:
+
+\begin{equation}
+  a_{ik} = - \max(u_{Ik}, 0)
+\end{equation}
+
+\begin{equation}
+  c_{ik} = - \max(-u_{I+1k}, 0)
+\end{equation}
+
+\begin{equation}
+  b_{ik} = \frac{\Delta x_{ik}}{\Delta t} + \frac{g n_{ik}^2 |Q_{ik}^t| \Delta x_{ik}}{A_{ik} R_{ik}^{4/3}} + \frac{A_{ik} |Q_{ik}^t|}{A_{cik}^2 C_{ik}^2} - a_{ik} - c_{ik}
+\end{equation}
+
+\begin{equation}
+  P_{ik} = Q_{ik} \frac{\Delta x_{ik}}{\Delta t} + g A_{ik} S_{o,ik} \Delta x_{ik}
+\end{equation}
+
+Substituting the coefficients:
+
+\begin{equation}
+  \begin{split}
+    - \max(u_{Ik}, 0) Q_{i - 1k}^{t + \Delta t} + \biggl(\frac{\Delta x_{ik}}{\Delta t} + \frac{g n_{ik}^2 |Q_{ik}^t| \Delta x_{ik}}{A_{ik} R_{ik}^{4/3}} + \frac{A_{ik} |Q_{ik}^t|}{A_{cik}^2 C_{ik}^2} + \max(u_{Ik}, 0) + \max(-u_{I+1k}, 0) \biggr) Q_{ik}^{t + \Delta t} \\ - \max(-u_{I+1k}, 0) Q_{i + 1k}^{t + \Delta t} \\ =
+    Q_{ik} \frac{\Delta x_{ik}}{\Delta t} + g A_{ik} S_{o,ik} \Delta x_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
+  \end{split}
+\end{equation}
+
+Assuming $u_{ik} > 0$ and $u_{i-1k} \approx u_{ik} \approx u_{i+1k}$:
+
+\begin{equation}
+  \begin{split}
+    -u_{Ik} Q_{i - 1k}^{t + \Delta t} + \biggl(\frac{\Delta x_{ik}}{\Delta t} + \frac{g n_{ik}^2 |Q_{ik}^t| \Delta x_{ik}}{A_{ik} R_{ik}^{4/3}} + \frac{A_{ik} |Q_{ik}^t|}{A_{cik}^2 C_{ik}^2} + u_{Ik} \biggr) Q_{ik}^{t + \Delta t} \\ =
+    Q_{ik}^t \frac{\Delta x_{ik}}{\Delta t} + g A_{ik} S_{o,ik} \Delta x_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + (Q_{ik}^{t + \Delta t} - Q_{i - 1k}^{t + \Delta t}) u_{Ik} \\ + g A_{ik} (\frac{n_{ik}^2 |Q_{ik}^t| Q_{ik}^{t + \Delta t}}{A_{ik}^2 R_{ik}^{4/3}} + \frac{|Q_{ik}^t| Q_{ik}^{t + \Delta t}}{g C_{ik}^2 A_{cik}^2 \Delta x_{ik}}) \Delta x_{ik} \\ =
+    g A_{ik} S_{o,ik} \Delta x_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
+  \end{split}
+\end{equation}
+
+
+\begin{equation}
+  \begin{split}
+    (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + (Q_{ik}^{t + \Delta t} - Q_{i - 1k}^{t + \Delta t}) u_{Ik} + g A_{ik} (S_{f,ik} + S_{L,ik}) \Delta x_{ik} \\ =
+    g A_{ik} S_{o,ik} \Delta x_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + (Q_{ik}^{t + \Delta t} - Q_{i - 1k}^{t + \Delta t}) u_{Ik} \\ + g A_{ik} (h_{I+1k}^{t + \Delta t} - h_{Ik}^{t + \Delta t}) + g A_{ik} (S_{f,ik} -
+    g A_{ik} S_{o,ik} \Delta x_{ik} + S_{L,ik}) \Delta x_{ik}
+  \end{split}
+\end{equation}
+
+Alternatively, assuming $u_{ik} < 0$ and $u_{i-1k} \approx u_{ik} \approx u_{i+1k}$:
+
+\begin{equation}
+  \begin{split}
+    u_{I+1k} Q_{i+1k}^{t + \Delta t} + \biggl(\frac{\Delta x_{ik}}{\Delta t} + \frac{g n_{ik}^2 |Q_{ik}^t| \Delta x_{ik}}{A_{ik} R_{ik}^{4/3}} + \frac{A_{ik} |Q_{ik}^t|}{A_{cik}^2 C_{ik}^2} - u_{I+1k} \biggr) Q_{ik}^{t + \Delta t} \\ =
+    Q_{ik}^t \frac{\Delta x_{ik}}{\Delta t} + g A_{ik} S_{o,ik} \Delta x_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + (Q_{i+1k}^{t + \Delta t} - Q_{ik}^{t + \Delta t}) u_{I+1k} \\ + g A_{ik} (\frac{n_{ik}^2 |Q_{ik}^t| Q_{ik}^{t + \Delta t}}{A_{ik}^2 R_{ik}^{4/3}} + \frac{|Q_{ik}^t| Q_{ik}^{t + \Delta t}}{g C_{ik}^2 A_{cik}^2 \Delta x_{ik}}) \Delta x_{ik} \\ =
+    g A_{ik} S_{o,ik} \Delta x_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
+  \end{split}
+\end{equation}
+
+
+\begin{equation}
+  \begin{split}
+    (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + (Q_{i+1k}^{t + \Delta t} - Q_{ik}^{t + \Delta t}) u_{I+1k} + g A_{ik} (S_{f,ik} + S_{L,ik}) \Delta x_{ik} \\ =
+    g A_{ik} S_{o,ik} \Delta x_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + (Q_{i+1k}^{t + \Delta t} - Q_{ik}^{t + \Delta t}) u_{I+1k} \\ + g A_{ik} (h_{I+1k}^{t + \Delta t} - h_{Ik}^{t + \Delta t}) + g A_{ik} (S_{f,ik} -
+    g A_{ik} S_{o,ik} \Delta x_{ik} + S_{L,ik}) \Delta x_{ik}
+  \end{split}
+\end{equation}
+
+\section*{Recurrence relationships}
+
+\subsection*{Backward recurrence}
+
+Starting at the downstream end of superlink k:
+
+\begin{equation}
+  Q_{nk}^{t + \Delta t} - Q_{nk - 1}^{t + \Delta t} + E_{Nk} h_{Nk}^{t + \Delta t} = D_{Nk}
+\end{equation}
+
+
+\begin{equation}
+   a_{nk} Q_{nk - 1}^{t + \Delta t} + b_{nk} Q_{nk}^{t + \Delta t} + c_{nk} Q_{nk + 1}^{t + \Delta t} = P_{nk} + g A_{nk} (h_{Nk}^{t + \Delta t} - h_{Nk+1}^{t + \Delta t})
+\end{equation}
+
+Assuming $Q_{nk}^{t + \Delta t} = Q_{nk+1}^{t + \Delta t}$:
+
+\begin{equation}
+  a_{nk} (Q_{nk}^{t + \Delta t} + E_{Nk} h_{Nk}^{t + \Delta t} - D_{Nk}) + b_{nk} Q_{nk}^{t + \Delta t} + c_{nk} Q_{nk}^{t + \Delta t} = P_{nk} + g A_{nk} (h_{Nk}^{t + \Delta t} - h_{Nk + 1}^{t + \Delta t})
+\end{equation}
+
+\begin{equation}
+  (a_{nk} + b_{nk} + c_{nk}) Q_{nk}^{t + \Delta t} = - E_{Nk} a_{nk} h_{Nk}^{t + \Delta t} + (P_{nk} + a_{nk} D_{Nk}) + g A_{nk} (h_{Nk}^{t + \Delta t} - h_{Nk + 1}^{t + \Delta t})
+\end{equation}
+
+\begin{equation}
+  (a_{nk} + b_{nk} + c_{nk}) Q_{nk}^{t + \Delta t} = ( g A_{nk} - E_{Nk} a_{nk} ) h_{Nk}^{t + \Delta t} + (P_{nk} +  D_{Nk} a_{nk}) - g A_{nk} h_{Nk + 1}^{t + \Delta t}
+\end{equation}
+
+
+\begin{equation}
+  Q_{nk}^{t + \Delta t} = \frac{( g A_{nk} -  E_{Nk} a_{nk} ) h_{Nk}^{t + \Delta t} + (P_{nk} +  D_{Nk} a_{nk}) - g A_{nk} h_{Nk + 1}^{t + \Delta t}}{(a_{nk} + b_{nk} + c_{nk})}
+\end{equation}
+
+Thus for the downstream end of superlink k:
+
+\begin{equation}
+  \boxed{
+  Q_{nk}^{t + \Delta t} = X_{Nk} h_{Nk}^{t + \Delta t} + Y_{Nk} + Z_{Nk} h_{Nk + 1}^{t + \Delta t}
+  }
+\end{equation}
+
+Where:
+
+\begin{equation}
+  \boxed{
+  O_{nk} = a_{nk} + b_{nk} + c_{nk}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  X_{Nk} = \frac{( g A_{nk} - E_{Nk} a_{nk} )}{O_{nk}}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  Y_{Nk} = \frac{P_{nk} +  D_{Nk} a_{nk}}{O_{nk}}
+  } 
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  Z_{Nk} = - \frac{g A_{nk}}{O_{nk}}
+  } 
+\end{equation}
+
+For the next element upstream:
+
+\begin{equation}
+  Q_{nk - 1}^{t + \Delta t} - Q_{nk - 2}^{t + \Delta t} + E_{Nk - 1} h_{Nk - 1}^{t + \Delta t} = D_{Nk - 1}
+\end{equation}
+
+
+\begin{equation}
+   a_{nk - 1} Q_{nk - 2}^{t + \Delta t} + b_{nk - 1} Q_{nk - 1}^{t + \Delta t} + c_{nk - 1} Q_{nk}^{t + \Delta t} = P_{nk - 1} + g A_{nk - 1} (h_{Nk - 1}^{t + \Delta t} - h_{Nk}^{t + \Delta t})
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    a_{nk - 1} (Q_{nk - 1}^{t + \Delta t} + E_{Nk - 1} h_{Nk - 1}^{t + \Delta t}
+    - D_{Nk - 1}) + (b_{nk - 1}) Q_{nk - 1}^{t + \Delta t} + c_{nk - 1} (Q_{nk -
+      1} - E_{Nk} h_{Nk}^{t + \Delta t} + D_{Nk}) \\ - P_{nk - 1} - g A_{nk - 1}
+    (h_{Nk - 1}^{t + \Delta t} - h_{Nk}^{t + \Delta t}) = 0
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    (a_{nk - 1} + b_{nk - 1} + c_{nk - 1})  Q_{nk - 1}^{t + \Delta t} + ( - E_{Nk} c_{nk - 1} + g A_{nk - 1}) h_{Nk}^{t + \Delta t} \\ + (E_{Nk - 1} a_{nk - 1} - g A_{nk -1}) h_{Nk - 1}^{t + \Delta t}   
+    + (- D_{Nk - 1} a_{nk - 1}   + D_{Nk} c_{nk - 1} - P_{nk - 1}) = 0 
+  \end{split}
+\end{equation}
+
+Multiplying $h_{Nk}^{t + \Delta t}$ by $(X_{Nk} + E_{Nk}) / (X_{Nk} + E_{Nk})$
+and rearranging:
+
+\begin{equation}
+  \begin{split}
+    (a_{nk - 1} + b_{nk - 1} + c_{nk - 1})  Q_{nk - 1}^{t + \Delta t} + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} ) (X_{Nk} + E_{Nk}) }{(X_{Nk} + E_{Nk})} h_{Nk}^{t + \Delta t} \\ + (E_{Nk - 1} a_{nk - 1} - g A_{nk -1}) h_{Nk - 1}^{t + \Delta t}   
+    + ( - P_{nk - 1} - D_{Nk - 1} a_{nk - 1}   + D_{Nk} c_{nk - 1} ) = 0 
+  \end{split}
+\end{equation}
+
+Note that:
+
+\begin{equation}
+X_{Nk} h_{Nk}^{t + \Delta t} = (Q_{nk}^{t + \Delta t} - Y_{Nk} - Z_{Nk}
+h_{Nk + 1}^{t + \Delta t})
+\end{equation}
+
+\begin{equation}
+E_{Nk} h_{Nk^{t + \Delta t}} = (D_{Nk} -
+Q_{nk}^{t + \Delta t} + Q_{nk - 1}^{t + \Delta t})
+\end{equation}
+
+Thus:
+
+\begin{equation}
+  \begin{split}
+    (a_{nk - 1} + b_{nk - 1} + c_{nk - 1})  Q_{nk - 1}^{t + \Delta t} \\ + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} )}{(X_{Nk} + E_{Nk})} [(Q_{nk}^{t + \Delta t} - Y_{Nk} - Z_{Nk} h_{Nk + 1}^{t + \Delta t}) - (D_{Nk} - Q_{nk}^{t + \Delta t} + Q_{nk - 1}^{t + \Delta t})] \\ + (E_{Nk - 1} a_{nk - 1} - g A_{nk -1}) h_{Nk - 1}^{t + \Delta t}   
+    + ( - P_{nk - 1} - D_{Nk - 1} a_{nk - 1}   + D_{Nk} c_{nk - 1} ) = 0 
+  \end{split}
+\end{equation}
+
+Allowing $Q_{nk}^{t + \Delta t}$ to be eliminated:
+
+\begin{equation}
+  \begin{split}
+    (a_{nk - 1} + b_{nk - 1} + c_{nk - 1})  Q_{nk - 1}^{t + \Delta t} \\ + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} )}{(X_{Nk} + E_{Nk})} Q_{nk - 1}^{t + \Delta t} + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} ) (-Z_{Nk})}{(X_{Nk} + E_{Nk})} h_{Nk + 1}^{t + \Delta t} \\ + (E_{Nk - 1} a_{nk - 1} - g A_{nk -1}) h_{Nk - 1}^{t + \Delta t}   
+   \\ + \biggl( - P_{nk - 1} - D_{Nk - 1} a_{nk - 1}   + D_{Nk} c_{nk - 1} + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} )(-Y_{Nk} + D_{Nk})}{(X_{Nk} + E_{Nk})} \biggr) = 0 
+  \end{split}
+\end{equation}
+
+Rearranging:
+
+\begin{equation}
+  \begin{split}
+    \biggl(a_{nk - 1} + b_{nk - 1} + c_{nk - 1} + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} )}{(X_{Nk} + E_{Nk})} \biggr)  Q_{nk - 1}^{t + \Delta t} \\ + (E_{Nk - 1} a_{nk - 1} - g A_{nk -1}) h_{Nk - 1}^{t + \Delta t} - \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} ) Z_{Nk}}{(X_{Nk} + E_{Nk})} h_{Nk + 1}^{t + \Delta t}  
+   \\ + \biggl( - P_{nk - 1} - D_{Nk - 1} a_{nk - 1}   + D_{Nk} c_{nk - 1} + ( g A_{nk - 1} - E_{Nk} c_{nk - 1} ) \frac{( D_{Nk} - Y_{Nk})}{(X_{Nk} + E_{Nk})} \biggr) = 0 
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    \biggl(a_{nk - 1} + b_{nk - 1} + c_{nk - 1} + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} )}{(X_{Nk} + E_{Nk})} \biggr)  Q_{nk - 1}^{t + \Delta t} \\ = ( g A_{nk -1} - E_{Nk - 1} a_{nk - 1}) h_{Nk - 1}^{t + \Delta t} \\ + \biggl( P_{nk - 1} + D_{Nk - 1} a_{nk - 1}   - D_{Nk} c_{nk - 1} - ( g A_{nk - 1} - E_{Nk} c_{nk - 1} ) \frac{( D_{Nk} - Y_{Nk})}{(X_{Nk} + E_{Nk})} \biggr) \\ + \frac{( g A_{nk - 1} - E_{Nk} c_{nk - 1} ) Z_{Nk}}{(X_{Nk} + E_{Nk})} h_{Nk + 1}^{t + \Delta t}
+  \end{split}
+\end{equation}
+
+Generalizing for $i = nk - 1$, $I = Nk - 1$:
+
+\begin{equation}
+  \begin{split}
+    \biggl(a_{ik} + b_{ik} + c_{ik} + \frac{( g A_{ik} - E_{I + 1k} c_{ik} )}{(X_{I + 1k} + E_{I + 1k})} \biggr)  Q_{ik}^{t + \Delta t} \\ = ( g A_{ik} - E_{Ik} a_{ik}) h_{Ik}^{t + \Delta t} \\ + \biggl( P_{ik} + D_{Ik} a_{ik}   - D_{I + 1k} c_{ik} - ( g A_{ik} - E_{I + 1k} c_{ik} ) \frac{( D_{I + 1k} - Y_{I + 1k})}{(X_{I + 1k} + E_{I + 1k})} \biggr) \\ + \frac{( g A_{ik} - E_{I + 1k} c_{ik} ) Z_{I + 1k}}{(X_{I + 1k} + E_{I + 1k})} h_{Nk + 1}^{t + \Delta t}
+  \end{split}
+\end{equation}
+
+Condensing in terms of coefficients:
+
+\begin{equation}
+  \boxed{
+ Q_{ik}^{t + \Delta t} = X_{ik} h_{Ik}^{t + \Delta t} + Y_{Ik} + Z_{Ik} h_{Nk + 1}^{t + \Delta t} 
+ }
+\end{equation}
+
+Where:
+
+\begin{equation}
+  \boxed{
+    X_{Ik} = \frac{ g A_{ik} - E_{Ik} a_{ik}}{O_{ik}}
+ }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+    Y_{Ik} = \frac{P_{ik} + D_{Ik} a_{ik}   - D_{I + 1k} c_{ik} - ( g A_{ik} - E_{I + 1k} c_{ik} ) \frac{( D_{I + 1k} - Y_{I + 1k})}{(X_{I + 1k} + E_{I + 1k})}}{O_{ik}}
+ }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+    Z_{Ik} = \frac{( g A_{ik} - E_{I + 1k} c_{ik} ) Z_{I + 1k}}{(X_{I + 1k} + E_{I + 1k}) O_{ik}}
+ }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+ O_{ik} = \biggl(a_{ik} + b_{ik} + c_{ik} + \frac{ g A_{ik} - E_{I + 1k} c_{ik} }{X_{I + 1k} + E_{I + 1k}} \biggr) 
+ }
+\end{equation}
+
+\clearpage
+
 \section*{Inlet hydraulics}
 
 \subsection*{Depth at upstream end of superlink}
