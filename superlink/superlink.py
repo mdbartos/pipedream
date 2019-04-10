@@ -103,7 +103,7 @@ class SuperLink():
         # Get indexers for least squares
         self.lsq_indexers()
         # Initialize to stable state
-        self.step(_dt=1e-6, first_time=True)
+        self.step(dt=1e-6, first_time=True)
 
     def lsq_indexers(self):
         _ik = self._ik
@@ -826,7 +826,7 @@ class SuperLink():
         self._beta_dk = _beta_dk
         self._chi_dk = _chi_dk
 
-    def sparse_matrix_equations(self, H_bc=None, _Q_0j=0, _dt=None, first_time=False):
+    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, _dt=None, first_time=False):
         # TODO: May want to consider reconstructing A each time while debugging
         # Import instance variables
         _k = self._k
@@ -850,6 +850,8 @@ class SuperLink():
             _dt = self._dt
         if H_bc is None:
             H_bc = self.H_j
+        if _Q_0j is None:
+            _Q_0j = 0
         # Compute F_jj
         _alpha_ukm_J = pd.Series(_alpha_uk, index=_J_uk).groupby(level=0).sum()
         _beta_dkl_J = pd.Series(_beta_dk, index=_J_dk).groupby(level=0).sum()
@@ -887,7 +889,6 @@ class SuperLink():
         _z_inv_j = self._z_inv_j
         min_depth = self.min_depth
         H_j_next = scipy.sparse.linalg.spsolve(A, b)
-        # H_j_next = np.maximum(H_j_next, _z_inv_j)
         H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
         self.H_j = H_j_next
 
@@ -1285,16 +1286,17 @@ class SuperLink():
         t_2 = W_Im1k * h_1k
         return t_0 + t_1 + t_2
 
-    def step(self, H_bc=None, _dt=None, first_time=False):
+    def step(self, H_bc=None, Q_0j=None, dt=None, first_time=False):
         self.node_velocities()
-        self.link_coeffs(_dt=_dt)
-        self.node_coeffs(_dt=_dt)
+        self.link_coeffs(_dt=dt)
+        self.node_coeffs(_dt=dt)
         self.forward_recurrence()
         self.backward_recurrence()
         self.superlink_upstream_head_coefficients()
         self.superlink_downstream_head_coefficients()
         self.superlink_flow_coefficients()
-        self.sparse_matrix_equations(H_bc=H_bc, first_time=first_time, _dt=_dt)
+        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_0j,
+                                     first_time=first_time, _dt=dt)
         self.solve_sparse_matrix()
         self.solve_superlink_flows()
         # self.solve_superlink_depths()
