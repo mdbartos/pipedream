@@ -4,12 +4,15 @@ import scipy.sparse
 import scipy.sparse.linalg
 
 class SuperLink():
-    def __init__(self, superlinks, superjunctions, links, junctions, dt=60):
+    def __init__(self, superlinks, superjunctions, links, junctions,
+                 dt=60, sparse=False, min_depth=1e-5):
         self.superlinks = superlinks
         self.superjunctions = superjunctions
         self.links = links
         self.junctions = junctions
         self._dt = dt
+        self._sparse = sparse
+        self.min_depth = min_depth
         self._I = junctions.index.values
         self._ik = links.index.values
         self._Ik = links['j_0'].values.astype(int)
@@ -92,6 +95,7 @@ class SuperLink():
         self._chi_dkm = np.zeros(self.M, dtype=float)
         self._k = superlinks.index.values
         self._A_sj = self.superjunctions['A_sj'].values.astype(float)
+        # TODO: Allow input to be specified
         self._Q_0j = 0
         # Set upstream and downstream superlink variables
         self._Q_uk = self._Q_ik[self._i_1k]
@@ -99,13 +103,15 @@ class SuperLink():
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Other parameters
-        self.min_depth = 1e-5
         # Get indexers for least squares
         self.lsq_indexers()
         # Initialize to stable state
         self.step(dt=1e-6, first_time=True)
 
     def lsq_indexers(self):
+        """
+        Initialize matrices and indices for least-squares computation.
+        """
         _ik = self._ik
         _ki = self._ki
         _kI = self._kI
@@ -117,6 +123,7 @@ class SuperLink():
         _I_Np1k = self._I_Np1k
         _i_1k = self._i_1k
         _i_nk = self._i_nk
+        _sparse = self._sparse
         # Create forward and backward indexers
         _I_f = np.ones(_I.size, dtype=bool)
         _I_b = np.ones(_I.size, dtype=bool)
@@ -134,7 +141,10 @@ class SuperLink():
         m = 2*_ik.size - 2*_NK
         n = 2*_ik.size - 3*_NK
         # Create sparse matrices
-        _G = np.zeros((m, n))
+        if _sparse:
+            _G = scipy.sparse.lil_matrix((m, n))
+        else:
+            _G = np.zeros((m, n))
         _h = np.zeros(m)
         # Create row and column indexers for sparse matrices
         _kn = np.bincount(_ki)
@@ -183,6 +193,9 @@ class SuperLink():
         self._ix_q = _ix_q
 
     def safe_divide(function):
+        """
+        Allow for division by zero. Division by zero will return zero.
+        """
         def inner(*args, **kwargs):
             num, den = function(*args, **kwargs)
             cond = (den != 0)
@@ -193,6 +206,9 @@ class SuperLink():
 
     # Node velocities
     def A_ik(self, h_Ik, h_Ip1k, w):
+        """
+        Compute cross-sectional area of flow for link i, superlink k.
+        """
         y = (h_Ik + h_Ip1k) / 2
         y[y < 0] = 0
         y[y > w] = w[y > w]
@@ -202,6 +218,9 @@ class SuperLink():
         return A
 
     def Pe_ik(self, h_Ik, h_Ip1k, w):
+        """
+        Compute perimeter of flow for link i, superlink k.
+        """
         y = (h_Ik + h_Ip1k) / 2
         y[y < 0] = 0
         y[y > w] = w[y > w]
@@ -211,12 +230,18 @@ class SuperLink():
         return Pe
 
     def R_ik(self, A_ik, Pe_ik):
+        """
+        Compute hydraulic radius for link i, superlink k.
+        """
         cond = Pe_ik > 0
         R = np.zeros(A_ik.size)
         R[cond] = A_ik[cond] / Pe_ik[cond]
         return R
 
     def B_ik(self, h_Ik, h_Ip1k, w):
+        """
+        Compute top width of flow for link i, superlink k.
+        """
         y = (h_Ik + h_Ip1k) / 2
         y[y < 0] = 0
         r = w / 2
@@ -229,31 +254,51 @@ class SuperLink():
 
     @safe_divide
     def u_ik(self, Q_ik, A_ik):
+        """
+        Compute velocity of flow for link i, superlink k.
+        """
         num = Q_ik
         den = np.where(A_ik > 0, A_ik, 0)
         return num, den
 
     @safe_divide
     def u_Ip1k(self, dx_ik, u_ip1k, dx_ip1k, u_ik):
+        """
+        Compute approximate velocity of flow for node I+1, superlink k
+        using interpolation.
+        """
         num = dx_ik * u_ip1k + dx_ip1k * u_ik
         den = dx_ik + dx_ip1k
         return num, den
 
     @safe_divide
     def u_Ik(self, dx_ik, u_im1k, dx_im1k, u_ik):
+        """
+        Compute approximate velocity of flow for node I, superlink k
+        using interpolation.
+        """
         num = dx_ik * u_im1k + dx_im1k * u_ik
         den = dx_ik + dx_im1k
         return num, den
 
     # Link coefficients for superlink k
     def a_ik(self, u_Ik):
+        """
+        Compute link coefficient 'a' for link i, superlink k.
+        """
         return -np.maximum(u_Ik, 0)
 
     def c_ik(self, u_Ip1k):
+        """
+        Compute link coefficient 'c' for link i, superlink k.
+        """
         return -np.maximum(-u_Ip1k, 0)
 
     def b_ik(self, dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
              A_c_ik, C_ik, a_ik, c_ik, ctrl, g=9.81):
+        """
+        Compute link coefficient 'b' for link i, superlink k.
+        """
         # TODO: Clean up
         cond = A_ik > 0
         t_0 = dx_ik / dt
@@ -268,12 +313,18 @@ class SuperLink():
         return t_0 + t_1 + t_2 - t_3 - t_4
 
     def P_ik(self, Q_ik_t, dx_ik, dt, A_ik, S_o_ik, g=9.81):
+        """
+        Compute link coefficient 'P' for link i, superlink k.
+        """
         t_0 = Q_ik_t * dx_ik / dt
         t_1 = g * A_ik * S_o_ik * dx_ik
         return t_0 + t_1
 
     # Node coefficients for superlink k
     def E_Ik(self, B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, dt):
+        """
+        Compute node coefficient 'E' for node I, superlink k.
+        """
         t_0 = B_ik * dx_ik / 2
         t_1 = B_im1k * dx_im1k / 2
         t_2 = A_SIk
@@ -281,6 +332,9 @@ class SuperLink():
         return (t_0 + t_1 + t_2) / t_3
 
     def D_Ik(self, Q_0IK, B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, h_Ik_t, dt):
+        """
+        Compute node coefficient 'D' for node I, superlink k.
+        """
         t_0 = Q_0IK
         t_1 = B_ik * dx_ik / 2
         t_2 = B_im1k * dx_im1k / 2
@@ -291,33 +345,51 @@ class SuperLink():
     # Forward recurrence relation coefficients
     @safe_divide
     def U_1k(self, E_2k, c_1k, A_1k, T_1k, g=9.81):
+        """
+        Compute forward recurrence coefficient 'U' for node 1, superlink k.
+        """
         num = E_2k * c_1k - g * A_1k
         den = T_1k
         return num, den
 
     @safe_divide
     def V_1k(self, P_1k, D_2k, c_1k, T_1k):
+        """
+        Compute forward recurrence coefficient 'V' for node 1, superlink k.
+        """
         num = P_1k - D_2k * c_1k
         den = T_1k
         return num, den
 
     @safe_divide
     def W_1k(self, A_1k, T_1k, g=9.81):
+        """
+        Compute forward recurrence coefficient 'W' for node 1, superlink k.
+        """
         num = g * A_1k
         den = T_1k
         return num, den
 
     def T_1k(self, a_1k, b_1k, c_1k):
+        """
+        Compute forward recurrence coefficient 'T' for link 1, superlink k.
+        """
         return a_1k + b_1k + c_1k
 
     @safe_divide
     def U_Ik(self, E_Ip1k, c_ik, A_ik, T_ik, g=9.81):
+        """
+        Compute forward recurrence coefficient 'U' for node I, superlink k.
+        """
         num = E_Ip1k * c_ik - g * A_ik
         den = T_ik
         return num, den
 
     @safe_divide
     def V_Ik(self, P_ik, a_ik, D_Ik, D_Ip1k, c_ik, A_ik, E_Ik, V_Im1k, U_Im1k, T_ik, g=9.81):
+        """
+        Compute forward recurrence coefficient 'V' for node I, superlink k.
+        """
         t_0 = P_ik
         t_1 = a_ik * D_Ik
         t_2 = D_Ip1k * c_ik
@@ -332,11 +404,17 @@ class SuperLink():
 
     @safe_divide
     def W_Ik(self, A_ik, E_Ik, a_ik, W_Im1k, U_Im1k, T_ik, g=9.81):
+        """
+        Compute forward recurrence coefficient 'W' for node I, superlink k.
+        """
         num = -(g * A_ik - E_Ik * a_ik) * W_Im1k
         den = (U_Im1k - E_Ik) * T_ik
         return num, den
 
     def T_ik(self, a_ik, b_ik, c_ik, A_ik, E_Ik, U_Im1k, g=9.81):
+        """
+        Compute forward recurrence coefficient 'T' for link i, superlink k.
+        """
         t_0 = a_ik + b_ik + c_ik
         t_1 = g * A_ik - E_Ik * a_ik
         t_2 = U_Im1k - E_Ik
@@ -350,33 +428,51 @@ class SuperLink():
     # Reverse recurrence relation coefficients
     @safe_divide
     def X_Nk(self, A_nk, E_Nk, a_nk, O_nk, g=9.81):
+        """
+        Compute backward recurrence coefficient 'X' for node N, superlink k.
+        """
         num = g * A_nk - E_Nk * a_nk
         den = O_nk
         return num, den
 
     @safe_divide
     def Y_Nk(self, P_nk, D_Nk, a_nk, O_nk):
+        """
+        Compute backward recurrence coefficient 'Y' for node N, superlink k.
+        """
         num = P_nk + D_Nk * a_nk
         den = O_nk
         return num, den
 
     @safe_divide
     def Z_Nk(self, A_nk, O_nk, g=9.81):
+        """
+        Compute backward recurrence coefficient 'Z' for node N, superlink k.
+        """
         num = - g * A_nk
         den = O_nk
         return num, den
 
     def O_nk(self, a_nk, b_nk, c_nk):
+        """
+        Compute backward recurrence coefficient 'O' for link n, superlink k.
+        """
         return a_nk + b_nk + c_nk
 
     @safe_divide
     def X_Ik(self, A_ik, E_Ik, a_ik, O_ik, g=9.81):
+        """
+        Compute backward recurrence coefficient 'X' for node I, superlink k.
+        """
         num = g * A_ik - E_Ik * a_ik
         den = O_ik
         return num, den
 
     @safe_divide
     def Y_Ik(self, P_ik, a_ik, D_Ik, D_Ip1k, c_ik, A_ik, E_Ip1k, Y_Ip1k, X_Ip1k, O_ik, g=9.81):
+        """
+        Compute backward recurrence coefficient 'Y' for node I, superlink k.
+        """
         t_0 = P_ik
         t_1 = a_ik * D_Ik
         t_2 = D_Ip1k * c_ik
@@ -390,11 +486,17 @@ class SuperLink():
 
     @safe_divide
     def Z_Ik(self, A_ik, E_Ip1k, c_ik, Z_Ip1k, X_Ip1k, O_ik, g=9.81):
+        """
+        Compute backward recurrence coefficient 'Z' for node I, superlink k.
+        """
         num = (g * A_ik - E_Ip1k * c_ik) * Z_Ip1k
         den = (X_Ip1k + E_Ip1k) * O_ik
         return num, den
 
     def O_ik(self, a_ik, b_ik, c_ik, A_ik, E_Ip1k, X_Ip1k, g=9.81):
+        """
+        Compute backward recurrence coefficient 'O' for link i, superlink k.
+        """
         t_0 = a_ik + b_ik + c_ik
         t_1 = g * A_ik - E_Ip1k * c_ik
         t_2 = X_Ip1k + E_Ip1k
@@ -404,40 +506,48 @@ class SuperLink():
         result[cond] = t_0[cond] + (t_1[cond] / t_2[cond])
         return result
 
-    # Coefficients for head at upstream and downstream ends of superlink k
-    def dH_uk(self, H_juk, zinv_uk, h_uk):
-        return H_juk - zinv_uk - h_uk
-
-    def dH_dk(self, H_jdk, zinv_dk, h_dk):
-        return zinv_dk + h_dk - H_jdk
-
     @safe_divide
     def gamma_uk(self, Q_uk_t, C_uk, A_uk, g=9.81):
-        # TODO: I believe Zahner accidentally switched signs
+        """
+        Compute flow coefficient 'gamma' for upstream end of superlink k
+        """
         num = -np.abs(Q_uk_t)
         den = 2 * (C_uk**2) * (A_uk**2) * g
         return num, den
 
     @safe_divide
     def gamma_dk(self, Q_dk_t, C_dk, A_dk, g=9.81):
-        # TODO: I believe Zahner accidentally switched signs
+        """
+        Compute flow coefficient 'gamma' for downstream end of superlink k
+        """
         num = np.abs(Q_dk_t)
         den = 2 * (C_dk**2) * (A_dk**2) * g
         return num, den
 
     def D_k_star(self, X_1k, gamma_uk, U_Nk, gamma_dk, Z_1k, W_Nk):
+        """
+        Compute superlink boundary condition coefficient 'D_k_star'.
+        """
         t_0 = (X_1k * gamma_uk - 1) * (U_Nk * gamma_dk - 1)
         t_1 = (Z_1k * gamma_dk) * (W_Nk * gamma_uk)
         return t_0 - t_1
 
     @safe_divide
     def alpha_uk(self, U_Nk, gamma_dk, X_1k, Z_1k, W_Nk, D_k_star):
+        """
+        Compute superlink boundary condition coefficient 'alpha' for upstream end
+        of superlink k.
+        """
         num = (1 - U_Nk * gamma_dk) * X_1k + (Z_1k * gamma_dk * W_Nk)
         den = D_k_star
         return num, den
 
     @safe_divide
     def beta_uk(self, U_Nk, gamma_dk, Z_1k, W_Nk, D_k_star):
+        """
+        Compute superlink boundary condition coefficient 'beta' for upstream end
+        of superlink k.
+        """
         num = (1 - U_Nk * gamma_dk) * Z_1k + (Z_1k * gamma_dk * U_Nk)
         den = D_k_star
         return num, den
@@ -445,6 +555,10 @@ class SuperLink():
     @safe_divide
     def chi_uk(self, U_Nk, gamma_dk, Y_1k, X_1k, z_inv_uk, Z_1k,
                z_inv_dk, V_Nk, W_Nk, D_k_star):
+        """
+        Compute superlink boundary condition coefficient 'chi' for upstream end
+        of superlink k.
+        """
         t_0 = (1 - U_Nk * gamma_dk) * (Y_1k - X_1k * z_inv_uk - Z_1k * z_inv_dk)
         t_1 = (Z_1k * gamma_dk) * (V_Nk - W_Nk * z_inv_uk - U_Nk * z_inv_dk)
         num = t_0 + t_1
@@ -453,12 +567,20 @@ class SuperLink():
 
     @safe_divide
     def alpha_dk(self, X_1k, gamma_uk, W_Nk, D_k_star):
+        """
+        Compute superlink boundary condition coefficient 'alpha' for downstream end
+        of superlink k.
+        """
         num = (1 - X_1k * gamma_uk) * W_Nk + (W_Nk * gamma_uk * X_1k)
         den = D_k_star
         return num, den
 
     @safe_divide
     def beta_dk(self, X_1k, gamma_uk, U_Nk, W_Nk, Z_1k, D_k_star):
+        """
+        Compute superlink boundary condition coefficient 'beta' for downstream end
+        of superlink k.
+        """
         num = (1 - X_1k * gamma_uk) * U_Nk + (W_Nk * gamma_uk * Z_1k)
         den = D_k_star
         return num, den
@@ -466,20 +588,29 @@ class SuperLink():
     @safe_divide
     def chi_dk(self, X_1k, gamma_uk, V_Nk, W_Nk, z_inv_uk, U_Nk,
                z_inv_dk, Y_1k, Z_1k, D_k_star):
+        """
+        Compute superlink boundary condition coefficient 'chi' for downstream end
+        of superlink k.
+        """
         t_0 = (1 - X_1k * gamma_uk) * (V_Nk - W_Nk * z_inv_uk - U_Nk * z_inv_dk)
         t_1 = (W_Nk * gamma_uk) * (Y_1k - X_1k * z_inv_uk - Z_1k * z_inv_dk)
         num = t_0 + t_1
         den = D_k_star
         return num, den
 
-    # Sparse matrix coefficients
     def F_jj(self, A_sj, dt, beta_dkl, alpha_ukm):
+        """
+        Compute diagonal elements of sparse solution matrix A.
+        """
         t_0 = A_sj / dt
         t_1 = beta_dkl
         t_2 = alpha_ukm
         return t_0 - t_1 + t_2
 
     def G_j(self, A_sj, dt, H_j, Q_0j, chi_ukl, chi_dkm):
+        """
+        Compute solution vector b.
+        """
         t_0 = A_sj * H_j / dt
         t_1 = Q_0j
         t_2 = chi_ukl
@@ -488,6 +619,9 @@ class SuperLink():
         return t_0 + t_1 - t_2 + t_3
 
     def node_velocities(self):
+        """
+        Compute link hydraulic geometries and velocities.
+        """
         # Import instance variables for better readability
         # TODO: Should probably use forward_I_i instead of _ik directly
         _ik = self._ik
