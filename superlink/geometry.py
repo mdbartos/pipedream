@@ -229,14 +229,14 @@ class Trapezoidal():
 
 class Irregular():
     def __init__(self, x, y, horiz_points=100, vert_points=100):
-        self.x = x
-        self.y = y
+        self.x = np.asarray(x)
+        self.y = np.asarray(y)
         self.horiz_points = horiz_points
-        self.ymin = y.min()
-        self.ymax = y.max()
-        self.xmin = x.min()
-        self.xmax = x.max()
-        self.interpolator = scipy.interpolate.interp1d(x, y)
+        self.ymin = self.y.min()
+        self.ymax = self.y.max()
+        self.xmin = self.x.min()
+        self.xmax = self.x.max()
+        self.interpolator = scipy.interpolate.interp1d(self.x, self.y)
         self.xx, self.xstep = np.linspace(self.xmin, self.xmax,
                                           horiz_points, retstep=True)
         self.yy = self.interpolator(self.xx)

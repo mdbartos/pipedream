@@ -2,14 +2,16 @@ import numpy as np
 import pandas as pd
 import scipy.sparse
 import scipy.sparse.linalg
+import superlink.geometry
 
 class SuperLink():
     def __init__(self, superlinks, superjunctions, links, junctions,
-                 dt=60, sparse=False, min_depth=1e-5):
+                 transects={}, dt=60, sparse=False, min_depth=1e-5):
         self.superlinks = superlinks
         self.superjunctions = superjunctions
         self.links = links
         self.junctions = junctions
+        self.transects = transects
         self._dt = dt
         self._sparse = sparse
         self.min_depth = min_depth
@@ -17,9 +19,8 @@ class SuperLink():
         self._ik = links.index.values
         self._Ik = links['j_0'].values.astype(int)
         self._Ip1k = links['j_1'].values.astype(int)
-        # TODO: Could be better
-        self._kI = junctions['level_0'].values.astype(int)
-        self._ki = links['level_0'].values.astype(int)
+        self._kI = junctions['k'].values.astype(int)
+        self._ki = links['k'].values.astype(int)
         self.start_nodes = superlinks['j_0'].values.astype(int)
         self.end_nodes = superlinks['j_1'].values.astype(int)
         self._is_start = np.zeros(self._I.size, dtype=bool)
@@ -31,7 +32,14 @@ class SuperLink():
         self.backward_I_i = pd.Series(self._ik, index=self._Ip1k)
         self.forward_I_I = pd.Series(self._Ip1k, index=self._Ik)
         self.backward_I_I = pd.Series(self._Ik, index=self._Ip1k)
-        self._w_ik = links['w'].values.astype(float)
+        self._shape_ik = links['shape']
+        if transects:
+            self._transect_ik = links['ts']
+        else:
+            self._transect_ik = None
+        self._g1_ik = links['g1'].values.astype(float)
+        self._g2_ik = links['g2'].values.astype(float)
+        self._g3_ik = links['g3'].values.astype(float)
         self._Q_ik = links['Q_0'].values.astype(float)
         self._dx_ik = links['dx'].values.astype(float)
         self._n_ik = links['n'].values.astype(float)
@@ -45,10 +53,14 @@ class SuperLink():
                         / self._dx_ik)
         self._Q_0Ik = np.zeros(self._I.size, dtype=float)
         # Computational arrays
-        self._Q_ik_f = np.zeros_like(self._Q_ik)
-        self._Q_ik_b = np.zeros_like(self._Q_ik)
-        self._h_Ik_f = np.zeros_like(self._h_Ik)
-        self._h_Ik_b = np.zeros_like(self._h_Ik)
+        self._A_ik = np.zeros(self._ik.size)
+        self._Pe_ik = np.zeros(self._ik.size)
+        self._R_ik = np.zeros(self._ik.size)
+        self._B_ik = np.zeros(self._ik.size)
+        # self._Q_ik_f = np.zeros_like(self._Q_ik)
+        # self._Q_ik_b = np.zeros_like(self._Q_ik)
+        # self._h_Ik_f = np.zeros_like(self._h_Ik)
+        # self._h_Ik_b = np.zeros_like(self._h_Ik)
         # Node velocities
         self._u_Ik = np.zeros(self._Ik.size, dtype=float)
         self._u_Ip1k = np.zeros(self._Ip1k.size, dtype=float)
@@ -103,6 +115,8 @@ class SuperLink():
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Other parameters
+        # Set up hydraulic geometry computations
+        self.configure_hydraulic_geometry()
         # Get indexers for least squares
         self.lsq_indexers()
         # Initialize to stable state
@@ -204,7 +218,6 @@ class SuperLink():
             return result
         return inner
 
-    # Node velocities
     def A_ik(self, h_Ik, h_Ip1k, w):
         """
         Compute cross-sectional area of flow for link i, superlink k.
@@ -618,6 +631,91 @@ class SuperLink():
         # chi signs are switched in original paper
         return t_0 + t_1 - t_2 + t_3
 
+    def configure_hydraulic_geometry(self):
+        # Import instance variables
+        transects = self.transects
+        _shape_ik = self._shape_ik
+        _transect_ik = self._transect_ik
+        # Set attributes
+        _transect_factory = {}
+        _transect_indices = None
+        # Handle regular geometries
+        _is_irregular = _shape_ik.str.lower() == 'irregular'
+        _has_irregular = _is_irregular.any()
+        _unique_geom = set(_shape_ik.str.lower().unique())
+        _unique_geom.discard('irregular')
+        _regular_shapes = _shape_ik[~_is_irregular]
+        _geom_indices = pd.Series(_regular_shapes.index,
+                                  index=_regular_shapes.str.lower().values)
+        # Handle irregular geometries
+        if _has_irregular:
+            _irregular_transects = _transect_ik[_is_irregular]
+            _transect_indices = pd.Series(_irregular_transects.index,
+                                          index=_irregular_transects.values)
+            for transect_name, transect in transects.items():
+                _transect_factory[transect_name] = superlink.geometry.Irregular(**transect)
+        self._unique_geom = _unique_geom
+        self._has_irregular = _has_irregular
+        self._geom_indices = _geom_indices
+        self._transect_factory = _transect_factory
+        self._transect_indices = _transect_indices
+
+    def link_hydraulic_geometry(self):
+        # TODO: Should probably use forward_I_i instead of _ik directly
+        _ik = self._ik
+        _Ik = self._Ik
+        _Ip1k = self._Ip1k
+        _h_Ik = self._h_Ik
+        _A_ik = self._A_ik
+        _Pe_ik = self._Pe_ik
+        _R_ik = self._R_ik
+        _B_ik = self._B_ik
+        _dx_ik = self._dx_ik
+        _g1_ik = self._g1_ik
+        _g2_ik = self._g2_ik
+        _g3_ik = self._g3_ik
+        _transect_factory = self._transect_factory
+        _transect_indices = self._transect_indices
+        _unique_geom = self._unique_geom
+        _has_irregular = self._has_irregular
+        _geom_indices = self._geom_indices
+        # Compute hydraulic geometry for regular geometries
+        for geom in _unique_geom:
+            Geom = geom.title()
+            _ik_g = _geom_indices.loc[geom].values
+            _Ik_g = _Ik[_ik_g]
+            _Ip1k_g = _Ip1k[_ik_g]
+            generator = getattr(superlink.geometry, Geom)
+            _g1_g = _g1_ik[_ik_g]
+            _g2_g = _g2_ik[_ik_g]
+            _g3_g = _g3_ik[_ik_g]
+            _h_Ik_g = _h_Ik[_Ik_g]
+            _h_Ip1k_g = _h_Ik[_Ip1k_g]
+            _A_ik[_ik_g] = generator.A_ik(_h_Ik_g, _h_Ip1k_g,
+                                          g1=_g1_g, g2=_g2_g, g3=_g3_g)
+            _Pe_ik[_ik_g] = generator.Pe_ik(_h_Ik_g, _h_Ip1k_g,
+                                            g1=_g1_g, g2=_g2_g, g3=_g3_g)
+            _R_ik[_ik_g] = generator.R_ik(_A_ik[_ik_g], _Pe_ik[_ik_g])
+            _B_ik[_ik_g] = generator.B_ik(_h_Ik_g, _h_Ip1k_g,
+                                          g1=_g1_g, g2=_g2_g, g3=_g3_g)
+        # Compute hydraulic geometry for irregular geometries
+        if _has_irregular:
+            for transect_name, generator in _transect_factory.items():
+                _ik_g = _transect_indices.loc[transect_name].values
+                _Ik_g = _Ik[_ik_g]
+                _Ip1k_g = _Ip1k[_ik_g]
+                _h_Ik_g = _h_Ik[_Ik_g]
+                _h_Ip1k_g = _h_Ik[_Ip1k_g]
+                _A_ik[_ik_g] = generator.A_ik(_h_Ik_g, _h_Ip1k_g)
+                _Pe_ik[_ik_g] = generator.Pe_ik(_h_Ik_g, _h_Ip1k_g)
+                _R_ik[_ik_g] = generator.R_ik(_h_Ik_g, _h_Ip1k_g)
+                _B_ik[_ik_g] = generator.B_ik(_h_Ik_g, _h_Ip1k_g)
+        # Export to instance variables
+        self._A_ik = _A_ik
+        self._Pe_ik = _Pe_ik
+        self._R_ik = _R_ik
+        self._B_ik = _B_ik
+
     def node_velocities(self):
         """
         Compute link hydraulic geometries and velocities.
@@ -628,7 +726,10 @@ class SuperLink():
         _Ik = self._Ik
         _Ip1k = self._Ip1k
         _h_Ik = self._h_Ik
-        _w_ik = self._w_ik
+        _A_ik = self._A_ik
+        _Pe_ik = self._Pe_ik
+        _R_ik = self._R_ik
+        _B_ik = self._B_ik
         _Q_ik = self._Q_ik
         _u_Ik = self._u_Ik
         _u_Ip1k = self._u_Ip1k
@@ -638,11 +739,7 @@ class SuperLink():
         # TODO: Watch this
         _is_start_Ik = self._is_start[_Ik]
         _is_end_Ip1k = self._is_end[_Ip1k]
-        # Compute hydraulic geometry and link velocities
-        _A_ik = self.A_ik(_h_Ik[_Ik], _h_Ik[_Ip1k], _w_ik)
-        _Pe_ik = self.Pe_ik(_h_Ik[_Ik], _h_Ik[_Ip1k], _w_ik)
-        _B_ik = self.B_ik(_h_Ik[_Ik], _h_Ik[_Ip1k], _w_ik)
-        _R_ik = self.R_ik(_A_ik, _Pe_ik)
+        # Compute link velocities
         _u_ik = self.u_ik(_Q_ik, _A_ik)
         # Compute velocities for start nodes (1 -> Nk)
         _u_Ik[_is_start_Ik] = _u_ik[_is_start_Ik]
@@ -657,10 +754,6 @@ class SuperLink():
         _u_Ip1k[~_is_end_Ip1k] = self.u_Ip1k(_dx_ik[center], _u_ik[forward],
                                              _dx_ik[forward], _u_ik[center])
         # Export to instance variables
-        self._A_ik = _A_ik
-        self._Pe_ik = _Pe_ik
-        self._B_ik = _B_ik
-        self._R_ik = _R_ik
         self._u_ik = _u_ik
         self._u_Ik = _u_Ik
         self._u_Ip1k = _u_Ip1k
@@ -864,7 +957,7 @@ class SuperLink():
         self._Y_Ik = _Y_Ik
         self._Z_Ik = _Z_Ik
 
-    def superlink_upstream_head_coefficients(self):
+    def superlink_upstream_head_coefficients(self, full_solution=False):
         # Import instance variables
         _I_1k = self._I_1k
         _i_1k = self._i_1k
@@ -873,18 +966,11 @@ class SuperLink():
         _z_inv_uk = self._z_inv_uk
         _A_ik = self._A_ik
         _Q_ik = self._Q_ik
-        _w_ik = self._w_ik
-        H_j = self.H_j
         # Placeholder discharge coefficient
         _C_uk = 0.67
         # Current upstream flows
         _Q_uk_t = _Q_ik[_i_1k]
-        # Compute superjunction head
-        _H_juk = H_j[_J_uk]
-        # Compute flow area
-        _h_juk = _H_juk - _z_inv_uk
-        _A_juk = self.A_ik(_h_juk, _h_juk, _w_ik[_i_1k])
-        # _A_uk = (_A_juk + _A_ik[_i_1k]) / 2
+        # Upstream area
         _A_uk = _A_ik[_i_1k]
         # Compute superlink upstream coefficients
         _gamma_uk = self.gamma_uk(_Q_uk_t, _C_uk, _A_uk)
@@ -899,18 +985,11 @@ class SuperLink():
         _z_inv_dk = self._z_inv_dk
         _A_ik = self._A_ik
         _Q_ik = self._Q_ik
-        _w_ik = self._w_ik
-        H_j = self.H_j
         # Placeholder discharge coefficient
         _C_dk = 0.67
         # Current downstream flows
         _Q_dk_t = _Q_ik[_i_nk]
-        # Compute superjunction head
-        _H_jdk = H_j[_J_dk]
-        # Compute flow area
-        _h_jdk = _H_jdk - _z_inv_dk
-        _A_jdk = self.A_ik(_h_jdk, _h_jdk, _w_ik[_i_nk])
-        # _A_dk = (_A_jdk + _A_ik[_i_nk]) / 2
+        # Downstream area
         _A_dk = _A_ik[_i_nk]
         # Compute superlink downstream coefficients
         _gamma_dk = self.gamma_dk(_Q_dk_t, _C_dk, _A_dk)
@@ -1421,6 +1500,7 @@ class SuperLink():
         return t_0 + t_1 + t_2
 
     def step(self, H_bc=None, Q_0j=None, dt=None, first_time=False):
+        self.link_hydraulic_geometry()
         self.node_velocities()
         self.link_coeffs(_dt=dt)
         self.node_coeffs(_dt=dt)
