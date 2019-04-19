@@ -6,42 +6,66 @@
             "z_inv" : 10.7,
             "h_0" : 0,
             "A_sj" : 0.64,
-            "bc" : false
+            "bc" : false,
+            "storage" : "functional",
+            "a" : 0,
+            "b" : 0,
+            "c" : 0.64
         },
         {
             "id" : 1,
             "z_inv" : 10.4,
             "h_0" : 0,
             "A_sj" : 0.25,
-            "bc" : false
+            "bc" : false,
+            "storage" : "functional",
+            "a" : 0,
+            "b" : 0,
+            "c" : 0.25
         },
         {
             "id" : 2,
             "z_inv" : 10.0,
             "h_0" : 0,
             "A_sj" : 0.25,
-            "bc" : false
+            "bc" : false,
+            "storage" : "functional",
+            "a" : 0,
+            "b" : 0,
+            "c" : 0.25
         },
         {
             "id" : 3,
             "z_inv" : 9.5,
             "h_0" : 0,
             "A_sj" : 0.25,
-            "bc" : true
+            "bc" : true,
+            "storage" : "functional",
+            "a" : 0,
+            "b" : 0,
+            "c" : 0.25
         },
         {
             "id" : 4,
             "z_inv" : 10.1,
             "h_0" : 0,
             "A_sj" : 0.25,
-            "bc" : false
+            "bc" : false,
+            "storage" : "functional",
+            "a" : 0,
+            "b" : 0,
+            "c" : 0.25
         },
         {
             "id" : 5,
             "z_inv" : 9.3,
             "h_0" : 0,
             "A_sj" : 0.25,
-            "bc" : true
+            "bc" : true,
+            "storage" : "functional",
+            "a" : 0,
+            "b" : 0,
+            "c" : 0.25
         }
     ],
 
