@@ -1,5 +1,11 @@
 # superlink
-🚰 Implementation of the SUPERLINK hydraulic solver
+🚰 Implementation of the SUPERLINK hydraulic solver by [Ji (1998).](https://ascelibrary.org/doi/10.1061/%28ASCE%290733-9429%281998%29124%3A3%28307%29)
+
+```
+Ji, Z. (1998). General Hydrodynamic Model for Sewer/Channel Network Systems.
+Journal of Hydraulic Engineering, 124(3), 307–315.
+doi:10.1061/(asce)0733-9429(1998)124:3(307)
+```
 
 ## Example
 
