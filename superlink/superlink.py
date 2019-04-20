@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import scipy.optimize
 import scipy.sparse
 import scipy.sparse.linalg
 import superlink.geometry
@@ -62,6 +63,8 @@ class SuperLink():
         self._S_o_ik = ((self._z_inv_Ik[self._Ik] - self._z_inv_Ik[self._Ip1k])
                         / self._dx_ik)
         self._Q_0Ik = np.zeros(self._I.size, dtype=float)
+        # Enforce minimum depth
+        self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
         self._A_ik = np.zeros(self._ik.size)
         self._Pe_ik = np.zeros(self._ik.size)
@@ -100,6 +103,8 @@ class SuperLink():
         # Head at superjunctions
         self._z_inv_j = self.superjunctions['z_inv'].values
         self.H_j = self.superjunctions['h_0'].values + self._z_inv_j
+        # Enforce minimum depth
+        self.H_j = np.maximum(self.H_j, self._z_inv_j + self.min_depth)
         # Coefficients for head at upstream ends of superlink k
         self._J_uk = self.superlinks['sj_0'].values.astype(int)
         self._z_inv_uk = self._z_inv_Ik[self._I_1k]
@@ -117,7 +122,7 @@ class SuperLink():
         self._chi_dkm = np.zeros(self.M, dtype=float)
         self._k = superlinks.index.values
         self._A_sj = np.zeros(self.M, dtype=float)
-        # TODO: Allow input to be specified
+        # TODO: Allow initial input to be specified
         self._Q_0j = 0
         # Set upstream and downstream superlink variables
         self._Q_uk = self._Q_ik[self._i_1k]
@@ -1513,7 +1518,7 @@ class SuperLink():
         t_2 = W_Im1k * h_1k
         return t_0 + t_1 + t_2
 
-    def step(self, H_bc=None, Q_0j=None, dt=None, first_time=False):
+    def step(self, H_bc=None, Q_in=None, dt=None, first_time=False):
         self.link_hydraulic_geometry()
         self.compute_storage_areas()
         self.node_velocities()
@@ -1524,7 +1529,7 @@ class SuperLink():
         self.superlink_upstream_head_coefficients()
         self.superlink_downstream_head_coefficients()
         self.superlink_flow_coefficients()
-        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_0j,
+        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
                                      first_time=first_time, _dt=dt)
         self.solve_sparse_matrix()
         self.solve_superlink_flows()
