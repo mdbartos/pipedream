@@ -29,12 +29,12 @@ links = pd.DataFrame(inp['links'])
 # Read input hydrographs and stage boundary conditions
 H_bc = pd.read_csv('../data/boundary_stage.csv', index_col=0)
 Q_in = pd.read_csv('../data/flow_input.csv', index_col=0)
-t_range = H_bc.index.values
+time_range = H_bc.index.values
 ```
 
 ### Run superlink
 
-```
+```python
 # Instantiate superlink object
 superlink = SuperLink(superlinks, superjunctions, links, junctions)
 
@@ -50,7 +50,7 @@ H_bcs = []
 t_prev = t_range[0]
 
 # For each time step...
-for t_next in t_range[1:]:
+for t_next in time_range[1:]:
     # Compute time difference between steps
     dt = t_next - t_prev
     # Get next stage boundary condition
