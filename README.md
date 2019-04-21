@@ -26,56 +26,18 @@ superlinks = pd.DataFrame(inp['superlinks'])
 junctions = pd.DataFrame(inp['junctions'])
 links = pd.DataFrame(inp['links'])
 
-# Define function to create triangular input hydrographs
-def triangle(t, lm=1, rm=1, tc=0, yc=1):
-    """
-    Generate a triangular signal at time t.
-    """
-    lm = np.asarray(lm)
-    rm = np.asarray(rm)
-    tc = np.asarray(tc)
-    yc = np.asarray(yc)
-    if t < tc:
-        return np.maximum(yc - (lm)*(-t + tc), 0)
-    else:
-        return np.maximum(yc - (rm)*(t - tc), 0)
-```
-### Specify parameters and boundary conditions
-
-```python
-# Instantiate superlink object
-superlink = SuperLink(superlinks, superjunctions, links, junctions)
-
-# Specify time step
-dt = 30
-
-# Specify superjunctions with boundary conditions
-bc_junctions = np.asarray([0, 0, 0, 1, 0, 1], dtype=float)
-# Specify rate of head rise at boundary junctions
-dHdt_rise = (1 / 60 / 60) * bc_junctions
-dHdt_fall = (2.5 / 240 / 60) * bc_junctions
-# Specify time at which maximum boundary head is reached...
-t_Hc = 2 * 3600
-# ...and the maximum boundary head
-H_j_0 = np.copy(superlink.H_j)
-H_max = (dHdt_rise * 2 * 3600) + H_j_0
-
-# Specify rate of inflow at input junctions
-dQdt = np.array([0.5, 0, 0.3, 0, 0, 0]) / 60 / 60
-# Specify time at which maximum inflow is reached...
-t_Qc = 3 * 3600
-# ...and the maximum inflow
-Q_max = dQdt * 1 * 3600
-
-# Initialize time at zero
-t = 0
-# End simulation at six hours
-T = 6 * 3600
+# Read input hydrographs and stage boundary conditions
+H_bc = pd.read_csv('../data/boundary_stage.csv', index_col=0)
+Q_in = pd.read_csv('../data/flow_input.csv', index_col=0)
+time_range = H_bc.index.values
 ```
 
 ### Run superlink
 
 ```python
+# Instantiate superlink object
+superlink = SuperLink(superlinks, superjunctions, links, junctions)
+
 # Create lists to store results
 hs = []
 Hs = []
@@ -84,24 +46,28 @@ ts = []
 Q_ins = []
 H_bcs = []
 
-# For each timestep...
-for _ in range(T // dt):
-    # Increment time
-    t += dt
-    # Specify stage boundary conditions at time t
-    H_bc = triangle(t, lm=dHdt_rise, rm=dHdt_fall,
-                    tc=t_Hc, yc=H_max)
-    # Specify inflow at time t
-    Q_0j = triangle(t, lm=dQdt, rm=dQdt, tc=t_Qc, yc=Q_max)
+# Set initial time
+t_prev = t_range[0]
+
+# For each time step...
+for t_next in time_range[1:]:
+    # Compute time difference between steps
+    dt = t_next - t_prev
+    # Get next stage boundary condition
+    H_bc_next = H_bc.loc[t_next].values
+    # Get net flow input
+    Q_in_next = Q_in.loc[t_next].values
     # Run superlink algorithm
-    superlink.step(H_bc=H_bc, Q_0j=Q_0j, dt=dt)
+    superlink.step(H_bc=H_bc_next, Q_in=Q_in_next, dt=dt)
+    # Store previous timestamp
+    t_prev = t_next
     # Store results
-    ts.append(t)
+    ts.append(t_next)
     hs.append(np.copy(superlink._h_Ik))
     Hs.append(superlink.H_j)
     Qs.append((superlink._Q_uk + superlink._Q_dk) / 2)
-    Q_ins.append(Q_0j)
-    H_bcs.append(H_bc)
+    Q_ins.append(Q_in_next)
+    H_bcs.append(H_bc_next)
 ```
 
 ![Superlink Example](https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/superlink_test.png)
