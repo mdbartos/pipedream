@@ -31,10 +31,18 @@ class SuperLink():
         self._is_start[self.start_nodes] = True
         self._is_end[self.end_nodes] = True
         self.middle_nodes = self._I[(~self._is_start) & (~self._is_end)]
-        self.forward_I_i = pd.Series(self._ik, index=self._Ik)
-        self.backward_I_i = pd.Series(self._ik, index=self._Ip1k)
-        self.forward_I_I = pd.Series(self._Ip1k, index=self._Ik)
-        self.backward_I_I = pd.Series(self._Ik, index=self._Ip1k)
+        # Create forward and backward indexers
+        self.forward_I_I = np.copy(self._I)
+        self.forward_I_I[self._Ik] = self._Ip1k
+        self.backward_I_I = np.copy(self._I)
+        self.backward_I_I[self._Ip1k] = self._Ik
+        self.forward_I_i = np.copy(self._I)
+        self.forward_I_i[self._Ik] = self._ik
+        self.backward_I_i = np.copy(self._I)
+        self.backward_I_i[self._Ip1k] = self._ik
+        self.forward_I_i[self.end_nodes] = self.backward_I_i[self.start_nodes]
+        self.backward_I_i[self.start_nodes] = self.forward_I_i[self.start_nodes]
+        # Handle channel geometries
         self._shape_ik = links['shape']
         if transects:
             self._transect_ik = links['ts']
@@ -84,8 +92,8 @@ class SuperLink():
         self._I_end = np.zeros(self._I.size, dtype=bool)
         self._I_end[self.end_nodes] = True
         self._I_1k = self.start_nodes
-        self._I_2k = self.forward_I_I[self._I_1k].values
-        self._i_1k = self.forward_I_i[self._I_1k].values
+        self._I_2k = self.forward_I_I[self._I_1k]
+        self._i_1k = self.forward_I_i[self._I_1k]
         self._T_ik = np.zeros(self._ik.size)
         self._U_Ik = np.zeros(self._I.size)
         self._V_Ik = np.zeros(self._I.size)
@@ -94,8 +102,8 @@ class SuperLink():
         self._I_start = np.zeros(self._I.size, dtype=bool)
         self._I_start[self.start_nodes] = True
         self._I_Np1k = self.end_nodes
-        self._I_Nk = self.backward_I_I[self._I_Np1k].values
-        self._i_nk = self.backward_I_i[self._I_Np1k].values
+        self._I_Nk = self.backward_I_I[self._I_Np1k]
+        self._i_nk = self.backward_I_i[self._I_Np1k]
         self._O_ik = np.zeros(self._ik.size)
         self._X_Ik = np.zeros(self._I.size)
         self._Y_Ik = np.zeros(self._I.size)
@@ -762,13 +770,13 @@ class SuperLink():
         _u_ik = self.u_ik(_Q_ik, _A_ik)
         # Compute velocities for start nodes (1 -> Nk)
         _u_Ik[_is_start_Ik] = _u_ik[_is_start_Ik]
-        backward = backward_I_i[_Ik[~_is_start_Ik]].values
+        backward = backward_I_i[_Ik[~_is_start_Ik]]
         center = _ik[~_is_start_Ik]
         _u_Ik[~_is_start_Ik] = self.u_Ik(_dx_ik[center], _u_ik[backward],
                                          _dx_ik[backward], _u_ik[center])
         # Compute velocities for end nodes (2 -> Nk+1)
         _u_Ip1k[_is_end_Ip1k] = _u_ik[_is_end_Ip1k]
-        forward = forward_I_i[_Ip1k[~_is_end_Ip1k]].values
+        forward = forward_I_i[_Ip1k[~_is_end_Ip1k]]
         center = _ik[~_is_end_Ip1k]
         _u_Ip1k[~_is_end_Ip1k] = self.u_Ip1k(_dx_ik[center], _u_ik[forward],
                                              _dx_ik[forward], _u_ik[center])
@@ -823,10 +831,10 @@ class SuperLink():
         if _Q_0Ik is None:
             _Q_0Ik = np.zeros(_I.size)
         # Compute E_Ik and D_Ik
-        start_links = self.forward_I_i[start_nodes].values
-        end_links = self.backward_I_i[end_nodes].values
-        backward = self.backward_I_i[middle_nodes].values
-        forward = self.forward_I_i[middle_nodes].values
+        start_links = self.forward_I_i[start_nodes]
+        end_links = self.backward_I_i[end_nodes]
+        backward = self.backward_I_i[middle_nodes]
+        forward = self.forward_I_i[middle_nodes]
         _E_Ik[start_nodes] = self.E_Ik(_B_ik[start_links], _dx_ik[start_links],
                                         _B_ik[start_links], _dx_ik[start_links],
                                         _A_SIk[start_nodes], _dt)
@@ -889,9 +897,9 @@ class SuperLink():
         # Loop from 2 -> Nk
         # print('Forward recurrence')
         while _I_next.size:
-            _Im1_next = backward_I_I[_I_next].values
-            _Ip1_next = forward_I_I[_I_next].values
-            _i_next = forward_I_i[_I_next].values
+            _Im1_next = backward_I_I[_I_next]
+            _Ip1_next = forward_I_I[_I_next]
+            _i_next = forward_I_i[_I_next]
             # print('I = ', _I_next, 'i = ', _i_next, 'I-1 = ', _Im1_next, 'I+1 = ', _Ip1_next)
             _T_ik[_i_next] = self.T_ik(_a_ik[_i_next], _b_ik[_i_next], _c_ik[_i_next],
                                        _A_ik[_i_next], _E_Ik[_I_next], _U_Ik[_Im1_next])
@@ -947,12 +955,12 @@ class SuperLink():
         _Y_Ik[_I_Nk] = _Y_Nk
         _Z_Ik[_I_Nk] = _Z_Nk
         # I = Nk-1, i = nk-1
-        _I_next = backward_I_I[_I_Nk[~_I_start[_I_Nk]]].values
+        _I_next = backward_I_I[_I_Nk[~_I_start[_I_Nk]]]
         # Loop from Nk - 1 -> 1
         # print('Backward recurrence')
         while _I_next.size:
-            _Ip1_next = forward_I_I[_I_next].values
-            _i_next = forward_I_i[_I_next].values
+            _Ip1_next = forward_I_I[_I_next]
+            _i_next = forward_I_i[_I_next]
             # print('I = ', _I_next, 'i = ', _i_next, 'I+1 = ', _Ip1_next)
             _O_ik[_i_next] = self.O_ik(_a_ik[_i_next], _b_ik[_i_next], _c_ik[_i_next],
                                 _A_ik[_i_next], _E_Ik[_Ip1_next], _X_Ik[_Ip1_next])
@@ -964,7 +972,7 @@ class SuperLink():
                                        _O_ik[_i_next])
             _Z_Ik[_I_next] = self.Z_Ik(_A_ik[_i_next], _E_Ik[_Ip1_next], _c_ik[_i_next],
                                        _Z_Ik[_Ip1_next], _X_Ik[_Ip1_next], _O_ik[_i_next])
-            _I_next = backward_I_I[_I_next[~_I_start[_I_next]]].values
+            _I_next = backward_I_I[_I_next[~_I_start[_I_next]]]
         # Try resetting
         _O_ik[_i_nk] = _O_nk
         _X_Ik[_I_Nk] = _X_Nk
@@ -1306,12 +1314,12 @@ class SuperLink():
         _I_2k_next_b = _I_2k[keep_b]
         _I_Np1k_next_b = _I_Np1k[keep_b]
         while (_I_next_f.size > 0) & (_I_next_b.size > 0):
-            _i_next_f = forward_I_i[_I_next_f].values
-            _im1_next_f = forward_I_i[_Im1_next_f].values
-            _Ip1_next_f = forward_I_I[_I_next_f].values
-            _i_next_b = forward_I_i[_I_next_b].values
-            _Im1_next_b = backward_I_I[_I_next_b].values
-            _im1_next_b = forward_I_i[_Im1_next_b].values
+            _i_next_f = forward_I_i[_I_next_f]
+            _im1_next_f = forward_I_i[_Im1_next_f]
+            _Ip1_next_f = forward_I_I[_I_next_f]
+            _i_next_b = forward_I_i[_I_next_b]
+            _Im1_next_b = backward_I_I[_I_next_b]
+            _im1_next_b = forward_I_i[_Im1_next_b]
             # print('I_f =', _I_next_f, 'I_b =', _I_next_b)
             _h_Ik[_I_next_b] = self._h_Ik_next_b(_Q_ik[_i_next_b], _Y_Ik[_I_next_b],
                                                  _Z_Ik[_I_next_b], _h_Ik[_I_Np1k_next_b],
@@ -1403,9 +1411,9 @@ class SuperLink():
         # Loop from 2 -> Nk
         # print('Solve internals forwards')
         while _I_next.size:
-            _i_next = forward_I_i[_I_next].values
-            _im1_next = forward_I_i[_Im1_next].values
-            _Ip1_next = forward_I_I[_I_next].values
+            _i_next = forward_I_i[_I_next]
+            _im1_next = forward_I_i[_Im1_next]
+            _Ip1_next = forward_I_I[_I_next]
             # print('I = ', _I_next, 'i = ', _i_next, 'I-1 = ', _Im1_next, 'I+1 = ', _Ip1_next)
             _h_Ik_f[_I_next] = self._h_Ik_next_f(_Q_ik_f[_im1_next], _V_Ik[_Im1_next],
                                                  _W_Ik[_Im1_next], _h_Ik_f[_I_1k_next],
@@ -1479,9 +1487,9 @@ class SuperLink():
         # Loop from Nk -> 1
         # print('Solve internals backwards')
         while _I_next.size:
-            _i_next = forward_I_i[_I_next].values
-            _Im1_next = backward_I_I[_I_next].values
-            _im1_next = forward_I_i[_Im1_next].values
+            _i_next = forward_I_i[_I_next]
+            _Im1_next = backward_I_I[_I_next]
+            _im1_next = forward_I_i[_Im1_next]
             # print('I = ', _I_next, 'i = ', _i_next, 'I-1 = ', _Im1_next, 'i-1 = ', _im1_next)
             _h_Ik_b[_I_next] = self._h_Ik_next_b(_Q_ik_b[_i_next], _Y_Ik[_I_next],
                                                  _Z_Ik[_I_next], _h_Ik_b[_I_Np1k_next],
