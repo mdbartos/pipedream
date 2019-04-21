@@ -613,6 +613,7 @@ class SuperLink():
         _shape_ik = self._shape_ik
         _transect_ik = self._transect_ik
         # Set attributes
+        _geom_factory = {}
         _transect_factory = {}
         _transect_indices = None
         # Handle regular geometries
@@ -623,6 +624,9 @@ class SuperLink():
         _regular_shapes = _shape_ik[~_is_irregular]
         _geom_indices = pd.Series(_regular_shapes.index,
                                   index=_regular_shapes.str.lower().values)
+        for geom in _unique_geom:
+            _ik_g = _geom_indices.loc[[geom]].values
+            _geom_factory[geom] = _ik_g
         # Handle irregular geometries
         if _has_irregular:
             _irregular_transects = _transect_ik[_is_irregular]
@@ -630,9 +634,8 @@ class SuperLink():
                                           index=_irregular_transects.values)
             for transect_name, transect in transects.items():
                 _transect_factory[transect_name] = superlink.geometry.Irregular(**transect)
-        self._unique_geom = _unique_geom
         self._has_irregular = _has_irregular
-        self._geom_indices = _geom_indices
+        self._geom_factory = _geom_factory
         self._transect_factory = _transect_factory
         self._transect_indices = _transect_indices
 
@@ -674,15 +677,14 @@ class SuperLink():
         _g1_ik = self._g1_ik
         _g2_ik = self._g2_ik
         _g3_ik = self._g3_ik
+        _geom_factory = self._geom_factory
         _transect_factory = self._transect_factory
         _transect_indices = self._transect_indices
-        _unique_geom = self._unique_geom
         _has_irregular = self._has_irregular
-        _geom_indices = self._geom_indices
         # Compute hydraulic geometry for regular geometries
-        for geom in _unique_geom:
+        for geom, indices in _geom_factory.items():
             Geom = geom.title()
-            _ik_g = _geom_indices.loc[[geom]].values
+            _ik_g = indices
             _Ik_g = _Ik[_ik_g]
             _Ip1k_g = _Ip1k[_ik_g]
             generator = getattr(superlink.geometry, Geom)
