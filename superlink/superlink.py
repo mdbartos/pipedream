@@ -1093,10 +1093,10 @@ class SuperLink():
         if _Q_0j is None:
             _Q_0j = 0
         # Compute F_jj
-        _alpha_ukm_J = pd.Series(_alpha_uk, index=_J_uk).groupby(level=0).sum()
-        _beta_dkl_J = pd.Series(_beta_dk, index=_J_dk).groupby(level=0).sum()
-        _alpha_ukm[_alpha_ukm_J.index.values] = _alpha_ukm_J.values
-        _beta_dkl[_beta_dkl_J.index.values] = _beta_dkl_J.values
+        _alpha_ukm.fill(0)
+        _beta_dkl.fill(0)
+        np.add.at(_alpha_ukm, _J_uk, _alpha_uk)
+        np.add.at(_beta_dkl, _J_dk, _beta_dk)
         _F_jj = self.F_jj(_A_sj, _dt, _beta_dkl, _alpha_ukm)
         # Set diagonals
         i = np.arange(M)
@@ -1108,10 +1108,10 @@ class SuperLink():
         self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = _beta_uk[~bc_uk]
         self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = -_alpha_dk[~bc_dk]
         # Compute G_j
-        _chi_ukl_J = pd.Series(_chi_uk, index=_J_uk).groupby(level=0).sum()
-        _chi_dkm_J = pd.Series(_chi_dk, index=_J_dk).groupby(level=0).sum()
-        _chi_ukl[_chi_ukl_J.index.values] = _chi_ukl_J.values
-        _chi_dkm[_chi_dkm_J.index.values] = _chi_dkm_J.values
+        _chi_ukl.fill(0)
+        _chi_dkm.fill(0)
+        np.add.at(_chi_ukl, _J_uk, _chi_uk)
+        np.add.at(_chi_dkm, _J_dk, _chi_dk)
         b = self.G_j(_A_sj, _dt, H_j, _Q_0j, _chi_ukl, _chi_dkm)
         b[bc] = H_bc[bc]
         # Export instance variables
