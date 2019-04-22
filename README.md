@@ -4,7 +4,7 @@
 ```
 Ji, Z. (1998). General Hydrodynamic Model for Sewer/Channel Network Systems.
 Journal of Hydraulic Engineering, 124(3), 307–315.
-doi:10.1061/(asce)0733-9429(1998)124:3(307)
+doi: 10.1061/(asce)0733-9429(1998)124:3(307)
 ```
 
 ## Example
