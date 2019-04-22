@@ -11,7 +11,7 @@ doi: 10.1061/(asce)0733-9429(1998)124:3(307)
 
 ### Diagram of test case
 
-![Example network](https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/example_network.png)
+![Example network](https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/example_network_ji.png)
 
 ### Import modules and load data
 
