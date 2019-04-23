@@ -8,13 +8,15 @@ import superlink.storage
 
 class SuperLink():
     def __init__(self, superlinks, superjunctions, links, junctions,
-                 transects={}, storages={}, dt=60, sparse=False, min_depth=1e-5):
+                 transects={}, storages={}, orifices=None,
+                 dt=60, sparse=False, min_depth=1e-5):
         self.superlinks = superlinks
         self.superjunctions = superjunctions
         self.links = links
         self.junctions = junctions
         self.transects = transects
         self.storages = storages
+        self.orifices = orifices
         self._dt = dt
         self._sparse = sparse
         self.min_depth = min_depth
@@ -70,7 +72,19 @@ class SuperLink():
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(float)
         self._S_o_ik = ((self._z_inv_Ik[self._Ik] - self._z_inv_Ik[self._Ip1k])
                         / self._dx_ik)
+        # TODO: Allow specifying initial flows
         self._Q_0Ik = np.zeros(self._I.size, dtype=float)
+        # Handle orifices
+        if orifices is not None:
+            self._J_uo = self.orifices['sj_0'].values.astype(int)
+            self._J_do = self.orifices['sj_1'].values.astype(int)
+            self._Ao = self.orifices['A'].values.astype(float)
+            self.p = self.orifices.shape[0]
+        else:
+            self._J_uo = np.array([], dtype=int)
+            self._J_do = np.array([], dtype=int)
+            self._Ao = np.array([], dtype=float)
+            self.p = 0
         # Enforce minimum depth
         self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
@@ -121,9 +135,12 @@ class SuperLink():
         self._z_inv_dk = self._z_inv_Ik[self._I_Np1k]
         # Sparse matrix coefficients
         self.M = len(superjunctions)
+        self.NK = len(superlinks)
         self.A = scipy.sparse.lil_matrix((self.M, self.M))
         self.b = np.zeros(self.M)
         self.bc = self.superjunctions['bc'].values.astype(bool)
+        self.B = scipy.sparse.lil_matrix((self.M, self.p))
+        # TODO: Should these be size NK?
         self._alpha_ukm = np.zeros(self.M, dtype=float)
         self._beta_dkl = np.zeros(self.M, dtype=float)
         self._chi_ukl = np.zeros(self.M, dtype=float)
@@ -607,6 +624,14 @@ class SuperLink():
         # chi signs are switched in original paper
         return t_0 + t_1 - t_2 + t_3
 
+    def B_j(self, J_uo, J_do, Ao, H_j, Co=0.67, g=9.81):
+        dH_u = H_j[J_uo] - H_j[J_do]
+        dH_d = H_j[J_do] - H_j[J_uo]
+        # TODO: Why are these reversed?
+        Qo_d = Co * Ao * np.sign(dH_u) * np.sqrt(2 * g * np.abs(dH_u))
+        Qo_u = Co * Ao * np.sign(dH_d) * np.sqrt(2 * g * np.abs(dH_d))
+        return Qo_u, Qo_d
+
     def configure_hydraulic_geometry(self):
         # Import instance variables
         transects = self.transects
@@ -1085,6 +1110,9 @@ class SuperLink():
         _chi_ukl = self._chi_ukl
         _chi_dkm = self._chi_dkm
         _A_sj = self._A_sj
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        _Ao = self._Ao
         M = self.M
         H_j = self.H_j
         bc = self.bc
@@ -1116,6 +1144,12 @@ class SuperLink():
         np.add.at(_chi_dkm, _J_dk, _chi_dk)
         b = self.G_j(_A_sj, _dt, H_j, _Q_0j, _chi_ukl, _chi_dkm)
         b[bc] = H_bc[bc]
+        # Compute control matrix
+        # TODO: Should account for boundary nodes here as well
+        if _J_uo.size:
+            _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
+            self.B[_J_uo] = _Qo_u
+            self.B[_J_do] = _Qo_d
         # Export instance variables
         self.b = b
         self._beta_dkl = _beta_dkl
@@ -1124,13 +1158,21 @@ class SuperLink():
         self._chi_dkm = _chi_dkm
         if first_time:
             self.A = self.A.tocsr()
+            # self.B = self.B.tocsr()
 
-    def solve_sparse_matrix(self):
+    def solve_sparse_matrix(self, u=None):
+        # Import instance variables
         A = self.A
         b = self.b
+        B = self.B
         _z_inv_j = self._z_inv_j
         min_depth = self.min_depth
-        H_j_next = scipy.sparse.linalg.spsolve(A, b)
+        # Get right-hand size
+        if B.nnz and (u is not None):
+            r = b + np.squeeze(B @ u)
+        else:
+            r = b
+        H_j_next = scipy.sparse.linalg.spsolve(A, r)
         H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
         self.H_j = H_j_next
 
@@ -1528,7 +1570,7 @@ class SuperLink():
         t_2 = W_Im1k * h_1k
         return t_0 + t_1 + t_2
 
-    def step(self, H_bc=None, Q_in=None, dt=None, first_time=False):
+    def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False):
         self.link_hydraulic_geometry()
         self.compute_storage_areas()
         self.node_velocities()
@@ -1541,7 +1583,7 @@ class SuperLink():
         self.superlink_flow_coefficients()
         self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
                                      first_time=first_time, _dt=dt)
-        self.solve_sparse_matrix()
+        self.solve_sparse_matrix(u=u)
         self.solve_superlink_flows()
         # self.solve_superlink_depths()
         self.solve_superlink_depths_alt()
