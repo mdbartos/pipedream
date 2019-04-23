@@ -4,10 +4,14 @@
 ```
 Ji, Z. (1998). General Hydrodynamic Model for Sewer/Channel Network Systems.
 Journal of Hydraulic Engineering, 124(3), 307–315.
-doi:10.1061/(asce)0733-9429(1998)124:3(307)
+doi: 10.1061/(asce)0733-9429(1998)124:3(307)
 ```
 
 ## Example
+
+### Diagram of test case
+
+![Example network](https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/example_network_ji.png)
 
 ### Import modules and load data
 
@@ -55,7 +59,7 @@ for t_next in time_range[1:]:
     dt = t_next - t_prev
     # Get next stage boundary condition
     H_bc_next = H_bc.loc[t_next].values
-    # Get net flow input
+    # Get next flow input
     Q_in_next = Q_in.loc[t_next].values
     # Run superlink algorithm
     superlink.step(H_bc=H_bc_next, Q_in=Q_in_next, dt=dt)
