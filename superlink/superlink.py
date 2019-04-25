@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import scipy.linalg
 import scipy.optimize
 import scipy.sparse
 import scipy.sparse.linalg
@@ -136,10 +137,20 @@ class SuperLink():
         # Sparse matrix coefficients
         self.M = len(superjunctions)
         self.NK = len(superlinks)
-        self.A = scipy.sparse.lil_matrix((self.M, self.M))
+        if sparse:
+            self.A = scipy.sparse.lil_matrix((self.M, self.M))
+        else:
+            self.A = np.zeros((self.M, self.M))
         self.b = np.zeros(self.M)
         self.bc = self.superjunctions['bc'].values.astype(bool)
-        self.B = scipy.sparse.lil_matrix((self.M, self.p))
+        if sparse:
+            self.B = scipy.sparse.lil_matrix((self.M, self.p))
+        else:
+            self.B = np.zeros((self.M, self.p))
+        if sparse:
+            self.O = scipy.sparse.lil_matrix((self.M, self.M))
+        else:
+            self.O = np.zeros((self.M, self.M))
         # TODO: Should these be size NK?
         self._alpha_ukm = np.zeros(self.M, dtype=float)
         self._beta_dkl = np.zeros(self.M, dtype=float)
@@ -155,6 +166,8 @@ class SuperLink():
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Other parameters
+        self._Qo_t, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
+        self._O_diag = np.zeros(self.M)
         # Set up hydraulic geometry computations
         self.configure_storages()
         self.configure_hydraulic_geometry()
@@ -632,6 +645,12 @@ class SuperLink():
         Qo_u = Co * Ao * np.sign(dH_d) * np.sqrt(2 * g * np.abs(dH_d))
         return Qo_u, Qo_d
 
+    @safe_divide
+    def theta_o(self, u, Qo_d_t, Ao, Co=0.67, g=9.81):
+        num = 2 * g * u**2 * Co**2 * Ao**2
+        den = Qo_d_t
+        return num, den
+
     def configure_hydraulic_geometry(self):
         # Import instance variables
         transects = self.transects
@@ -681,7 +700,8 @@ class SuperLink():
             _tabular_storages = _storage_table[_tabular]
             _storage_indices = pd.Series(_tabular_storages.index, _tabular_storages.values)
             for table_name, table in storages.items():
-                _storage_factory[table_name] = superlink.storage.Tabular(**table)
+                if table_name in _storage_indices:
+                    _storage_factory[table_name] = superlink.storage.Tabular(**table)
         # Export instance variables
         self._storage_indices = _storage_indices
         self._storage_factory = _storage_factory
@@ -1093,7 +1113,8 @@ class SuperLink():
         self._beta_dk = _beta_dk
         self._chi_dk = _chi_dk
 
-    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, _dt=None, first_time=False):
+    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
+                                first_time=False):
         # TODO: May want to consider reconstructing A each time while debugging
         # Import instance variables
         _k = self._k
@@ -1113,15 +1134,20 @@ class SuperLink():
         _J_uo = self._J_uo
         _J_do = self._J_do
         _Ao = self._Ao
+        _sparse = self._sparse
+        _O_diag = self._O_diag
         M = self.M
         H_j = self.H_j
         bc = self.bc
+        _Qo_t = self._Qo_t
         if _dt is None:
             _dt = self._dt
         if H_bc is None:
             H_bc = self.H_j
         if _Q_0j is None:
             _Q_0j = 0
+        if u is None:
+            u = 0
         # Compute F_jj
         _alpha_ukm.fill(0)
         _beta_dkl.fill(0)
@@ -1145,34 +1171,53 @@ class SuperLink():
         b = self.G_j(_A_sj, _dt, H_j, _Q_0j, _chi_ukl, _chi_dkm)
         b[bc] = H_bc[bc]
         # Compute control matrix
-        # TODO: Should account for boundary nodes here as well
         if _J_uo.size:
-            _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
-            self.B[_J_uo] = _Qo_u
-            self.B[_J_do] = _Qo_d
+            # TODO: Should account for boundary nodes here as well
+            if implicit:
+                _theta_o = self.theta_o(u, _Qo_t, _Ao)
+                _O_diag.fill(0)
+                np.subtract.at(_O_diag, _J_uo, _theta_o)
+                np.subtract.at(_O_diag, _J_do, _theta_o)
+                np.fill_diagonal(self.O, _O_diag)
+                self.O[_J_uo, _J_do] = _theta_o
+                self.O[_J_do, _J_uo] = _theta_o
+            else:
+                _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
+                self.B[_J_uo] = _Qo_u
+                self.B[_J_do] = _Qo_d
         # Export instance variables
         self.b = b
         self._beta_dkl = _beta_dkl
         self._alpha_ukm = _alpha_ukm
         self._chi_ukl = _chi_ukl
         self._chi_dkm = _chi_dkm
-        if first_time:
+        if first_time and _sparse:
             self.A = self.A.tocsr()
-            # self.B = self.B.tocsr()
 
-    def solve_sparse_matrix(self, u=None):
+    def solve_sparse_matrix(self, u=None, implicit=True):
         # Import instance variables
         A = self.A
         b = self.b
         B = self.B
+        O = self.O
         _z_inv_j = self._z_inv_j
+        _sparse = self._sparse
         min_depth = self.min_depth
         # Get right-hand size
-        if B.nnz and (u is not None):
-            r = b + np.squeeze(B @ u)
+        if u is not None:
+            if implicit:
+                l = A + O
+                r = b
+            else:
+                l = A
+                r = b + np.squeeze(B @ u)
         else:
+            l = A
             r = b
-        H_j_next = scipy.sparse.linalg.spsolve(A, r)
+        if _sparse:
+            H_j_next = scipy.sparse.linalg.spsolve(l, r)
+        else:
+            H_j_next = scipy.linalg.solve(l, r)
         H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
         self.H_j = H_j_next
 
@@ -1193,6 +1238,19 @@ class SuperLink():
         # Export instance variables
         self._Q_uk = _Q_uk_next
         self._Q_dk = _Q_dk_next
+
+    def solve_orifice_flows(self, u=None):
+        # Import instance variables
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        _Ao = self._Ao
+        H_j = self.H_j
+        if u is None:
+            u = 0
+        # Compute orifice flows
+        _Qo_t, _ = self.B_j(_J_uo, _J_do, u * _Ao, H_j)
+        # Export instance variables
+        self._Qo_t = _Qo_t
 
     def solve_superlink_depths(self):
         # Import instance variables
@@ -1570,7 +1628,7 @@ class SuperLink():
         t_2 = W_Im1k * h_1k
         return t_0 + t_1 + t_2
 
-    def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False):
+    def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False, implicit=True):
         self.link_hydraulic_geometry()
         self.compute_storage_areas()
         self.node_velocities()
@@ -1581,10 +1639,12 @@ class SuperLink():
         self.superlink_upstream_head_coefficients()
         self.superlink_downstream_head_coefficients()
         self.superlink_flow_coefficients()
-        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
-                                     first_time=first_time, _dt=dt)
-        self.solve_sparse_matrix(u=u)
+        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in, u=u,
+                                     first_time=first_time, _dt=dt,
+                                     implicit=implicit)
+        self.solve_sparse_matrix(u=u, implicit=implicit)
         self.solve_superlink_flows()
+        self.solve_orifice_flows(u=u)
         # self.solve_superlink_depths()
         self.solve_superlink_depths_alt()
         self.solve_internals_lsq()
