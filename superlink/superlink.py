@@ -166,7 +166,8 @@ class SuperLink():
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Other parameters
-        self._Qo_t, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
+        self._Qo_t = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
+        self._Qo_t_min = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
         self._O_diag = np.zeros(self.M)
         # Set up hydraulic geometry computations
         self.configure_storages()
@@ -645,10 +646,17 @@ class SuperLink():
         Qo_u = Co * Ao * np.sign(dH_d) * np.sqrt(2 * g * np.abs(dH_d))
         return Qo_u, Qo_d
 
+    def min_Qo(self, J_uo, J_do, Ao, H_j, Co=0.67, g=9.81):
+        dH = H_j[J_uo] - H_j[J_do]
+        dH = np.maximum(np.abs(dH), self.min_depth)
+        # TODO: Why are these reversed?
+        Qo = Co * Ao * np.sign(dH) * np.sqrt(2 * g * np.abs(dH))
+        return Qo
+
     @safe_divide
     def theta_o(self, u, Qo_d_t, Ao, Co=0.67, g=9.81):
         num = 2 * g * u**2 * Co**2 * Ao**2
-        den = Qo_d_t
+        den = np.abs(Qo_d_t)
         return num, den
 
     def configure_hydraulic_geometry(self):
@@ -1172,19 +1180,21 @@ class SuperLink():
         b[bc] = H_bc[bc]
         # Compute control matrix
         if _J_uo.size:
-            # TODO: Should account for boundary nodes here as well
+            bc_uo = bc[_J_uo]
+            bc_do = bc[_J_do]
             if implicit:
+                # TODO: This will overwrite?
                 _theta_o = self.theta_o(u, _Qo_t, _Ao)
                 _O_diag.fill(0)
-                np.subtract.at(_O_diag, _J_uo, _theta_o)
-                np.subtract.at(_O_diag, _J_do, _theta_o)
+                np.add.at(_O_diag, _J_uo[~bc_uo], _theta_o[~bc_uo])
+                np.add.at(_O_diag, _J_do[~bc_do], _theta_o[~bc_do])
                 np.fill_diagonal(self.O, _O_diag)
-                self.O[_J_uo, _J_do] = _theta_o
-                self.O[_J_do, _J_uo] = _theta_o
+                self.O[_J_uo[~bc_uo], _J_do[~bc_uo]] = -_theta_o[~bc_uo]
+                self.O[_J_do[~bc_do], _J_uo[~bc_do]] = -_theta_o[~bc_do]
             else:
                 _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
-                self.B[_J_uo] = _Qo_u
-                self.B[_J_do] = _Qo_d
+                self.B[_J_uo[~bc_uo]] = _Qo_u[~bc_uo]
+                self.B[_J_do[~bc_do]] = _Qo_d[~bc_do]
         # Export instance variables
         self.b = b
         self._beta_dkl = _beta_dkl
@@ -1248,7 +1258,7 @@ class SuperLink():
         if u is None:
             u = 0
         # Compute orifice flows
-        _Qo_t, _ = self.B_j(_J_uo, _J_do, u * _Ao, H_j)
+        _, _Qo_t = self.B_j(_J_uo, _J_do, u * _Ao, H_j)
         # Export instance variables
         self._Qo_t = _Qo_t
 
