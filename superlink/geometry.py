@@ -15,7 +15,10 @@ class Circular():
         y[y < 0] = 0
         y[y > d] = d[y > d]
         r = d / 2
-        theta = np.arccos(1 - y / r)
+        phi = y / r
+        phi[phi < -1] = -1
+        phi[phi > 1] = 1
+        theta = np.arccos(1 - phi)
         A = r**2 * (theta - np.cos(theta) * np.sin(theta))
         return A
 
@@ -29,7 +32,10 @@ class Circular():
         y[y < 0] = 0
         y[y > d] = d[y > d]
         r = d / 2
-        theta = np.arccos(1 - y / r)
+        phi = y / r
+        phi[phi < -1] = -1
+        phi[phi > 1] = 1
+        theta = np.arccos(1 - phi)
         Pe = 2 * r * theta
         return Pe
 
@@ -52,7 +58,10 @@ class Circular():
         y = (h_Ik + h_Ip1k) / 2
         y[y < 0] = 0
         r = d / 2
-        theta = np.arccos(1 - y / r)
+        phi = y / r
+        phi[phi < -1] = -1
+        phi[phi > 1] = 1
+        theta = np.arccos(1 - phi)
         cond = (y < d)
         B = np.zeros(y.size)
         B[~cond] = 0.001 * d[~cond]

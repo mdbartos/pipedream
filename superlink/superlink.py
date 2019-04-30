@@ -10,7 +10,8 @@ import superlink.storage
 class SuperLink():
     def __init__(self, superlinks, superjunctions, links, junctions,
                  transects={}, storages={}, orifices=None,
-                 dt=60, sparse=False, min_depth=1e-5):
+                 dt=60, sparse=False, min_depth=1e-5, method='b',
+                 inertial_damping=False):
         self.superlinks = superlinks
         self.superjunctions = superjunctions
         self.links = links
@@ -20,6 +21,8 @@ class SuperLink():
         self.orifices = orifices
         self._dt = dt
         self._sparse = sparse
+        self._method = method
+        self.inertial_damping = inertial_damping
         self.min_depth = min_depth
         self._I = junctions.index.values
         self._ik = links.index.values
@@ -137,6 +140,7 @@ class SuperLink():
         # Sparse matrix coefficients
         self.M = len(superjunctions)
         self.NK = len(superlinks)
+        self.nk = np.bincount(self._ki)
         if sparse:
             self.A = scipy.sparse.lil_matrix((self.M, self.M))
         else:
@@ -166,8 +170,9 @@ class SuperLink():
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Other parameters
-        self._Qo_t = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
-        self._Qo_t_min = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
+        # self._Qo_t = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
+        self._Qo_t, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
+        # self._Qo_t_min = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
         self._O_diag = np.zeros(self.M)
         # Set up hydraulic geometry computations
         self.configure_storages()
@@ -302,27 +307,33 @@ class SuperLink():
         den = dx_ik + dx_im1k
         return num, den
 
+    @safe_divide
+    def Fr(self, u_ik, A_ik, B_ik, g=9.81):
+        num = np.abs(u_ik) * np.sqrt(B_ik)
+        den = np.sqrt(g * A_ik)
+        return num, den
+
     # Link coefficients for superlink k
-    def a_ik(self, u_Ik):
+    def a_ik(self, u_Ik, sigma_ik=1):
         """
         Compute link coefficient 'a' for link i, superlink k.
         """
-        return -np.maximum(u_Ik, 0)
+        return -np.maximum(u_Ik, 0) * sigma_ik
 
-    def c_ik(self, u_Ip1k):
+    def c_ik(self, u_Ip1k, sigma_ik=1):
         """
         Compute link coefficient 'c' for link i, superlink k.
         """
-        return -np.maximum(-u_Ip1k, 0)
+        return -np.maximum(-u_Ip1k, 0) * sigma_ik
 
     def b_ik(self, dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
-             A_c_ik, C_ik, a_ik, c_ik, ctrl, g=9.81):
+             A_c_ik, C_ik, a_ik, c_ik, ctrl, sigma_ik=1, g=9.81):
         """
         Compute link coefficient 'b' for link i, superlink k.
         """
         # TODO: Clean up
         cond = A_ik > 0
-        t_0 = dx_ik / dt
+        t_0 = (dx_ik / dt) * sigma_ik
         t_1 = np.zeros(Q_ik_t.size)
         t_1[cond] = (g * n_ik[cond]**2 * np.abs(Q_ik_t[cond]) * dx_ik[cond]
                     / A_ik[cond] / R_ik[cond]**(4/3))
@@ -333,11 +344,11 @@ class SuperLink():
         t_4 = c_ik
         return t_0 + t_1 + t_2 - t_3 - t_4
 
-    def P_ik(self, Q_ik_t, dx_ik, dt, A_ik, S_o_ik, g=9.81):
+    def P_ik(self, Q_ik_t, dx_ik, dt, A_ik, S_o_ik, sigma_ik=1, g=9.81):
         """
         Compute link coefficient 'P' for link i, superlink k.
         """
-        t_0 = Q_ik_t * dx_ik / dt
+        t_0 = (Q_ik_t * dx_ik / dt) * sigma_ik
         t_1 = g * A_ik * S_o_ik * dx_ik
         return t_0 + t_1
 
@@ -646,13 +657,6 @@ class SuperLink():
         Qo_u = Co * Ao * np.sign(dH_d) * np.sqrt(2 * g * np.abs(dH_d))
         return Qo_u, Qo_d
 
-    def min_Qo(self, J_uo, J_do, Ao, H_j, Co=0.67, g=9.81):
-        dH = H_j[J_uo] - H_j[J_do]
-        dH = np.maximum(np.abs(dH), self.min_depth)
-        # TODO: Why are these reversed?
-        Qo = Co * Ao * np.sign(dH) * np.sqrt(2 * g * np.abs(dH))
-        return Qo
-
     @safe_divide
     def theta_o(self, u, Qo_d_t, Ao, Co=0.67, g=9.81):
         num = 2 * g * u**2 * Co**2 * Ao**2
@@ -840,6 +844,32 @@ class SuperLink():
         self._u_Ik = _u_Ik
         self._u_Ip1k = _u_Ip1k
 
+    def compute_flow_regime(self):
+        # Import instance variables
+        _u_ik = self._u_ik
+        _A_ik = self._A_ik
+        _B_ik = self._B_ik
+        _ki = self._ki
+        _kI = self._kI
+        NK = self.NK
+        nk = self.nk
+        # Compute Froude number for each superlink and link
+        _Fr_k = np.zeros(NK)
+        _Fr_ik = self.Fr(_u_ik, _A_ik, _B_ik)
+        np.add.at(_Fr_k, _ki, _Fr_ik)
+        _Fr_k /= nk
+        # Determine if superlink is supercritical
+        _supercritical = (_Fr_k >= 1)[_kI]
+        # Compute sigma for inertial damping
+        _sigma_ik = 2 * (1 - _Fr_ik)
+        _sigma_ik[_Fr_ik < 0.5] = 1.
+        _sigma_ik[_Fr_ik > 1] = 0.
+        # Export instance variables
+        self._Fr_k = _Fr_k
+        self._Fr_ik = _Fr_ik
+        self._supercritical = _supercritical
+        self._sigma_ik = _sigma_ik
+
     def link_coeffs(self, _dt=None):
         # Import instance variables
         _u_Ik = self._u_Ik
@@ -853,14 +883,20 @@ class SuperLink():
         _A_c_ik = self._A_c_ik
         _C_ik = self._C_ik
         _ctrl = self._ctrl
+        inertial_damping = self.inertial_damping
+        if inertial_damping:
+            _sigma_ik = self._sigma_ik
+        else:
+            _sigma_ik = 1
         if _dt is None:
             _dt = self._dt
         # Compute link coefficients
-        _a_ik = self.a_ik(_u_Ik)
-        _c_ik = self.c_ik(_u_Ip1k)
+        _a_ik = self.a_ik(_u_Ik, _sigma_ik)
+        _c_ik = self.c_ik(_u_Ip1k, _sigma_ik)
         _b_ik = self.b_ik(_dx_ik, _dt, _n_ik, _Q_ik, _A_ik, _R_ik,
                           _A_c_ik, _C_ik, _a_ik, _c_ik, _ctrl)
-        _P_ik = self.P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik)
+        _P_ik = self.P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
+                          _sigma_ik)
         # Export to instance variables
         self._a_ik = _a_ik
         self._b_ik = _b_ik
@@ -1436,7 +1472,7 @@ class SuperLink():
             _h_Ik[_I_next_b] = self._h_Ik_next_b(_Q_ik[_i_next_b], _Y_Ik[_I_next_b],
                                                  _Z_Ik[_I_next_b], _h_Ik[_I_Np1k_next_b],
                                                  _X_Ik[_I_next_b])
-            # _h_Ik[_I_next_b[_h_Ik[_I_next_b] < min_depth]] = min_depth
+            _h_Ik[_I_next_b[_h_Ik[_I_next_b] < min_depth]] = min_depth
             _Q_ik[_im1_next_b] = self._Q_im1k_next_b(_U_Ik[_Im1_next_b], _h_Ik[_I_next_b],
                                                        _V_Ik[_Im1_next_b], _W_Ik[_Im1_next_b],
                                                        _h_Ik[_I_1k_next_b])
@@ -1445,6 +1481,7 @@ class SuperLink():
                                                                      _W_Ik[_Im1_next_b],
                                                                      _h_Ik[_I_1k_next_b],
                                                                      _U_Ik[_Im1_next_b])) / 2
+            _h_Ik[_I_next_b[_h_Ik[_I_next_b] < min_depth]] = min_depth
             _Q_ik[_im1_next_b] = (_Q_ik[_im1_next_b] + self._Q_im1k_next_b(_U_Ik[_Im1_next_b],
                                                                            _h_Ik[_I_next_b],
                                                                            _V_Ik[_Im1_next_b],
@@ -1453,7 +1490,7 @@ class SuperLink():
             _h_Ik[_I_next_f] = self._h_Ik_next_f(_Q_ik[_im1_next_f], _V_Ik[_Im1_next_f],
                                                  _W_Ik[_Im1_next_f], _h_Ik[_I_1k_next_f],
                                                  _U_Ik[_Im1_next_f])
-            # _h_Ik[_I_next_f[_h_Ik[_I_next_f] < min_depth]] = min_depth
+            _h_Ik[_I_next_f[_h_Ik[_I_next_f] < min_depth]] = min_depth
             _Q_ik[_i_next_f] = self._Q_i_next_f(_X_Ik[_I_next_f], _h_Ik[_I_next_f],
                                                 _Y_Ik[_I_next_f], _Z_Ik[_I_next_f],
                                                 _h_Ik[_I_Np1k_next_f])
@@ -1462,6 +1499,7 @@ class SuperLink():
                                                                      _Z_Ik[_I_next_f],
                                                                      _h_Ik[_I_Np1k_next_f],
                                                                      _X_Ik[_I_next_f])) / 2
+            _h_Ik[_I_next_f[_h_Ik[_I_next_f] < min_depth]] = min_depth
             _Q_ik[_i_next_f] = (_Q_ik[_i_next_f] + self._Q_i_next_f(_X_Ik[_I_next_f],
                                                                     _h_Ik[_I_next_f],
                                                                     _Y_Ik[_I_next_f],
@@ -1485,7 +1523,7 @@ class SuperLink():
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
 
-    def solve_internals_forwards(self):
+    def solve_internals_forwards(self, supercritical_only=False):
         # Import instance variables
         _I_1k = self._I_1k
         _I_2k = self._I_2k
@@ -1496,8 +1534,8 @@ class SuperLink():
         _I_end = self._I_end
         forward_I_I = self.forward_I_I
         forward_I_i = self.forward_I_i
-        _h_Ik_f = self._h_Ik_f
-        _Q_ik_f = self._Q_ik_f
+        _h_Ik = self._h_Ik
+        _Q_ik = self._Q_ik
         _U_Ik = self._U_Ik
         _V_Ik = self._V_Ik
         _W_Ik = self._W_Ik
@@ -1508,11 +1546,14 @@ class SuperLink():
         _Q_dk = self._Q_dk
         _h_uk = self._h_uk
         _h_dk = self._h_dk
+        min_depth = self.min_depth
+        if supercritical_only:
+            _supercritical = self._supercritical
         # Set first elements
-        _Q_ik_f[_i_1k] = _Q_uk
-        _Q_ik_f[_i_nk] = _Q_dk
-        _h_Ik_f[_I_1k] = _h_uk
-        _h_Ik_f[_I_Np1k] = _h_dk
+        _Q_ik[_i_1k] = _Q_uk
+        _Q_ik[_i_nk] = _Q_dk
+        _h_Ik[_I_1k] = _h_uk
+        _h_Ik[_I_Np1k] = _h_dk
         # Get rid of superlinks with one link
         keep = (_I_2k != _I_Np1k)
         _Im1_next = _I_1k[keep]
@@ -1520,6 +1561,14 @@ class SuperLink():
         _I_1k_next = _I_1k[keep]
         _I_Nk_next = _I_Nk[keep]
         _I_Np1k_next = _I_Np1k[keep]
+        # If only using subcritical superlinks
+        if supercritical_only:
+            keep = _supercritical[_I_next]
+            _Im1_next = _Im1_next[keep]
+            _I_next = _I_next[keep]
+            _I_1k_next = _I_1k_next[keep]
+            _I_Nk_next = _I_Nk_next[keep]
+            _I_Np1k_next = _I_Np1k_next[keep]
         # Loop from 2 -> Nk
         # print('Solve internals forwards')
         while _I_next.size:
@@ -1527,12 +1576,13 @@ class SuperLink():
             _im1_next = forward_I_i[_Im1_next]
             _Ip1_next = forward_I_I[_I_next]
             # print('I = ', _I_next, 'i = ', _i_next, 'I-1 = ', _Im1_next, 'I+1 = ', _Ip1_next)
-            _h_Ik_f[_I_next] = self._h_Ik_next_f(_Q_ik_f[_im1_next], _V_Ik[_Im1_next],
-                                                 _W_Ik[_Im1_next], _h_Ik_f[_I_1k_next],
+            _h_Ik[_I_next] = self._h_Ik_next_f(_Q_ik[_im1_next], _V_Ik[_Im1_next],
+                                                 _W_Ik[_Im1_next], _h_Ik[_I_1k_next],
                                                  _U_Ik[_Im1_next])
-            _Q_ik_f[_i_next] = self._Q_i_next_f(_X_Ik[_I_next], _h_Ik_f[_I_next],
+            _h_Ik[_I_next[_h_Ik[_I_next] < min_depth]] = min_depth
+            _Q_ik[_i_next] = self._Q_i_next_f(_X_Ik[_I_next], _h_Ik[_I_next],
                                                 _Y_Ik[_I_next], _Z_Ik[_I_next],
-                                                _h_Ik_f[_I_Np1k_next])
+                                                _h_Ik[_I_Np1k_next])
             keep = (_Ip1_next != _I_Np1k_next)
             _Im1_next = _I_next[keep]
             # _im1_next = _i_next[keep]
@@ -1541,12 +1591,12 @@ class SuperLink():
             _I_Nk_next = _I_Nk_next[keep]
             _I_Np1k_next = _I_Np1k_next[keep]
         # TODO: Reset first elements
-        # _Q_ik_f[_i_1k] = _Q_uk
-        # _Q_ik_f[_i_nk] = _Q_dk
-        # _h_Ik_f[_I_1k] = _h_uk
-        # _h_Ik_f[_I_Np1k] = _h_dk
-        self._h_Ik_f = _h_Ik_f
-        self._Q_ik_f = _Q_ik_f
+        _Q_ik[_i_1k] = _Q_uk
+        _Q_ik[_i_nk] = _Q_dk
+        _h_Ik[_I_1k] = _h_uk
+        _h_Ik[_I_Np1k] = _h_dk
+        self._h_Ik = _h_Ik
+        self._Q_ik = _Q_ik
 
     @safe_divide
     def _h_Ik_next_f(self, Q_ik, V_Ik, W_Ik, h_1k, U_Ik):
@@ -1560,7 +1610,7 @@ class SuperLink():
         t_2 = Z_Ik * h_Np1k
         return t_0 + t_1 + t_2
 
-    def solve_internals_backwards(self):
+    def solve_internals_backwards(self, subcritical_only=False):
         # Import instance variables
         _I_1k = self._I_1k
         _I_2k = self._I_2k
@@ -1571,8 +1621,8 @@ class SuperLink():
         _I_end = self._I_end
         backward_I_I = self.backward_I_I
         forward_I_i = self.forward_I_i
-        _h_Ik_b = self._h_Ik_b
-        _Q_ik_b = self._Q_ik_b
+        _h_Ik = self._h_Ik
+        _Q_ik = self._Q_ik
         _U_Ik = self._U_Ik
         _V_Ik = self._V_Ik
         _W_Ik = self._W_Ik
@@ -1584,11 +1634,13 @@ class SuperLink():
         _h_uk = self._h_uk
         _h_dk = self._h_dk
         min_depth = self.min_depth
+        if subcritical_only:
+            _subcritical = ~self._supercritical
         # Set first elements
-        _Q_ik_b[_i_1k] = _Q_uk
-        _Q_ik_b[_i_nk] = _Q_dk
-        _h_Ik_b[_I_1k] = _h_uk
-        _h_Ik_b[_I_Np1k] = _h_dk
+        _Q_ik[_i_1k] = _Q_uk
+        _Q_ik[_i_nk] = _Q_dk
+        _h_Ik[_I_1k] = _h_uk
+        _h_Ik[_I_Np1k] = _h_dk
         # Get rid of superlinks with one link
         keep = (_I_1k != _I_Nk)
         _Im1_next = _I_1k[keep]
@@ -1596,6 +1648,14 @@ class SuperLink():
         _I_1k_next = _I_1k[keep]
         _I_2k_next = _I_2k[keep]
         _I_Np1k_next = _I_Np1k[keep]
+        # If only using subcritical superlinks
+        if subcritical_only:
+            keep = _subcritical[_I_next]
+            _Im1_next = _Im1_next[keep]
+            _I_next = _I_next[keep]
+            _I_1k_next = _I_1k_next[keep]
+            _I_2k_next = _I_2k_next[keep]
+            _I_Np1k_next = _I_Np1k_next[keep]
         # Loop from Nk -> 1
         # print('Solve internals backwards')
         while _I_next.size:
@@ -1603,28 +1663,28 @@ class SuperLink():
             _Im1_next = backward_I_I[_I_next]
             _im1_next = forward_I_i[_Im1_next]
             # print('I = ', _I_next, 'i = ', _i_next, 'I-1 = ', _Im1_next, 'i-1 = ', _im1_next)
-            _h_Ik_b[_I_next] = self._h_Ik_next_b(_Q_ik_b[_i_next], _Y_Ik[_I_next],
-                                                 _Z_Ik[_I_next], _h_Ik_b[_I_Np1k_next],
+            _h_Ik[_I_next] = self._h_Ik_next_b(_Q_ik[_i_next], _Y_Ik[_I_next],
+                                                 _Z_Ik[_I_next], _h_Ik[_I_Np1k_next],
                                                  _X_Ik[_I_next])
             # Ensure non-negative depths?
-            # _h_Ik[_I_next[_h_Ik[_I_next] < min_depth]] = min_depth
-            _Q_ik_b[_im1_next] = self._Q_im1k_next_b(_U_Ik[_Im1_next], _h_Ik_b[_I_next],
+            _h_Ik[_I_next[_h_Ik[_I_next] < min_depth]] = min_depth
+            _Q_ik[_im1_next] = self._Q_im1k_next_b(_U_Ik[_Im1_next], _h_Ik[_I_next],
                                                      _V_Ik[_Im1_next], _W_Ik[_Im1_next],
-                                                     _h_Ik_b[_I_1k_next])
+                                                     _h_Ik[_I_1k_next])
             keep = (_Im1_next != _I_1k_next)
             _I_next = _Im1_next[keep]
             _I_1k_next = _I_1k_next[keep]
             _I_Np1k_next = _I_Np1k_next[keep]
         # Set upstream flow
         # TODO: May want to delete where this is set earlier
-        # _Q_ik_b[_i_1k] = _Q_uk
-        # _Q_ik_b[_i_nk] = _Q_dk
-        # _h_Ik_b[_I_1k] = _h_uk
-        # _h_Ik_b[_I_Np1k] = _h_dk
+        _Q_ik[_i_1k] = _Q_uk
+        _Q_ik[_i_nk] = _Q_dk
+        _h_Ik[_I_1k] = _h_uk
+        _h_Ik[_I_Np1k] = _h_dk
         # Ensure non-negative depths?
-        # _h_Ik[_h_Ik < min_depth] = min_depth
-        self._h_Ik_b = _h_Ik_b
-        self._Q_ik_b = _Q_ik_b
+        _h_Ik[_h_Ik < min_depth] = min_depth
+        self._h_Ik = _h_Ik
+        self._Q_ik = _Q_ik
 
     @safe_divide
     def _h_Ik_next_b(self, Q_ik, Y_Ik, Z_Ik, h_Np1k, X_Ik):
@@ -1639,9 +1699,11 @@ class SuperLink():
         return t_0 + t_1 + t_2
 
     def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False, implicit=True):
+        _method = self._method
         self.link_hydraulic_geometry()
         self.compute_storage_areas()
         self.node_velocities()
+        self.compute_flow_regime()
         self.link_coeffs(_dt=dt)
         self.node_coeffs(_dt=dt)
         self.forward_recurrence()
@@ -1655,6 +1717,14 @@ class SuperLink():
         self.solve_sparse_matrix(u=u, implicit=implicit)
         self.solve_superlink_flows()
         self.solve_orifice_flows(u=u)
-        # self.solve_superlink_depths()
-        self.solve_superlink_depths_alt()
-        self.solve_internals_lsq()
+        self.solve_superlink_depths()
+        # self.solve_superlink_depths_alt()
+        if _method == 'lsq':
+            self.solve_internals_lsq()
+        elif _method == 'b':
+            self.solve_internals_backwards()
+        elif _method == 'f':
+            self.solve_internals_forwards()
+        elif _method == 's':
+            self.solve_internals_backwards(subcritical_only=True)
+            self.solve_internals_forwards(supercritical_only=True)
