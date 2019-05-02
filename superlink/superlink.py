@@ -71,6 +71,10 @@ class SuperLink():
         self._storage_a = superjunctions['a'].values.astype(float)
         self._storage_b = superjunctions['b'].values.astype(float)
         self._storage_c = superjunctions['c'].values.astype(float)
+        if 'max_depth' in superjunctions:
+            self.max_depth = superjunctions['max_depth'].values.astype(float)
+        else:
+            self.max_depth = np.full(len(superjunctions), np.inf, dtype=float)
         self._h_Ik = junctions.loc[self._I, 'h_0'].values.astype(float)
         self._A_SIk = junctions.loc[self._I, 'A_s'].values.astype(float)
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(float)
@@ -1249,6 +1253,7 @@ class SuperLink():
         _z_inv_j = self._z_inv_j
         _sparse = self._sparse
         min_depth = self.min_depth
+        max_depth = self.max_depth
         # Get right-hand size
         if u is not None:
             if implicit:
@@ -1265,6 +1270,7 @@ class SuperLink():
         else:
             H_j_next = scipy.linalg.solve(l, r)
         H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
+        H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
         self.H_j = H_j_next
 
     def solve_superlink_flows(self):
@@ -1595,6 +1601,8 @@ class SuperLink():
         _Q_ik[_i_nk] = _Q_dk
         _h_Ik[_I_1k] = _h_uk
         _h_Ik[_I_Np1k] = _h_dk
+        # Ensure non-negative depths
+        _h_Ik[_h_Ik < min_depth] = min_depth
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
 
