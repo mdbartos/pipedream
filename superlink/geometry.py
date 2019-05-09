@@ -50,7 +50,7 @@ class Circular():
         return R
 
     @classmethod
-    def B_ik(self, h_Ik, h_Ip1k, g1, **kwargs):
+    def B_ik(self, h_Ik, h_Ip1k, g1, pslot=0.001, **kwargs):
         """
         Compute top width of flow for link i, superlink k.
         """
@@ -64,11 +64,66 @@ class Circular():
         theta = np.arccos(1 - phi)
         cond = (y < d)
         B = np.zeros(y.size)
-        B[~cond] = 0.001 * d[~cond]
+        B[~cond] = pslot * d[~cond]
         B[cond] = 2 * r[cond] * np.sin(theta[cond])
         return B
 
 class Rect_Closed():
+    def __init__(self):
+        pass
+
+    @classmethod
+    def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute cross-sectional area of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        y[y > y_max] = y_max[y > y_max]
+        A = y * b
+        return A
+
+    @classmethod
+    def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute perimeter of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        y[y > y_max] = y_max[y > y_max]
+        Pe = b + 2 * y
+        return Pe
+
+    @classmethod
+    def R_ik(self, A_ik, Pe_ik):
+        """
+        Compute hydraulic radius for link i, superlink k.
+        """
+        cond = Pe_ik > 0
+        R = np.zeros(A_ik.size)
+        R[cond] = A_ik[cond] / Pe_ik[cond]
+        return R
+
+    @classmethod
+    def B_ik(self, h_Ik, h_Ip1k, g1, g2, pslot=0.001, **kwargs):
+        """
+        Compute top width of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        cond = (y < y_max)
+        B = np.zeros(y.size)
+        B[~cond] = pslot * b[~cond]
+        B[cond] = b[cond]
+        return B
+
+class Rect_Open():
     def __init__(self):
         pass
 
@@ -115,13 +170,8 @@ class Rect_Closed():
         """
         y_max = g1
         b = g2
-        y = (h_Ik + h_Ip1k) / 2
-        y[y < 0] = 0
-        cond = (y < y_max)
-        B = np.zeros(y.size)
-        B[~cond] = 0.001 * b[~cond]
-        B[cond] = b[cond]
-        return B
+        return b
+
 
 class Triangular():
     def __init__(self):
@@ -174,7 +224,8 @@ class Triangular():
         y[y < 0] = 0
         cond = (y < y_max)
         B = np.zeros(y.size)
-        B[~cond] = 0.001 * 2 * m[~cond] * y[~cond]
+        # B[~cond] = 0.001 * 2 * m[~cond] * y[~cond]
+        B[~cond] = 2 * m[~cond] * y_max[~cond]
         B[cond] = 2 * m[cond] * y[cond]
         return B
 
@@ -232,7 +283,8 @@ class Trapezoidal():
         y[y < 0] = 0
         cond = (y < y_max)
         B = np.zeros(y.size)
-        B[~cond] = 0.001 * b[~cond]
+        # B[~cond] = 0.001 * b[~cond]
+        B[~cond] = b[~cond] + 2 * m[~cond] * y_max[~cond]
         B[cond] = b[cond] + 2 * m[cond] * y[cond]
         return B
 

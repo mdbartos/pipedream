@@ -1224,6 +1224,7 @@ class SuperLink():
             bc_do = bc[_J_do]
             if implicit:
                 # TODO: This will overwrite?
+                # TODO: Ao should be dependent on height of water
                 _theta_o = self.theta_o(u, _Qo_t, _Ao)
                 _O_diag.fill(0)
                 np.add.at(_O_diag, _J_uo[~bc_uo], _theta_o[~bc_uo])
