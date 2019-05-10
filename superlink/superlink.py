@@ -792,7 +792,7 @@ class SuperLink():
         min_depth = self.min_depth
         _A_sj = self._A_sj
         # Compute storage areas
-        _h_j = np.maximum(H_j - _z_inv_j, _z_inv_j + min_depth)
+        _h_j = np.maximum(H_j - _z_inv_j, min_depth)
         if _functional.any():
             generator = getattr(superlink.storage, 'Functional')
             _A_sj[_functional] = generator.A_sj(_h_j[_functional],
@@ -1339,6 +1339,7 @@ class SuperLink():
         min_depth = self.min_depth
         # Compute flow at next time step
         det = (_X_Ik[_I_1k] * _U_Ik[_I_Nk]) - (_Z_Ik[_I_1k] * _W_Ik[_I_Nk])
+        det[det == 0] = np.inf
         _h_uk_next = (_U_Ik[_I_Nk] * (_Q_uk - _Y_Ik[_I_1k])
                       - _Z_Ik[_I_1k] * (_Q_dk - _V_Ik[_I_Nk])) / det
         _h_dk_next = (-_W_Ik[_I_Nk] * (_Q_uk - _Y_Ik[_I_1k])
@@ -1554,6 +1555,7 @@ class SuperLink():
         _h_uk = self._h_uk
         _h_dk = self._h_dk
         min_depth = self.min_depth
+        # max_depth = 0.3048 * 10
         if supercritical_only:
             _supercritical = self._supercritical
         # Set first elements
@@ -1587,6 +1589,7 @@ class SuperLink():
                                                  _W_Ik[_Im1_next], _h_Ik[_I_1k_next],
                                                  _U_Ik[_Im1_next])
             _h_Ik[_I_next[_h_Ik[_I_next] < min_depth]] = min_depth
+            # _h_Ik[_I_next[_h_Ik[_I_next] > max_depth]] = min_depth
             _Q_ik[_i_next] = self._Q_i_next_f(_X_Ik[_I_next], _h_Ik[_I_next],
                                                 _Y_Ik[_I_next], _Z_Ik[_I_next],
                                                 _h_Ik[_I_Np1k_next])
@@ -1604,6 +1607,7 @@ class SuperLink():
         _h_Ik[_I_Np1k] = _h_dk
         # Ensure non-negative depths
         _h_Ik[_h_Ik < min_depth] = min_depth
+        # _h_Ik[_h_Ik > max_depth] = max_depth
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
 
@@ -1643,6 +1647,7 @@ class SuperLink():
         _h_uk = self._h_uk
         _h_dk = self._h_dk
         min_depth = self.min_depth
+        # max_depth = 0.3048 * 10
         if subcritical_only:
             _subcritical = ~self._supercritical
         # Set first elements
@@ -1677,6 +1682,7 @@ class SuperLink():
                                                  _X_Ik[_I_next])
             # Ensure non-negative depths?
             _h_Ik[_I_next[_h_Ik[_I_next] < min_depth]] = min_depth
+            # _h_Ik[_I_next[_h_Ik[_I_next] > max_depth]] = min_depth
             _Q_ik[_im1_next] = self._Q_im1k_next_b(_U_Ik[_Im1_next], _h_Ik[_I_next],
                                                      _V_Ik[_Im1_next], _W_Ik[_Im1_next],
                                                      _h_Ik[_I_1k_next])
@@ -1692,6 +1698,7 @@ class SuperLink():
         _h_Ik[_I_Np1k] = _h_dk
         # Ensure non-negative depths?
         _h_Ik[_h_Ik < min_depth] = min_depth
+        # _h_Ik[_h_Ik > max_depth] = max_depth
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
 
