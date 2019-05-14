@@ -799,6 +799,72 @@ Where:
   \gamma_{dk} = \frac{|Q_{dk}^{t}|}{2 C_{dk}^2 A_{dk}^2 g}
 \end{align}
 
+\subsection{Boundary conditions using Ji's method}
+
+In a similar manner, one can define the superlink coefficients using the
+linearized boundary conditions from Ji (1998):
+
+\begin{equation}
+ h_{uk}^{t + \Delta t} = \kappa_{uk} Q_{uk}^{t + \Delta t} + \lambda_{uk} H_{juk}^{t + \Delta t} + \mu_{uk} 
+\end{equation}
+
+\begin{equation}
+ h_{dk}^{t + \Delta t} = \kappa_{dk} Q_{dk}^{t + \Delta t} + \lambda_{dk} H_{jdk}^{t + \Delta t} + \mu_{dk} 
+\end{equation}
+
+\begin{equation}
+  \kappa_{uk} = \frac{2 A_{uk} \Delta H_{uk}}{Q_{uk} (2 \Delta H_{uk} B_{uk} - A_{uk})}
+\end{equation}
+
+\begin{equation}
+  \lambda_{uk} = - \frac{A_{uk}}{2 \Delta H_{uk} B_{uk} - A_{uk}}
+\end{equation}
+
+\begin{equation}
+  \mu_{uk} = \frac{A_{uk} (H_{juk} - h_{uk})}{2 \Delta H_{uk} B_{uk} - A_{uk}}
+\end{equation}
+
+\begin{equation}
+  \kappa_{dk} = \frac{2 A_{dk} \Delta H_{dk}}{Q_{dk} (2 \Delta H_{dk} B_{dk} + A_{dk})}
+\end{equation}
+
+\begin{equation}
+  \lambda_{dk} = \frac{A_{dk}}{Q_{dk} (2 \Delta H_{dk} B_{dk} + A_{dk}}
+\end{equation}
+
+\begin{equation}
+  \mu_{dk} = \frac{A_{dk} (h_{dk} - H_{jdk})}{2 \Delta H_{dk} B_{dk} + A_{uk}}
+\end{equation}
+
+\begin{equation}
+  \alpha_{uk} = \frac{(1 - U_{Nk} \kappa_{dk}) X_{1k} \lambda_{uk} + \kappa_{dk} \lambda_{uk} Z_{1k} W_{Nk}}{D_k^{*}}
+\end{equation}
+
+\begin{equation}
+  \beta_{uk} = \frac{(1 - U_{Nk} \kappa_{dk}) X_{1k} \lambda_{uk} + \kappa_{dk} \lambda_{uk} Z_{1k} W_{Nk}}{D_k^{*}}
+\end{equation}
+
+\begin{equation}
+  \chi_{uk} = \frac{(1 - U_{Nk} \kappa_{dk}) (X_{1k} \mu_{uk} + Z_{1k} \mu_{dk} + Y_{1k}) + (Z_{1k} \kappa_{dk})(W_{Nk} \mu_{uk} + U_{Nk} \mu_{dk} + V_{Nk})}{D_k^{*}}
+\end{equation}
+
+\begin{equation}
+  \alpha_{dk} = \frac{(1 - X_{1k} \kappa_{uk}) W_{Nk} \lambda_{uk} + \kappa_{uk} \lambda_{uk} W_{Nk} X_{1k}}{D_k^{*}}
+\end{equation}
+
+\begin{equation}
+  \beta_{dk} = \frac{(1 - X_{1k} \kappa_{uk}) U_{Nk} \lambda_{dk} + \kappa_{uk} \lambda_{dk} W_{Nk} Z_{1k}}{D_k^{*}}
+\end{equation}
+
+\begin{equation}
+  \chi_{dk} = \frac{(1 - X_{1k} \kappa_{uk}) (W_{Nk} \mu_{uk} + U_{Nk} \mu_{dk} + V_{Nk}) + (W_{Nk} \kappa_{uk})(X_{1k} \mu_{uk} + Z_{1k} \mu_{dk} + Y_{1k})}{D_k^{*}}
+\end{equation}
+
+\begin{equation}
+  D_k^* = (X_{1k} \kappa_{uk} - 1)(U_{Nk} \kappa_{dk} - 1) - (Z_{1k} \kappa_{dk})(W_{Nk} \kappa_{uk})
+\end{equation}
+
+
 \section{Forming the solution matrix}
 
 The equations for the flows at the ends of each superlink are given by:
