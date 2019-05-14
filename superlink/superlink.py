@@ -179,11 +179,19 @@ class SuperLink():
         self._Qo_t, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
         # self._Qo_t_min = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
         self._O_diag = np.zeros(self.M)
+        # Superlink end hydraulic geometries
+        self._A_uk = np.copy(self._A_ik[self._i_1k])
+        self._A_dk = np.copy(self._A_ik[self._i_nk])
+        self._link_start = np.zeros(self._ik.size, dtype=bool)
+        self._link_end = np.zeros(self._ik.size, dtype=bool)
+        self._link_start[self._i_1k] = True
+        self._link_end[self._i_nk] = True
         # Set up hydraulic geometry computations
         self.configure_storages()
         self.configure_hydraulic_geometry()
         # Get indexers for least squares
-        self.lsq_indexers()
+        if method == 'lsq':
+            self.lsq_indexers()
         # Iteration counter
         self.iter_count = 0
         # Initialize to stable state
@@ -712,13 +720,23 @@ class SuperLink():
         transects = self.transects
         _shape_ik = self._shape_ik
         _transect_ik = self._transect_ik
+        _link_start = self._link_start
+        _link_end = self._link_end
         # Set attributes
         _geom_factory = {}
         _transect_factory = {}
         _transect_indices = None
+        _uk_geom_factory = {}
+        _uk_transect_factory = {}
+        _uk_transect_indices = None
+        _dk_geom_factory = {}
+        _dk_transect_factory = {}
+        _dk_transect_indices = None
         # Handle regular geometries
         _is_irregular = _shape_ik.str.lower() == 'irregular'
         _has_irregular = _is_irregular.any()
+        _uk_has_irregular = (_link_start & _is_irregular).any()
+        _dk_has_irregular = (_link_end & _is_irregular).any()
         _unique_geom = set(_shape_ik.str.lower().unique())
         _unique_geom.discard('irregular')
         _regular_shapes = _shape_ik[~_is_irregular]
@@ -727,17 +745,27 @@ class SuperLink():
         for geom in _unique_geom:
             _ik_g = _geom_indices.loc[[geom]].values
             _geom_factory[geom] = _ik_g
+            _uk_geom_factory[geom] = _ik_g[_link_start[_ik_g]]
+            _dk_geom_factory[geom] = _ik_g[_link_end[_ik_g]]
         # Handle irregular geometries
         if _has_irregular:
             _irregular_transects = _transect_ik[_is_irregular]
             _transect_indices = pd.Series(_irregular_transects.index,
                                           index=_irregular_transects.values)
+            _uk_transect_indices = _transect_indices[_link_start[_transect_indices]]
+            _dk_transect_indices = _transect_indices[_link_end[_transect_indices]]
             for transect_name, transect in transects.items():
                 _transect_factory[transect_name] = superlink.geometry.Irregular(**transect)
         self._has_irregular = _has_irregular
         self._geom_factory = _geom_factory
         self._transect_factory = _transect_factory
         self._transect_indices = _transect_indices
+        self._uk_has_irregular = _uk_has_irregular
+        self._dk_has_irregular = _dk_has_irregular
+        self._uk_geom_factory = _uk_geom_factory
+        self._dk_geom_factory = _dk_geom_factory
+        self._uk_transect_indices = _uk_transect_indices
+        self._dk_transect_indices = _dk_transect_indices
 
     def configure_storages(self):
         # Import instance variables
@@ -818,6 +846,94 @@ class SuperLink():
         self._Pe_ik = _Pe_ik
         self._R_ik = _R_ik
         self._B_ik = _B_ik
+
+    def upstream_hydraulic_geometry(self):
+        # TODO: Should probably use forward_I_i instead of _ik directly
+        _ik = self._ik
+        _Ik = self._Ik
+        _ki = self._ki
+        _h_Ik = self._h_Ik
+        _A_uk = self._A_uk
+        _dx_ik = self._dx_ik
+        _g1_ik = self._g1_ik
+        _g2_ik = self._g2_ik
+        _g3_ik = self._g3_ik
+        _z_inv_uk = self._z_inv_uk
+        _J_uk = self._J_uk
+        H_j = self.H_j
+        _uk_geom_factory = self._uk_geom_factory
+        _transect_factory = self._transect_factory
+        _uk_transect_indices = self._uk_transect_indices
+        _uk_has_irregular = self._uk_has_irregular
+        # Compute hydraulic geometry for regular geometries
+        for geom, indices in _uk_geom_factory.items():
+            Geom = geom.title()
+            _ik_g = indices
+            _ki_g = _ki[_ik_g]
+            _Ik_g = _Ik[_ik_g]
+            generator = getattr(superlink.geometry, Geom)
+            _g1_g = _g1_ik[_ik_g]
+            _g2_g = _g2_ik[_ik_g]
+            _g3_g = _g3_ik[_ik_g]
+            _h_Ik_g = _h_Ik[_Ik_g]
+            _H_j_g = H_j[_J_uk[_ki_g]] - _z_inv_uk[_ki_g]
+            _A_uk[_ki_g] = generator.A_ik(_h_Ik_g, _H_j_g,
+                                          g1=_g1_g, g2=_g2_g, g3=_g3_g)
+        # Compute hydraulic geometry for irregular geometries
+        if _uk_has_irregular:
+            for transect_name, generator in _transect_factory.items():
+                _ik_g = _uk_transect_indices.loc[[transect_name]].values
+                _ki_g = _ki[_ik_g]
+                _Ik_g = _Ik[_ik_g]
+                _h_Ik_g = _h_Ik[_Ik_g]
+                _H_j_g = H_j[_J_uk[_ki_g]] - _z_inv_uk[_ki_g]
+                _A_uk[_ki_g] = generator.A_ik(_h_Ik_g, _H_j_g)
+        # Export to instance variables
+        self._A_uk = _A_uk
+
+    def downstream_hydraulic_geometry(self):
+        # TODO: Should probably use forward_I_i instead of _ik directly
+        _ik = self._ik
+        _ki = self._ki
+        _Ip1k = self._Ip1k
+        _h_Ik = self._h_Ik
+        _A_dk = self._A_dk
+        _dx_ik = self._dx_ik
+        _g1_ik = self._g1_ik
+        _g2_ik = self._g2_ik
+        _g3_ik = self._g3_ik
+        _z_inv_dk = self._z_inv_dk
+        _J_dk = self._J_dk
+        H_j = self.H_j
+        _dk_geom_factory = self._dk_geom_factory
+        _transect_factory = self._transect_factory
+        _dk_transect_indices = self._dk_transect_indices
+        _dk_has_irregular = self._dk_has_irregular
+        # Compute hydraulic geometry for regular geometries
+        for geom, indices in _dk_geom_factory.items():
+            Geom = geom.title()
+            _ik_g = indices
+            _ki_g = _ki[_ik_g]
+            _Ip1k_g = _Ip1k[_ik_g]
+            generator = getattr(superlink.geometry, Geom)
+            _g1_g = _g1_ik[_ik_g]
+            _g2_g = _g2_ik[_ik_g]
+            _g3_g = _g3_ik[_ik_g]
+            _h_Ip1k_g = _h_Ik[_Ip1k_g]
+            _H_j_g = H_j[_J_dk[_ki_g]] - _z_inv_dk[_ki_g]
+            _A_dk[_ki_g] = generator.A_ik(_h_Ip1k_g, _H_j_g,
+                                          g1=_g1_g, g2=_g2_g, g3=_g3_g)
+        # Compute hydraulic geometry for irregular geometries
+        if _dk_has_irregular:
+            for transect_name, generator in _transect_factory.items():
+                _ik_g = _dk_transect_indices.loc[[transect_name]].values
+                _ki_g = _ki[_ik_g]
+                _Ip1k_g = _Ip1k[_ik_g]
+                _h_Ip1k_g = _h_Ik[_Ip1k_g]
+                _H_j_g = H_j[_J_dk[_ki_g]] - _z_inv_dk[_ki_g]
+                _A_dk[_ki_g] = generator.A_ik(_h_Ip1k_g, _H_j_g)
+        # Export to instance variables
+        self._A_dk = _A_dk
 
     def compute_storage_areas(self):
         _functional = self._functional
@@ -1131,12 +1247,13 @@ class SuperLink():
         _Q_ik = self._Q_ik
         _bc_method = self._bc_method
         H_j = self.H_j
+        _A_uk = self._A_uk
         # Placeholder discharge coefficient
         _C_uk = 0.67
         # Current upstream flows
         _Q_uk_t = _Q_ik[_i_1k]
         # Upstream area
-        _A_uk = _A_ik[_i_1k]
+        # _A_uk = _A_ik[_i_1k]
         if _bc_method == 'z':
             # Compute superlink upstream coefficients (Zahner)
             _gamma_uk = self.gamma_uk(_Q_uk_t, _C_uk, _A_uk)
@@ -1174,12 +1291,13 @@ class SuperLink():
         _Q_ik = self._Q_ik
         _bc_method = self._bc_method
         H_j = self.H_j
+        _A_dk = self._A_dk
         # Placeholder discharge coefficient
         _C_dk = 0.67
         # Current downstream flows
         _Q_dk_t = _Q_ik[_i_nk]
         # Downstream area
-        _A_dk = _A_ik[_i_nk]
+        # _A_dk = _A_ik[_i_nk]
         if _bc_method == 'z':
             # Compute superlink downstream coefficients (Zahner)
             _gamma_dk = self.gamma_dk(_Q_dk_t, _C_dk, _A_dk)
@@ -1811,6 +1929,8 @@ class SuperLink():
     def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False, implicit=True):
         _method = self._method
         self.link_hydraulic_geometry()
+        self.upstream_hydraulic_geometry()
+        self.downstream_hydraulic_geometry()
         self.compute_storage_areas()
         self.node_velocities()
         self.compute_flow_regime()
