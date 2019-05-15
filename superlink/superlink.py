@@ -11,7 +11,8 @@ class SuperLink():
     def __init__(self, superlinks, superjunctions, links, junctions,
                  transects={}, storages={}, orifices=None,
                  dt=60, sparse=False, min_depth=1e-5, method='b',
-                 inertial_damping=False, bc_method='z'):
+                 inertial_damping=False, bc_method='z',
+                 exit_hydraulics=False):
         self.superlinks = superlinks
         self.superjunctions = superjunctions
         self.links = links
@@ -23,6 +24,7 @@ class SuperLink():
         self._sparse = sparse
         self._method = method
         self._bc_method = bc_method
+        self._exit_hydraulics = exit_hydraulics
         self.inertial_damping = inertial_damping
         self.min_depth = min_depth
         self._I = junctions.index.values
@@ -182,10 +184,18 @@ class SuperLink():
         # Superlink end hydraulic geometries
         self._A_uk = np.copy(self._A_ik[self._i_1k])
         self._A_dk = np.copy(self._A_ik[self._i_nk])
+        self._B_uk = np.copy(self._B_ik[self._i_1k])
+        self._B_dk = np.copy(self._B_ik[self._i_nk])
+        self._Pe_uk = np.copy(self._Pe_ik[self._i_1k])
+        self._Pe_dk = np.copy(self._Pe_ik[self._i_nk])
+        self._R_uk = np.copy(self._R_ik[self._i_1k])
+        self._R_dk = np.copy(self._R_ik[self._i_nk])
         self._link_start = np.zeros(self._ik.size, dtype=bool)
         self._link_end = np.zeros(self._ik.size, dtype=bool)
         self._link_start[self._i_1k] = True
         self._link_end[self._i_nk] = True
+        self._h_c = np.zeros(self.NK)
+        self._h_n = np.zeros(self.NK)
         # Set up hydraulic geometry computations
         self.configure_storages()
         self.configure_hydraulic_geometry()
@@ -854,6 +864,7 @@ class SuperLink():
         _ki = self._ki
         _h_Ik = self._h_Ik
         _A_uk = self._A_uk
+        _B_uk = self._B_uk
         _dx_ik = self._dx_ik
         _g1_ik = self._g1_ik
         _g2_ik = self._g2_ik
@@ -880,10 +891,14 @@ class SuperLink():
             if area == 'max':
                 _h_u_g = np.maximum(_h_Ik_g, _H_j_g)
                 _A_uk[_ki_g] = generator.A_ik(_h_u_g, _h_u_g,
-                                            g1=_g1_g, g2=_g2_g, g3=_g3_g)
+                                              g1=_g1_g, g2=_g2_g, g3=_g3_g)
+                _B_uk[_ki_g] = generator.B_ik(_h_u_g, _h_u_g,
+                                              g1=_g1_g, g2=_g2_g, g3=_g3_g)
             elif area == 'avg':
                 _A_uk[_ki_g] = generator.A_ik(_h_Ik_g, _H_j_g,
                                             g1=_g1_g, g2=_g2_g, g3=_g3_g)
+                _B_uk[_ki_g] = generator.B_ik(_h_Ik_g, _H_j_g,
+                                              g1=_g1_g, g2=_g2_g, g3=_g3_g)
         # Compute hydraulic geometry for irregular geometries
         if _uk_has_irregular:
             for transect_name, generator in _transect_factory.items():
@@ -892,7 +907,9 @@ class SuperLink():
                 _Ik_g = _Ik[_ik_g]
                 _h_Ik_g = _h_Ik[_Ik_g]
                 _H_j_g = H_j[_J_uk[_ki_g]] - _z_inv_uk[_ki_g]
+                # TODO: Allow for max here like above
                 _A_uk[_ki_g] = generator.A_ik(_h_Ik_g, _H_j_g)
+                _B_uk[_ki_g] = generator.B_ik(_h_Ik_g, _H_j_g)
         # Export to instance variables
         self._A_uk = _A_uk
 
@@ -903,6 +920,7 @@ class SuperLink():
         _Ip1k = self._Ip1k
         _h_Ik = self._h_Ik
         _A_dk = self._A_dk
+        _B_dk = self._B_dk
         _dx_ik = self._dx_ik
         _g1_ik = self._g1_ik
         _g2_ik = self._g2_ik
@@ -929,10 +947,14 @@ class SuperLink():
             if area == 'max':
                 _h_d_g = np.maximum(_h_Ip1k_g, _H_j_g)
                 _A_dk[_ki_g] = generator.A_ik(_h_d_g, _h_d_g,
-                                            g1=_g1_g, g2=_g2_g, g3=_g3_g)
+                                              g1=_g1_g, g2=_g2_g, g3=_g3_g)
+                _B_dk[_ki_g] = generator.B_ik(_h_d_g, _h_d_g,
+                                              g1=_g1_g, g2=_g2_g, g3=_g3_g)
             elif area == 'avg':
                 _A_dk[_ki_g] = generator.A_ik(_h_Ip1k_g, _H_j_g,
-                                            g1=_g1_g, g2=_g2_g, g3=_g3_g)
+                                              g1=_g1_g, g2=_g2_g, g3=_g3_g)
+                _B_dk[_ki_g] = generator.B_ik(_h_Ip1k_g, _H_j_g,
+                                              g1=_g1_g, g2=_g2_g, g3=_g3_g)
         # Compute hydraulic geometry for irregular geometries
         if _dk_has_irregular:
             for transect_name, generator in _transect_factory.items():
@@ -941,7 +963,9 @@ class SuperLink():
                 _Ip1k_g = _Ip1k[_ik_g]
                 _h_Ip1k_g = _h_Ik[_Ip1k_g]
                 _H_j_g = H_j[_J_dk[_ki_g]] - _z_inv_dk[_ki_g]
+                # TODO: Allow max here like above
                 _A_dk[_ki_g] = generator.A_ik(_h_Ip1k_g, _H_j_g)
+                _B_dk[_ki_g] = generator.B_ik(_h_Ip1k_g, _H_j_g)
         # Export to instance variables
         self._A_dk = _A_dk
 
@@ -1258,12 +1282,11 @@ class SuperLink():
         _bc_method = self._bc_method
         H_j = self.H_j
         _A_uk = self._A_uk
+        _B_uk = self._B_uk
         # Placeholder discharge coefficient
         _C_uk = 0.67
         # Current upstream flows
         _Q_uk_t = _Q_ik[_i_1k]
-        # Upstream area
-        # _A_uk = _A_ik[_i_1k]
         if _bc_method == 'z':
             # Compute superlink upstream coefficients (Zahner)
             _gamma_uk = self.gamma_uk(_Q_uk_t, _C_uk, _A_uk)
@@ -1271,8 +1294,6 @@ class SuperLink():
             self._lambda_uk = 1
             self._mu_uk = - _z_inv_uk
         elif _bc_method == 'j':
-            # Upstream top width
-            _B_uk = _B_ik[_i_1k]
             # Current upstream depth
             _h_uk = _h_Ik[_I_1k]
             # Junction head
@@ -1302,12 +1323,11 @@ class SuperLink():
         _bc_method = self._bc_method
         H_j = self.H_j
         _A_dk = self._A_dk
+        _B_dk = self._B_dk
         # Placeholder discharge coefficient
         _C_dk = 0.67
         # Current downstream flows
         _Q_dk_t = _Q_ik[_i_nk]
-        # Downstream area
-        # _A_dk = _A_ik[_i_nk]
         if _bc_method == 'z':
             # Compute superlink downstream coefficients (Zahner)
             _gamma_dk = self.gamma_dk(_Q_dk_t, _C_dk, _A_dk)
@@ -1316,7 +1336,6 @@ class SuperLink():
             self._mu_dk = - _z_inv_dk
         elif _bc_method == 'j':
             # Downstream top width
-            _B_dk = _B_ik[_i_nk]
             # Current downstream depth
             _h_dk = _h_Ik[_I_Np1k]
             # Junction head
@@ -1936,8 +1955,99 @@ class SuperLink():
         t_2 = W_Im1k * h_1k
         return t_0 + t_1 + t_2
 
+    def exit_conditions(self):
+        # Import instance variables
+        _g1_ik = self._g1_ik
+        _i_nk = self._i_nk
+        _z_inv_dk = self._z_inv_dk
+        _J_dk = self._J_dk
+        H_j = self.H_j
+        # Determine which superlinks need critical depth
+        _crown_elev_dk = _g1_ik[_i_nk]
+        _exit_conditions = (H_j[_J_dk] - _z_inv_dk) < _crown_elev_dk
+        self._exit_conditions = _exit_conditions
+
+    def solve_critical_depth(self):
+        # Import instance variables
+        _g1_ik = self._g1_ik
+        _i_nk = self._i_nk
+        _z_inv_dk = self._z_inv_dk
+        _h_dk = self._h_dk
+        _Q_dk = self._Q_dk
+        _exit_conditions = self._exit_conditions
+        _h_c = self._h_c
+        # Determine which superlinks need critical depth
+        _h_c[:] = 0.
+        _crown_elev_dk = _g1_ik[_i_nk]
+        _eps = np.finfo(np.float64).eps
+        _iter = np.flatnonzero(_exit_conditions)
+        for i in _iter:
+            _h_c[i] = scipy.optimize.brentq(self._critical_depth,
+                                            np.array([_eps]),
+                                            _crown_elev_dk[[i]],
+                                            args=(_Q_dk[[i]],
+                                                  _crown_elev_dk[[i]]))
+        self._h_c = _h_c
+
+    def solve_normal_depth(self):
+        # Import instance variables
+        _g1_ik = self._g1_ik
+        _i_nk = self._i_nk
+        _z_inv_dk = self._z_inv_dk
+        _h_dk = self._h_dk
+        _Q_dk = self._Q_dk
+        _exit_conditions = self._exit_conditions
+        _h_n = self._h_n
+        # Determine which superlinks need critical depth
+        _h_n[:] = 0.
+        _crown_elev_dk = _g1_ik[_i_nk]
+        _n = self._n_ik[_i_nk[_exit_conditions]]
+        _S_o = self._S_o_ik[_i_nk[_exit_conditions]]
+        _h_n[_exit_conditions] = scipy.optimize.newton(self._normal_depth,
+                                                       _h_dk[_exit_conditions],
+                                                       args=(_Q_dk[_exit_conditions],
+                                                             _crown_elev_dk[_exit_conditions],
+                                                             _n, _S_o))
+        self._h_n = _h_n
+
+    def solve_exit_hydraulics(self):
+        _h_c = self._h_c
+        _h_n = self._h_n
+        _h_dk = self._h_dk
+        _z_inv_dk = self._z_inv_dk
+        _J_dk = self._J_dk
+        _exit_conditions = self._exit_conditions
+        H_j = self.H_j
+        min_depth = self.min_depth
+        # Determine conditions
+        _h_j = H_j[_J_dk] - _z_inv_dk
+        _backwater = (_h_j > _h_c) & (_exit_conditions)
+        _mild = (~_backwater & (_h_n > _h_c)) & (_exit_conditions)
+        _critical = (~_backwater & (_h_n == _h_c)) & (_exit_conditions)
+        _steep = (~_backwater & (_h_n < _h_c)) & (_exit_conditions)
+        _h_dk[_backwater] = _h_j[_backwater]
+        _h_dk[_mild] = _h_c[_mild]
+        _h_dk[_critical] = _h_c[_critical]
+        # Assume that _h_n is _h_dk
+        # _h_dk[_steep] = _h_n[_steep]
+        _h_dk[_steep] = _h_dk[_steep]
+        _h_dk[_h_dk < min_depth] = min_depth
+        self._h_dk = _h_dk
+
+    def _critical_depth(self, h, Q, d):
+        # TODO: This will always be circular
+        _h = np.array([h])
+        return np.asscalar(np.log((Q**2) * superlink.geometry.Circular.B_ik(_h, _h, d)
+                      / (9.81 * superlink.geometry.Circular.A_ik(_h, _h, d)**3)))
+
+    def _normal_depth(self, h, Q, d, n, S_o):
+        # TODO: This will always be circular
+        return Q - (S_o**(1/2) * superlink.geometry.Circular.A_ik(h, h, d)**(5/3)
+                    / superlink.geometry.Circular.Pe_ik(h, h, d)**(2/3) / n)
+
     def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False, implicit=True):
         _method = self._method
+        _exit_hydraulics = self._exit_hydraulics
         self.link_hydraulic_geometry()
         self.upstream_hydraulic_geometry()
         self.downstream_hydraulic_geometry()
@@ -1957,8 +2067,13 @@ class SuperLink():
         self.solve_sparse_matrix(u=u, implicit=implicit)
         self.solve_superlink_flows()
         self.solve_orifice_flows(u=u)
-        # self.solve_superlink_depths()
-        self.solve_superlink_depths_alt()
+        self.solve_superlink_depths()
+        # self.solve_superlink_depths_alt()
+        if _exit_hydraulics:
+            self.exit_conditions()
+            self.solve_critical_depth()
+            # self.solve_normal_depth()
+            self.solve_exit_hydraulics()
         if _method == 'lsq':
             self.solve_internals_lsq()
         elif _method == 'b':
