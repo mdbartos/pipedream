@@ -847,7 +847,7 @@ class SuperLink():
         self._R_ik = _R_ik
         self._B_ik = _B_ik
 
-    def upstream_hydraulic_geometry(self):
+    def upstream_hydraulic_geometry(self, area='avg'):
         # TODO: Should probably use forward_I_i instead of _ik directly
         _ik = self._ik
         _Ik = self._Ik
@@ -877,8 +877,13 @@ class SuperLink():
             _g3_g = _g3_ik[_ik_g]
             _h_Ik_g = _h_Ik[_Ik_g]
             _H_j_g = H_j[_J_uk[_ki_g]] - _z_inv_uk[_ki_g]
-            _A_uk[_ki_g] = generator.A_ik(_h_Ik_g, _H_j_g,
-                                          g1=_g1_g, g2=_g2_g, g3=_g3_g)
+            if area == 'max':
+                _h_u_g = np.maximum(_h_Ik_g, _H_j_g)
+                _A_uk[_ki_g] = generator.A_ik(_h_u_g, _h_u_g,
+                                            g1=_g1_g, g2=_g2_g, g3=_g3_g)
+            elif area == 'avg':
+                _A_uk[_ki_g] = generator.A_ik(_h_Ik_g, _H_j_g,
+                                            g1=_g1_g, g2=_g2_g, g3=_g3_g)
         # Compute hydraulic geometry for irregular geometries
         if _uk_has_irregular:
             for transect_name, generator in _transect_factory.items():
@@ -891,7 +896,7 @@ class SuperLink():
         # Export to instance variables
         self._A_uk = _A_uk
 
-    def downstream_hydraulic_geometry(self):
+    def downstream_hydraulic_geometry(self, area='avg'):
         # TODO: Should probably use forward_I_i instead of _ik directly
         _ik = self._ik
         _ki = self._ki
@@ -921,8 +926,13 @@ class SuperLink():
             _g3_g = _g3_ik[_ik_g]
             _h_Ip1k_g = _h_Ik[_Ip1k_g]
             _H_j_g = H_j[_J_dk[_ki_g]] - _z_inv_dk[_ki_g]
-            _A_dk[_ki_g] = generator.A_ik(_h_Ip1k_g, _H_j_g,
-                                          g1=_g1_g, g2=_g2_g, g3=_g3_g)
+            if area == 'max':
+                _h_d_g = np.maximum(_h_Ip1k_g, _H_j_g)
+                _A_dk[_ki_g] = generator.A_ik(_h_d_g, _h_d_g,
+                                            g1=_g1_g, g2=_g2_g, g3=_g3_g)
+            elif area == 'avg':
+                _A_dk[_ki_g] = generator.A_ik(_h_Ip1k_g, _H_j_g,
+                                            g1=_g1_g, g2=_g2_g, g3=_g3_g)
         # Compute hydraulic geometry for irregular geometries
         if _dk_has_irregular:
             for transect_name, generator in _transect_factory.items():
