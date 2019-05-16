@@ -1286,7 +1286,7 @@ class SuperLink():
         # Placeholder discharge coefficient
         _C_uk = 0.67
         # Current upstream flows
-        _Q_uk_t = _Q_ik[_i_1k]
+        _Q_uk_t = self._Q_uk
         if _bc_method == 'z':
             # Compute superlink upstream coefficients (Zahner)
             _gamma_uk = self.gamma_uk(_Q_uk_t, _C_uk, _A_uk)
@@ -1327,7 +1327,7 @@ class SuperLink():
         # Placeholder discharge coefficient
         _C_dk = 0.67
         # Current downstream flows
-        _Q_dk_t = _Q_ik[_i_nk]
+        _Q_dk_t = self._Q_dk
         if _bc_method == 'z':
             # Compute superlink downstream coefficients (Zahner)
             _gamma_dk = self.gamma_dk(_Q_dk_t, _C_dk, _A_dk)
