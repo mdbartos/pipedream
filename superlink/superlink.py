@@ -17,6 +17,15 @@ class SuperLink():
         self.superjunctions = superjunctions
         self.links = links
         self.junctions = junctions
+        if links is None:
+            assert junctions is None
+            generate_elems = True
+            num_elems = 4
+            total_elems = num_elems + 1
+        else:
+            generate_elems = False
+            num_elems = None
+            total_elems = None
         self.transects = transects
         self.storages = storages
         self.orifices = orifices
@@ -290,6 +299,103 @@ class SuperLink():
         self._ubound = _ubound
         self._ix_h = _ix_h
         self._ix_q = _ix_q
+
+    def configure_internals(self):
+        superlinks = self.superlinks
+        superjunctions = self.superjunctions
+        njunctions_fixed = 4
+        njunctions = njunctions_fixed + 1
+        nlinks = njunctions - 1
+        link_ncols = 15
+        junction_ncols = 5
+        n_superlinks = len(superlinks)
+        NJ = njunctions * n_superlinks
+        NL = nlinks * n_superlinks
+        elems = np.repeat(njunctions_fixed, n_superlinks)
+        total_elems = elems + 1
+        upstream_nodes = np.cumsum(total_elems) - total_elems
+        downstream_nodes = np.cumsum(total_elems) - 2
+        # Configure links
+        links = pd.DataFrame(np.zeros((NL, link_ncols)))
+        links.columns = ['A_c', 'C', 'Q_0', 'ctrl', 'dx', 'g1', 'g2', 'g3', 'g4',
+                        'id', 'j_0', 'j_1', 'k', 'n', 'shape']
+        links['A_c'] = np.repeat(superlinks['A_c'].values, nlinks)
+        links['C'] = np.repeat(superlinks['C'].values, nlinks)
+        links['Q_0'] = np.repeat(superlinks['Q_0'].values, nlinks)
+        links['ctrl'] = np.repeat(superlinks['ctrl'].values, nlinks)
+        links['k'] = np.repeat(superlinks.index.values, nlinks)
+        links['shape'] = np.repeat(superlinks['shape'].values, nlinks)
+        links['n'] = np.repeat(superlinks['n'].values, nlinks)
+        links['g1'] = np.repeat(superlinks['g1'].values, nlinks)
+        links['g2'] = np.repeat(superlinks['g2'].values, nlinks)
+        links['g3'] = np.repeat(superlinks['g3'].values, nlinks)
+        links['g4'] = np.repeat(superlinks['g4'].values, nlinks)
+        links['id'] = links.index.values
+        j = np.arange(NJ)
+        links['j_0'] = np.delete(j, downstream_nodes + 1)
+        links['j_1'] = np.delete(j, upstream_nodes)
+        # Configure junctions
+        junctions = pd.DataFrame(np.zeros((NJ, junction_ncols)))
+        junctions.columns = ['A_s', 'h_0', 'id', 'k', 'z_inv']
+        junctions['A_s'] = np.repeat(superlinks['A_s'].values, njunctions)
+        junctions['h_0'] = np.repeat(superlinks['h_0'].values, njunctions)
+        junctions['k'] = np.repeat(superlinks.index.values, njunctions)
+        junctions['id'] = junctions.index.values
+        # Configure internal variables
+        x = np.zeros(NJ)
+        z = np.zeros(NJ)
+        dx = np.zeros(NL)
+        h = junctions['h_0'].values
+        Q = links['Q_0'].values
+        xx = x.reshape(-1, njunctions)
+        zz = z.reshape(-1, njunctions)
+        dxdx = dx.reshape(-1, nlinks)
+        hh = h.reshape(-1, njunctions)
+        QQ = Q.reshape(-1, nlinks)
+        dx_j = superlinks['dx'].values
+        x[upstream_nodes] = 0.
+        x[downstream_nodes] = dx_j
+        x[upstream_nodes + 1] = np.minimum(0.05 * dx_j, 2)
+        x[downstream_nodes - 1] = dx_j - np.minimum(0.05 * dx_j, 2)
+        _b0 = _z_inv_j[_J_uk]
+        _b1 = _z_inv_j[_J_dk]
+        _m = (b1 - b0) / dx_j
+        _x0 = (dx_j / 2)
+        _z0 = m * x0 + b0
+        # Set junction invert elevations and positions
+        zz.flat[upstream_nodes] = _b0
+        zz.flat[downstream_nodes] = _b1
+        zz.flat[upstream_nodes + 1] = _b0 + _m * x[upstream_nodes + 1]
+        zz.flat[downstream_nodes - 1] = _b0 + _m * x[downstream_nodes -  1]
+        xx[:, -1] = _x0
+        zz[:, -1] = _z0
+        ix = np.argsort(xx)
+        _fixed = (ix < nlinks)
+        r, c = np.where(~_fixed)
+        cm1 = ix[r, c - 1]
+        cp1 = ix[r, c + 1]
+        frac = (xx[r, xx.shape[1] - 1] - xx[r, cm1]) / (xx[r, cp1] - xx[r, cm1])
+        # Set depths and flows
+        hh[:, -1] = (1 - frac) * hh[r, cm1] + (frac) * hh[r, cp1]
+        QQ[:, -1] = QQ[r, cm1]
+        # Write new variables
+        xx = np.take_along_axis(xx, ix, axis=-1)
+        zz = np.take_along_axis(zz, ix, axis=-1)
+        hh = np.take_along_axis(hh, ix, axis=-1)
+        dxdx = np.diff(xx)
+        _h_Ik = hh.ravel()
+        junctions['z_inv'] = zz.ravel()
+        junctions['h_0'] = hh.ravel()
+        links['dx'] = dxdx.ravel()
+        links['Q_0'] = QQ.ravel()
+        self.junctions = junctions
+        self.links = links
+        self._fixed = fixed
+        self._b0 = _b0
+        self._b1 = _b1
+        self._m = _m
+        self._x0 = _x0
+        self._z0 = _z0
 
     def safe_divide(function):
         """
@@ -2044,6 +2150,72 @@ class SuperLink():
         # TODO: This will always be circular
         return Q - (S_o**(1/2) * superlink.geometry.Circular.A_ik(h, h, d)**(5/3)
                     / superlink.geometry.Circular.Pe_ik(h, h, d)**(2/3) / n)
+
+    def reposition_junctions(self):
+        # Import instance variables
+        _b0 = self._b0
+        _b1 = self._b1
+        _m = self._m
+        _x0 = self._x0
+        _z0 = self._z0
+        _fixed = self._fixed
+        _h_Ik = self._h_Ik
+        _Q_ik = self._Q_ik
+        _J_dk = self._J_dk
+        _z_inv_Ik = self._z_inv_Ik
+        _S_o_ik = self._S_o_ik
+        _I_1k = self._I_1k
+        _I_Np1k = self._I_Np1k
+        _i_1k = self._i_1k
+        H_j = self.H_j
+        # Configure function variables
+        njunctions_fixed = 4
+        njunctions = njunctions_fixed + 1
+        nlinks = njunctions - 1
+        xx = _x_Ik.reshape(-1, njunctions)
+        zz = _z_inv_Ik.reshape(-1, njunctions)
+        dxdx = _dx_ik.reshape(-1, nlinks)
+        hh = _h_Ik.reshape(-1, njunctions)
+        QQ = _Q_ik.reshape(-1, nlinks)
+        _H_dk = H_j[_J_dk]
+        # b0 = _z_inv_Ik[_I_1k]
+        # b1 = _z_inv_Ik[_I_Np1k]
+        # m = _S_o_ik[_i_1k]
+        # TODO: Bool should actually be the elevation of outlet node, not superjunction
+        move_junction = (_H_dk > _z_inv_Ik[_I_Np1k]) & (_H_dk < _z_inv_Ik[_I_1k])
+        z_m = np.where(move_junction, _H_dk, _z0)
+        x_m = np.where(move_junction, (_H_dk - _b0) / _m, _x0)
+        # TODO: Use instance variable
+        r = np.arange(len(xx))
+        c = np.array(list(map(np.searchsorted, xx, x_m)))
+        frac = (x_m - xx[r, c - 1]) / (xx[r, c] - xx[r, c - 1])
+        h_m = (1 - frac) * hh[r, c - 1] + (frac) * hh[r, c]
+        xx[:, :-1] = xx[fixed].reshape(-1, njunctions - 1)
+        zz[:, :-1] = zz[fixed].reshape(-1, njunctions - 1)
+        hh[:, :-1] = hh[fixed].reshape(-1, njunctions - 1)
+        xx[:, -1] = x_m
+        zz[:, -1] = z_m
+        hh[:, -1] = h_m
+        # TODO: Check this
+        Q_m = QQ[r, c - 1]
+        QQ[:, :-1] = QQ[fixed[:, :-1]].reshape(-1, nlinks - 1)
+        QQ[:, -1] = Q_m
+        fixed[:, :-1] = True
+        fixed[:, -1] = False
+        ix = np.argsort(xx)
+        xx = np.take_along_axis(xx, ix, axis=-1)
+        zz = np.take_along_axis(zz, ix, axis=-1)
+        hh = np.take_along_axis(hh, ix, axis=-1)
+        fixed = np.take_along_axis(fixed, ix, axis=-1)
+        dxdx = np.diff(xx)
+        # TODO: Check this
+        link_ix = np.where(ix[:,:-1] == nlinks, nlinks - 1, ix[:,:-1])
+        QQ = np.take_along_axis(QQ, link_ix, axis=-1)
+        _h_Ik = hh.ravel()
+        _Q_ik = QQ.ravel()
+        _x_Ik = xx.ravel()
+        _z_inv_Ik = zz,ravel()
+        _dx_ik = dxdx.ravel()
 
     def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False, implicit=True):
         _method = self._method
