@@ -8,24 +8,28 @@ import superlink.geometry
 import superlink.storage
 
 class SuperLink():
-    def __init__(self, superlinks, superjunctions, links, junctions,
+    def __init__(self, superlinks, superjunctions,
+                 links=None, junctions=None,
                  transects={}, storages={}, orifices=None,
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False):
         self.superlinks = superlinks
         self.superjunctions = superjunctions
-        self.links = links
-        self.junctions = junctions
         if links is None:
             assert junctions is None
             generate_elems = True
             num_elems = 4
             total_elems = num_elems + 1
+            self.configure_internals()
+            links = self.links
+            junctions = self.junctions
         else:
             generate_elems = False
             num_elems = None
             total_elems = None
+            self.links = links
+            self.junctions = junctions
         self.transects = transects
         self.storages = storages
         self.orifices = orifices
@@ -92,6 +96,8 @@ class SuperLink():
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(float)
         self._S_o_ik = ((self._z_inv_Ik[self._Ik] - self._z_inv_Ik[self._Ip1k])
                         / self._dx_ik)
+        self._x_Ik = np.zeros(self._I.size)
+        self._x_Ik[~self._is_start] = links.groupby('k')['dx'].cumsum().values
         # TODO: Allow specifying initial flows
         self._Q_0Ik = np.zeros(self._I.size, dtype=float)
         # Handle orifices
@@ -353,15 +359,20 @@ class SuperLink():
         hh = h.reshape(-1, njunctions)
         QQ = Q.reshape(-1, nlinks)
         dx_j = superlinks['dx'].values
+        _z_inv_j = superjunctions['z_inv'].values.astype(float)
+        inoffset = superlinks['in_offset'].values.astype(float)
+        outoffset = superlinks['out_offset'].values.astype(float)
+        _J_uk = superlinks['sj_0'].values.astype(int)
+        _J_dk = superlinks['sj_1'].values.astype(int)
         x[upstream_nodes] = 0.
         x[downstream_nodes] = dx_j
         x[upstream_nodes + 1] = np.minimum(0.05 * dx_j, 2)
         x[downstream_nodes - 1] = dx_j - np.minimum(0.05 * dx_j, 2)
-        _b0 = _z_inv_j[_J_uk]
-        _b1 = _z_inv_j[_J_dk]
-        _m = (b1 - b0) / dx_j
+        _b0 = _z_inv_j[_J_uk] + inoffset
+        _b1 = _z_inv_j[_J_dk] + outoffset
+        _m = (_b1 - _b0) / dx_j
         _x0 = (dx_j / 2)
-        _z0 = m * x0 + b0
+        _z0 = _m * _x0 + _b0
         # Set junction invert elevations and positions
         zz.flat[upstream_nodes] = _b0
         zz.flat[downstream_nodes] = _b1
@@ -388,9 +399,13 @@ class SuperLink():
         junctions['h_0'] = hh.ravel()
         links['dx'] = dxdx.ravel()
         links['Q_0'] = QQ.ravel()
+        # Set start and end junctions on superlinks
+        superlinks['j_0'] = links.groupby('k')['j_0'].min()
+        superlinks['j_1'] = links.groupby('k')['j_1'].max()
         self.junctions = junctions
         self.links = links
-        self._fixed = fixed
+        self.superlinks = superlinks
+        self._fixed = _fixed
         self._b0 = _b0
         self._b1 = _b1
         self._m = _m
@@ -2162,6 +2177,8 @@ class SuperLink():
         _h_Ik = self._h_Ik
         _Q_ik = self._Q_ik
         _J_dk = self._J_dk
+        _x_Ik = self._x_Ik
+        _dx_ik = self._dx_ik
         _z_inv_Ik = self._z_inv_Ik
         _S_o_ik = self._S_o_ik
         _I_1k = self._I_1k
@@ -2190,32 +2207,34 @@ class SuperLink():
         c = np.array(list(map(np.searchsorted, xx, x_m)))
         frac = (x_m - xx[r, c - 1]) / (xx[r, c] - xx[r, c - 1])
         h_m = (1 - frac) * hh[r, c - 1] + (frac) * hh[r, c]
-        xx[:, :-1] = xx[fixed].reshape(-1, njunctions - 1)
-        zz[:, :-1] = zz[fixed].reshape(-1, njunctions - 1)
-        hh[:, :-1] = hh[fixed].reshape(-1, njunctions - 1)
+        xx[:, :-1] = xx[_fixed].reshape(-1, njunctions - 1)
+        zz[:, :-1] = zz[_fixed].reshape(-1, njunctions - 1)
+        hh[:, :-1] = hh[_fixed].reshape(-1, njunctions - 1)
         xx[:, -1] = x_m
         zz[:, -1] = z_m
         hh[:, -1] = h_m
         # TODO: Check this
         Q_m = QQ[r, c - 1]
-        QQ[:, :-1] = QQ[fixed[:, :-1]].reshape(-1, nlinks - 1)
+        QQ[:, :-1] = QQ[_fixed[:, :-1]].reshape(-1, nlinks - 1)
         QQ[:, -1] = Q_m
-        fixed[:, :-1] = True
-        fixed[:, -1] = False
+        _fixed[:, :-1] = True
+        _fixed[:, -1] = False
         ix = np.argsort(xx)
         xx = np.take_along_axis(xx, ix, axis=-1)
         zz = np.take_along_axis(zz, ix, axis=-1)
         hh = np.take_along_axis(hh, ix, axis=-1)
-        fixed = np.take_along_axis(fixed, ix, axis=-1)
+        _fixed = np.take_along_axis(_fixed, ix, axis=-1)
         dxdx = np.diff(xx)
         # TODO: Check this
         link_ix = np.where(ix[:,:-1] == nlinks, nlinks - 1, ix[:,:-1])
         QQ = np.take_along_axis(QQ, link_ix, axis=-1)
-        _h_Ik = hh.ravel()
-        _Q_ik = QQ.ravel()
-        _x_Ik = xx.ravel()
-        _z_inv_Ik = zz,ravel()
-        _dx_ik = dxdx.ravel()
+        # Export instance variables
+        self._h_Ik = hh.ravel()
+        self._Q_ik = QQ.ravel()
+        self._x_Ik = xx.ravel()
+        self._z_inv_Ik = zz.ravel()
+        self._dx_ik = dxdx.ravel()
+        self._fixed = _fixed
 
     def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False, implicit=True):
         _method = self._method
