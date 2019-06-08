@@ -2195,10 +2195,8 @@ class SuperLink():
         hh = _h_Ik.reshape(-1, njunctions)
         QQ = _Q_ik.reshape(-1, nlinks)
         _H_dk = H_j[_J_dk]
-        # b0 = _z_inv_Ik[_I_1k]
-        # b1 = _z_inv_Ik[_I_Np1k]
-        # m = _S_o_ik[_i_1k]
-        # TODO: Bool should actually be the elevation of outlet node, not superjunction
+        Q_ix = np.tile(np.arange(nlinks), len(QQ)).reshape(-1, nlinks)
+        # TODO: Add case where position of movable coord is exactly equal to fixed coord
         move_junction = (_H_dk > _z_inv_Ik[_I_Np1k]) & (_H_dk < _z_inv_Ik[_I_1k])
         z_m = np.where(move_junction, _H_dk, _z0)
         x_m = np.where(move_junction, (_H_dk - _b0) / _m, _x0)
@@ -2207,27 +2205,30 @@ class SuperLink():
         c = np.array(list(map(np.searchsorted, xx, x_m)))
         frac = (x_m - xx[r, c - 1]) / (xx[r, c] - xx[r, c - 1])
         h_m = (1 - frac) * hh[r, c - 1] + (frac) * hh[r, c]
+        pos_prev = np.where(~_fixed)[1]
         xx[:, :-1] = xx[_fixed].reshape(-1, njunctions - 1)
         zz[:, :-1] = zz[_fixed].reshape(-1, njunctions - 1)
         hh[:, :-1] = hh[_fixed].reshape(-1, njunctions - 1)
         xx[:, -1] = x_m
         zz[:, -1] = z_m
         hh[:, -1] = h_m
-        # TODO: Check this
-        Q_m = QQ[r, c - 1]
-        QQ[:, :-1] = QQ[_fixed[:, :-1]].reshape(-1, nlinks - 1)
-        QQ[:, -1] = Q_m
         _fixed[:, :-1] = True
         _fixed[:, -1] = False
+        # TODO: Check this
         ix = np.argsort(xx)
         xx = np.take_along_axis(xx, ix, axis=-1)
         zz = np.take_along_axis(zz, ix, axis=-1)
         hh = np.take_along_axis(hh, ix, axis=-1)
         _fixed = np.take_along_axis(_fixed, ix, axis=-1)
         dxdx = np.diff(xx)
-        # TODO: Check this
-        link_ix = np.where(ix[:,:-1] == nlinks, nlinks - 1, ix[:,:-1])
-        QQ = np.take_along_axis(QQ, link_ix, axis=-1)
+        pos_next = np.where(~_fixed)[1]
+        shifted = (pos_prev != pos_next)
+        Q_ix[r[shifted], pos_prev[shifted]] = pos_next[shifted]
+        QQ[r[shifted], pos_prev[shifted] - 1] = (QQ[r[shifted], pos_prev[shifted]]
+                                                + QQ[r[shifted], pos_prev[shifted] - 1]) / 2
+        Q_ix.sort(axis=-1)
+        QQ = np.take_along_axis(QQ, Q_ix, axis=-1)
+        QQ = np.take_along_axis(QQ, Q_ix, axis=-1)
         # Export instance variables
         self._h_Ik = hh.ravel()
         self._Q_ik = QQ.ravel()
