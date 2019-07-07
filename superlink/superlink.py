@@ -219,6 +219,7 @@ class SuperLink():
             self.lsq_indexers()
         # Iteration counter
         self.iter_count = 0
+        self.t = 0
         # Initialize to stable state
         self.step(dt=1e-6, first_time=True)
 
@@ -366,8 +367,8 @@ class SuperLink():
         _J_dk = superlinks['sj_1'].values.astype(int)
         x[upstream_nodes] = 0.
         x[downstream_nodes] = dx_j
-        x[upstream_nodes + 1] = np.minimum(0.05 * dx_j, 2)
-        x[downstream_nodes - 1] = dx_j - np.minimum(0.05 * dx_j, 2)
+        x[upstream_nodes + 1] = np.minimum(0.05 * dx_j, 10)
+        x[downstream_nodes - 1] = dx_j - np.minimum(0.05 * dx_j, 10)
         _b0 = _z_inv_j[_J_uk] + inoffset
         _b1 = _z_inv_j[_J_dk] + outoffset
         _m = (_b1 - _b0) / dx_j
@@ -2281,3 +2282,4 @@ class SuperLink():
             else:
                 self.solve_internals_forwards()
         self.iter_count += 1
+        self.t += dt
