@@ -53,6 +53,10 @@ class SuperLink():
         self._is_start[self.start_nodes] = True
         self._is_end[self.end_nodes] = True
         self.middle_nodes = self._I[(~self._is_start) & (~self._is_end)]
+        # Dimensions
+        self.M = len(superjunctions)
+        self.NK = len(superlinks)
+        self.nk = np.bincount(self._ki)
         # Create forward and backward indexers
         self.forward_I_I = np.copy(self._I)
         self.forward_I_I[self._Ik] = self._Ip1k
@@ -105,12 +109,34 @@ class SuperLink():
             self._J_uo = self.orifices['sj_0'].values.astype(int)
             self._J_do = self.orifices['sj_1'].values.astype(int)
             self._Ao = self.orifices['A'].values.astype(float)
+            self._Co = self.orifices['C'].values.astype(float)
+            self._z_o = self.orifices['z_o'].values.astype(float)
+            self._y_max_o = self.orifices['y_max'].values.astype(float)
+            self._orient_o = self.orifices['orientation'].values
             self.p = self.orifices.shape[0]
+            self._alpha_o = np.zeros(self.p, dtype=float)
+            self._beta_o = np.zeros(self.p, dtype=float)
+            self._chi_o = np.zeros(self.p, dtype=float)
+            self._alpha_uom = np.zeros(self.M, dtype=float)
+            self._beta_dol = np.zeros(self.M, dtype=float)
+            self._chi_uol = np.zeros(self.M, dtype=float)
+            self._chi_dom = np.zeros(self.M, dtype=float)
         else:
             self._J_uo = np.array([], dtype=int)
             self._J_do = np.array([], dtype=int)
             self._Ao = np.array([], dtype=float)
+            self._Co = np.array([], dtype=float)
+            self._z_o = np.array([], dtype=float)
+            self._y_max_o = np.array([], dtype=float)
+            self._orient_o = np.array([])
             self.p = 0
+            self._alpha_o = np.array([], dtype=float)
+            self._beta_o = np.array([], dtype=float)
+            self._chi_o = np.array([], dtype=float)
+            self._alpha_uom = np.array([], dtype=float)
+            self._beta_dol = np.array([], dtype=float)
+            self._chi_uol = np.array([], dtype=float)
+            self._chi_dom = np.array([], dtype=float)
         # Enforce minimum depth
         self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
@@ -118,10 +144,6 @@ class SuperLink():
         self._Pe_ik = np.zeros(self._ik.size)
         self._R_ik = np.zeros(self._ik.size)
         self._B_ik = np.zeros(self._ik.size)
-        # self._Q_ik_f = np.zeros_like(self._Q_ik)
-        # self._Q_ik_b = np.zeros_like(self._Q_ik)
-        # self._h_Ik_f = np.zeros_like(self._h_Ik)
-        # self._h_Ik_b = np.zeros_like(self._h_Ik)
         # Node velocities
         self._u_Ik = np.zeros(self._Ik.size, dtype=float)
         self._u_Ip1k = np.zeros(self._Ip1k.size, dtype=float)
@@ -160,9 +182,6 @@ class SuperLink():
         self._J_dk = self.superlinks['sj_1'].values.astype(int)
         self._z_inv_dk = self._z_inv_Ik[self._I_Np1k]
         # Sparse matrix coefficients
-        self.M = len(superjunctions)
-        self.NK = len(superlinks)
-        self.nk = np.bincount(self._ki)
         if sparse:
             self.A = scipy.sparse.lil_matrix((self.M, self.M))
         else:
@@ -193,7 +212,7 @@ class SuperLink():
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Other parameters
         # self._Qo_t = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
-        self._Qo_t, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
+        self._Qo, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
         # self._Qo_t_min = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
         self._O_diag = np.zeros(self.M)
         # Superlink end hydraulic geometries
@@ -842,9 +861,9 @@ class SuperLink():
         return Qo_u, Qo_d
 
     @safe_divide
-    def theta_o(self, u, Qo_d_t, Ao, Co=0.67, g=9.81):
-        num = 2 * g * u**2 * Co**2 * Ao**2
-        den = np.abs(Qo_d_t)
+    def gamma_o(self, Q_o_t, Ao, Co=0.67, g=9.81):
+        num = 2 * g * Co**2 * Ao**2
+        den = np.abs(Q_o_t)
         return num, den
 
     def configure_hydraulic_geometry(self):
@@ -1522,6 +1541,63 @@ class SuperLink():
         self._beta_dk = _beta_dk
         self._chi_dk = _chi_dk
 
+    def orifice_flow_coefficients(self, u=None):
+        # Import instance variables
+        H_j = self.H_j
+        _z_inv_j = self._z_inv_j
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        _z_o = self._z_o
+        _orient_o = self._orient_o
+        _y_max_o = self._y_max_o
+        _Qo = self._Qo
+        _Co = self._Co
+        _Ao = self._Ao
+        _alpha_o = self._alpha_o
+        _beta_o = self._beta_o
+        _chi_o = self._chi_o
+        if u is None:
+            u = 0.0
+        # Specify orifice heads at previous timestep
+        _H_uo = H_j[_J_uo]
+        _H_do = H_j[_J_do]
+        _z_inv_uo = _z_inv_j[_J_uo]
+        # Create indicator functions
+        _omega_o = (_H_uo >= _H_do).astype(float)
+        _tau_o = (_orient_o == 'side').astype(float)
+        # Compute universal coefficients
+        _gamma_o = self.gamma_o(_Qo, _Ao, _Co)
+        # Create conditionals
+        cond_0 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                  _z_o + _z_inv_uo + (_tau_o * _y_max_o * u))
+        cond_1 = ((1 - _omega_o) * _H_uo + _omega_o * _H_do >
+                  _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
+        cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                  _z_o + _z_inv_uo)
+        # Fill coefficient arrays
+        # Submerged on both sides
+        _alpha_o[cond_0 & cond_1] = _gamma_o * _omega_o * (-1)**(1 - _omega_o) * u**2
+        _beta_o[cond_0 & cond_1] = _gamma_o * (1 - _omega_o) * (-1)**(1 - _omega_o) * u**2
+        _chi_o[cond_0 & cond_1] = (_gamma_o * (-1)**(1 - _omega_o) * u**2
+                                      * (- _z_inv_uo - _z_o - _tau_o * _y_max_o * u / 2))
+        # Submerged on one side
+        _alpha_o[cond_0 & ~cond_1] = _gamma_o * u**2
+        _beta_o[cond_0 & ~cond_1] = -_gamma_o * u**2
+        _chi_o[cond_0 & ~cond_1] = 0.0
+        # Weir flow on one side
+        _alpha_o[~cond_0 & cond_2] = _gamma_o * _omega_o * (-1)**(1 - _omega_o) / _y_max_o**2
+        _beta_o[~cond_0 & cond_2] = _gamma_o * (1 - _omega_o) * (-1)**(1 - _omega_o) / _y_max_o**2
+        _chi_o[~cond_0 & cond_2] = (_gamma_o * (-1)**(1 - _omega_o)
+                                      * (- _z_inv_uo - _z_o)) / _y_max_o**2
+        # No flow
+        _alpha_o[~cond_0 & ~cond_2] = 0.0
+        _beta_o[~cond_0 & ~cond_2] = 0.0
+        _chi_o[~cond_0 & ~cond_2] = 0.0
+        # Export instance variables
+        self._alpha_o = _alpha_o
+        self._beta_o = _beta_o
+        self._chi_o = _chi_o
+
     def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
         # TODO: May want to consider reconstructing A each time while debugging
@@ -1543,12 +1619,19 @@ class SuperLink():
         _J_uo = self._J_uo
         _J_do = self._J_do
         _Ao = self._Ao
+        _alpha_o = self._alpha_o
+        _beta_o = self._beta_o
+        _chi_o = self._chi_o
+        _alpha_uom = self._alpha_uom
+        _beta_dol = self._beta_dol
+        _chi_uol = self._chi_uol
+        _chi_dom = self._chi_dom
         _sparse = self._sparse
         _O_diag = self._O_diag
         M = self.M
         H_j = self.H_j
         bc = self.bc
-        _Qo_t = self._Qo_t
+        _Qo = self._Qo
         if _dt is None:
             _dt = self._dt
         if H_bc is None:
@@ -1571,8 +1654,6 @@ class SuperLink():
         bc_uk = bc[_J_uk]
         bc_dk = bc[_J_dk]
         # TODO: This may not account for multiple superlinks
-        # self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = _beta_uk[~bc_uk]
-        # self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = -_alpha_dk[~bc_dk]
         self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = 0.0
         self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = 0.0
         np.add.at(self.A, (_J_uk[~bc_uk], _J_dk[~bc_uk]), _beta_uk[~bc_uk])
@@ -1583,7 +1664,6 @@ class SuperLink():
         np.add.at(_chi_ukl, _J_uk, _chi_uk)
         np.add.at(_chi_dkm, _J_dk, _chi_dk)
         b = self.G_j(_A_sj, _dt, H_j, _Q_0j, _chi_ukl, _chi_dkm)
-        b[bc] = H_bc[bc]
         # Compute control matrix
         if _J_uo.size:
             bc_uo = bc[_J_uo]
@@ -1591,18 +1671,38 @@ class SuperLink():
             if implicit:
                 # TODO: This will overwrite?
                 # TODO: Ao should be dependent on height of water
-                _theta_o = self.theta_o(u, _Qo_t, _Ao)
+                _alpha_uo = _alpha_o
+                _alpha_do = _alpha_o
+                _beta_uo = _beta_o
+                _beta_do = _beta_o
+                _chi_uo = _chi_o
+                _chi_do = _chi_o
+                _alpha_uom.fill(0)
+                _beta_dol.fill(0)
+                _chi_uol.fill(0)
+                _chi_dom.fill(0)
                 _O_diag.fill(0)
-                np.add.at(_O_diag, _J_uo[~bc_uo], _theta_o[~bc_uo])
-                np.add.at(_O_diag, _J_do[~bc_do], _theta_o[~bc_do])
-                np.fill_diagonal(self.O, _O_diag)
-                # TODO: This may not account for multiple orifices
-                self.O[_J_uo[~bc_uo], _J_do[~bc_uo]] = -_theta_o[~bc_uo]
-                self.O[_J_do[~bc_do], _J_uo[~bc_do]] = -_theta_o[~bc_do]
+                # Set diagonal
+                np.add.at(_alpha_uom, _J_uo, _alpha_uo)
+                np.add.at(_beta_dol, _J_do, _beta_do)
+                _O_diag = -_beta_dol + _alpha_uom
+                # Set off-diagonal
+                self.O[i[~bc], i[~bc]] = _O_diag[i[~bc]]
+                self.O[_J_uo[~bc_uo], _J_do[~bc_uo]] = 0.0
+                self.O[_J_do[~bc_do], _J_uo[~bc_do]] = 0.0
+                np.add.at(self.O, (_J_uo[~bc_uo], _J_do[~bc_uo]), _beta_uo[~bc_uo])
+                np.add.at(self.O, (_J_do[~bc_do], _J_uo[~bc_do]), -_alpha_do[~bc_do])
+                # Set right-hand side
+                np.add.at(_chi_uol, _J_uo, _chi_uo)
+                np.add.at(_chi_dom, _J_do, _chi_do)
+                np.add.at(b, i[~bc], -_chi_uol[~bc] + _chi_dom[~bc])
             else:
+                # TODO: Broken
                 _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
                 self.B[_J_uo[~bc_uo]] = _Qo_u[~bc_uo]
                 self.B[_J_do[~bc_do]] = _Qo_d[~bc_do]
+        # Ensure boundary condition is specified
+        b[bc] = H_bc[bc]
         # Export instance variables
         self.b = b
         self._beta_dkl = _beta_dkl
@@ -1661,16 +1761,61 @@ class SuperLink():
 
     def solve_orifice_flows(self, u=None):
         # Import instance variables
+        H_j = self.H_j
+        _z_inv_j = self._z_inv_j
         _J_uo = self._J_uo
         _J_do = self._J_do
+        _z_o = self._z_o
+        _orient_o = self._orient_o
+        _y_max_o = self._y_max_o
+        _Co = self._Co
         _Ao = self._Ao
-        H_j = self.H_j
+        _alpha_oo = np.zeros(self.p)
+        _beta_oo = np.zeros(self.p)
+        _chi_oo = np.zeros(self.p)
         if u is None:
-            u = 0
-        # Compute orifice flows
-        _, _Qo_t = self.B_j(_J_uo, _J_do, u * _Ao, H_j)
+            u = 0.0
+        g = 9.81
+        # Specify orifice heads at previous timestep
+        _H_uo = H_j[_J_uo]
+        _H_do = H_j[_J_do]
+        _z_inv_uo = _z_inv_j[_J_uo]
+        # Create indicator functions
+        _omega_o = (_H_uo >= _H_do).astype(float)
+        _tau_o = (_orient_o == 'side').astype(float)
+        # Compute universal coefficients
+        _gamma_oo = 2 * g * _Co**2 * _Ao**2
+        # Create conditionals
+        cond_0 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                  _z_o + _z_inv_uo + (_tau_o * _y_max_o * u))
+        cond_1 = ((1 - _omega_o) * _H_uo + _omega_o * _H_do >
+                  _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
+        cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                  _z_o + _z_inv_uo)
+        # Fill coefficient arrays
+        # Submerged on both sides
+        _alpha_oo[cond_0 & cond_1] = _gamma_oo * _omega_o * (-1)**(1 - _omega_o) * u**2
+        _beta_oo[cond_0 & cond_1] = _gamma_oo * (1 - _omega_o) * (-1)**(1 - _omega_o) * u**2
+        _chi_oo[cond_0 & cond_1] = (_gamma_oo * (-1)**(1 - _omega_o) * u**2
+                                      * (- _z_inv_uo - _z_o - _tau_o * _y_max_o * u / 2))
+        # Submerged on one side
+        _alpha_oo[cond_0 & ~cond_1] = _gamma_oo * u**2
+        _beta_oo[cond_0 & ~cond_1] = -_gamma_oo * u**2
+        _chi_oo[cond_0 & ~cond_1] = 0.0
+        # Weir flow on one side
+        _alpha_oo[~cond_0 & cond_2] = _gamma_oo * _omega_o * (-1)**(1 - _omega_o) / _y_max_o**2
+        _beta_oo[~cond_0 & cond_2] = _gamma_oo * (1 - _omega_o) * (-1)**(1 - _omega_o) / _y_max_o**2
+        _chi_oo[~cond_0 & cond_2] = (_gamma_oo * (-1)**(1 - _omega_o)
+                                      * (- _z_inv_uo - _z_o)) / _y_max_o**2
+        # No flow
+        _alpha_oo[~cond_0 & ~cond_2] = 0.0
+        _beta_oo[~cond_0 & ~cond_2] = 0.0
+        _chi_oo[~cond_0 & ~cond_2] = 0.0
+        # Compute flow
+        _Qo_next = (-1)**(1 - _omega_o) * np.sqrt(np.abs(
+                _alpha_oo * H_j[_J_uo] + _beta_oo * H_j[_J_do] + _chi_oo))
         # Export instance variables
-        self._Qo_t = _Qo_t
+        self._Qo = _Qo_next
 
     def solve_superlink_depths(self):
         # Import instance variables
@@ -2260,14 +2405,16 @@ class SuperLink():
         self.superlink_upstream_head_coefficients()
         self.superlink_downstream_head_coefficients()
         self.superlink_flow_coefficients()
+        if self.orifices is not None:
+            self.orifice_flow_coefficients(u=u)
         self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in, u=u,
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
         self.solve_sparse_matrix(u=u, implicit=implicit)
         self.solve_superlink_flows()
-        self.solve_orifice_flows(u=u)
+        if self.orifices is not None:
+            self.solve_orifice_flows(u=u)
         self.solve_superlink_depths()
-        # self.solve_superlink_depths_alt()
         if _exit_hydraulics:
             self.exit_conditions()
             self.solve_critical_depth()
