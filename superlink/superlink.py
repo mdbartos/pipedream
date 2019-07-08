@@ -1570,8 +1570,13 @@ class SuperLink():
         # Compute off-diagonals
         bc_uk = bc[_J_uk]
         bc_dk = bc[_J_dk]
-        self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = _beta_uk[~bc_uk]
-        self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = -_alpha_dk[~bc_dk]
+        # TODO: This may not account for multiple superlinks
+        # self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = _beta_uk[~bc_uk]
+        # self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = -_alpha_dk[~bc_dk]
+        self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = 0.0
+        self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = 0.0
+        np.add.at(self.A, (_J_uk[~bc_uk], _J_dk[~bc_uk]), _beta_uk[~bc_uk])
+        np.add.at(self.A, (_J_dk[~bc_dk], _J_uk[~bc_dk]), -_alpha_dk[~bc_dk])
         # Compute G_j
         _chi_ukl.fill(0)
         _chi_dkm.fill(0)
@@ -1591,6 +1596,7 @@ class SuperLink():
                 np.add.at(_O_diag, _J_uo[~bc_uo], _theta_o[~bc_uo])
                 np.add.at(_O_diag, _J_do[~bc_do], _theta_o[~bc_do])
                 np.fill_diagonal(self.O, _O_diag)
+                # TODO: This may not account for multiple orifices
                 self.O[_J_uo[~bc_uo], _J_do[~bc_uo]] = -_theta_o[~bc_uo]
                 self.O[_J_do[~bc_do], _J_uo[~bc_do]] = -_theta_o[~bc_do]
             else:
