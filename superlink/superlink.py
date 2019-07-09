@@ -10,7 +10,8 @@ import superlink.storage
 class SuperLink():
     def __init__(self, superlinks, superjunctions,
                  links=None, junctions=None,
-                 transects={}, storages={}, orifices=None, weirs=None,
+                 transects={}, storages={},
+                 orifices=None, weirs=None, pumps=None,
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False):
@@ -34,6 +35,7 @@ class SuperLink():
         self.storages = storages
         self.orifices = orifices
         self.weirs = weirs
+        self.pumps = pumps
         self._dt = dt
         self._sparse = sparse
         self._method = method
@@ -179,6 +181,41 @@ class SuperLink():
             self._beta_dwl = np.array([], dtype=float)
             self._chi_uwl = np.array([], dtype=float)
             self._chi_dwm = np.array([], dtype=float)
+        # Handle pumps
+        if pumps is not None:
+            self._J_up = self.pumps['sj_0'].values.astype(int)
+            self._J_dp = self.pumps['sj_1'].values.astype(int)
+            self._z_p = self.pumps['z_p'].values.astype(float)
+            self._ap_h = self.pumps['a_h'].values.astype(float)
+            self._ap_q = self.pumps['a_q'].values.astype(float)
+            self._dHp_max = self.pumps['dH_max'].values.astype(float)
+            self._dHp_min = self.pumps['dH_min'].values.astype(float)
+            self.n_p = self.pumps.shape[0]
+            self._Qp = np.zeros(self.n_p, dtype=float)
+            self._alpha_p = np.zeros(self.n_p, dtype=float)
+            self._beta_p = np.zeros(self.n_p, dtype=float)
+            self._chi_p = np.zeros(self.n_p, dtype=float)
+            self._alpha_upm = np.zeros(self.M, dtype=float)
+            self._beta_dpl = np.zeros(self.M, dtype=float)
+            self._chi_upl = np.zeros(self.M, dtype=float)
+            self._chi_dpm = np.zeros(self.M, dtype=float)
+        else:
+            self._J_up = np.array([], dtype=int)
+            self._J_dp = np.array([], dtype=int)
+            self._z_p = np.array([], dtype=float)
+            self._ap_h = np.array([], dtype=float)
+            self._ap_q = np.array([], dtype=float)
+            self._dHp_max = np.array([], dtype=float)
+            self._dHp_min = np.array([], dtype=float)
+            self.n_p = 0
+            self._Qp = np.array([], dtype=float)
+            self._alpha_p = np.array([], dtype=float)
+            self._beta_p = np.array([], dtype=float)
+            self._chi_p = np.array([], dtype=float)
+            self._alpha_upm = np.array([], dtype=float)
+            self._beta_dpl = np.array([], dtype=float)
+            self._chi_upl = np.array([], dtype=float)
+            self._chi_dpm = np.array([], dtype=float)
         # Enforce minimum depth
         self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
@@ -234,10 +271,12 @@ class SuperLink():
             self.B = scipy.sparse.lil_matrix((self.M, self.n_o))
             self.O = scipy.sparse.lil_matrix((self.M, self.M))
             self.W = scipy.sparse.lil_matrix((self.M, self.M))
+            self.P = scipy.sparse.lil_matrix((self.M, self.M))
         else:
             self.B = np.zeros((self.M, self.n_o))
             self.O = np.zeros((self.M, self.M))
             self.W = np.zeros((self.M, self.M))
+            self.P = np.zeros((self.M, self.M))
         # TODO: Should these be size NK?
         self._alpha_ukm = np.zeros(self.M, dtype=float)
         self._beta_dkl = np.zeros(self.M, dtype=float)
@@ -253,13 +292,9 @@ class SuperLink():
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Other parameters
-        # self._Qo_t = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
-        # TODO: Needs to be changed
-        # self._Qo, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
-        # self._Qw = np.zeros(self.n_w, dtype=float)
-        # self._Qo_t_min = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
         self._O_diag = np.zeros(self.M)
         self._W_diag = np.zeros(self.M)
+        self._P_diag = np.zeros(self.M)
         # Superlink end hydraulic geometries
         self._A_uk = np.copy(self._A_ik[self._i_1k])
         self._A_dk = np.copy(self._A_ik[self._i_nk])
@@ -915,6 +950,12 @@ class SuperLink():
     def gamma_w(self, Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
         num = (Cwr * L_w * H_w_t + Cwt * s_w * H_w_t**2)**2
         den = np.abs(Q_w_t)
+        return num, den
+
+    @safe_divide
+    def gamma_p(self, Q_p_t, dH_p_t, a_q=1.0, a_h=1.0):
+        num = a_q**2 * np.abs(dH_p_t)
+        den = a_h**2 * np.abs(Q_p_t)
         return num, den
 
     def configure_hydraulic_geometry(self):
@@ -1673,7 +1714,7 @@ class SuperLink():
         _Hw = self._Hw
         if u is None:
             u = np.zeros(self.n_w, dtype=float)
-        # Specify orifice heads at previous timestep
+        # Specify weir heads at previous timestep
         _H_uw = H_j[_J_uw]
         _H_dw = H_j[_J_dw]
         _z_inv_uw = _z_inv_j[_J_uw]
@@ -1717,6 +1758,51 @@ class SuperLink():
         self._beta_w = _beta_w
         self._chi_w = _chi_w
 
+    def pump_flow_coefficients(self, u=None):
+        # Import instance variables
+        H_j = self.H_j
+        _z_inv_j = self._z_inv_j
+        _J_up = self._J_up
+        _J_dp = self._J_dp
+        _z_p = self._z_p
+        _dHp_max = self._dHp_max
+        _dHp_min = self._dHp_min
+        _ap_h = self._ap_h
+        _ap_q = self._ap_h
+        _Qp = self._Qp
+        _alpha_p = self._alpha_p
+        _beta_p = self._beta_p
+        _chi_p = self._chi_p
+        if u is None:
+            u = np.zeros(self.n_p, dtype=float)
+        # Specify pump heads at previous timestep
+        _H_up = H_j[_J_up]
+        _H_dp = H_j[_J_dp]
+        _z_inv_up = _z_inv_j[_J_up]
+        # Create conditionals
+        assert (_dHp_min <= _dHp_max).all()
+        _dHp = _H_dp - _H_up
+        _dHp[_dHp > _dHp_max] = _dHp_max
+        _dHp[_dHp < _dHp_min] = _dHp_min
+        cond_0 = _H_up > _z_inv_up + _z_p
+        # Compute universal coefficients
+        _gamma_p = self.gamma_p(_Qp, _dHp, _ap_q, _ap_h)
+        # Fill coefficient arrays
+        # Head in pump curve range
+        a = (cond_0)
+        _alpha_p[a] = _gamma_p[a] * u[a]**2
+        _beta_p[a] = -_gamma_p[a] * u[a]**2
+        _chi_p[a] = (_gamma_p[a] * _ap_h[a]**2 / np.abs(_dHp[a])) * u[a]**2
+        # Depth below inlet
+        b = (~cond_0)
+        _alpha_p[b] = 0.0
+        _beta_p[b] = 0.0
+        _chi_p[b] = 0.0
+        # Export instance variables
+        self._alpha_p = _alpha_p
+        self._beta_p = _beta_p
+        self._chi_p = _chi_p
+
     def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
         # TODO: May want to consider reconstructing A each time while debugging
@@ -1755,7 +1841,20 @@ class SuperLink():
         _chi_uwl = self._chi_uwl
         _chi_dwm = self._chi_dwm
         _W_diag = self._W_diag
+        _J_up = self._J_up
+        _J_dp = self._J_dp
+        _alpha_p = self._alpha_p
+        _beta_p = self._beta_p
+        _chi_p = self._chi_p
+        _alpha_upm = self._alpha_upm
+        _beta_dpl = self._beta_dpl
+        _chi_upl = self._chi_upl
+        _chi_dpm = self._chi_dpm
+        _P_diag = self._P_diag
         _sparse = self._sparse
+        n_o = self.n_o
+        n_w = self.n_w
+        n_p = self.n_p
         M = self.M
         H_j = self.H_j
         bc = self.bc
@@ -1793,7 +1892,7 @@ class SuperLink():
         np.add.at(_chi_dkm, _J_dk, _chi_dk)
         b = self.G_j(_A_sj, _dt, H_j, _Q_0j, _chi_ukl, _chi_dkm)
         # Compute control matrix
-        if _J_uo.size:
+        if n_o:
             bc_uo = bc[_J_uo]
             bc_do = bc[_J_do]
             if implicit:
@@ -1830,12 +1929,10 @@ class SuperLink():
                 # self.B[_J_uo[~bc_uo]] = _Qo_u[~bc_uo]
                 # self.B[_J_do[~bc_do]] = _Qo_d[~bc_do]
                 pass
-        if _J_uw.size:
+        if n_w:
             bc_uw = bc[_J_uw]
             bc_dw = bc[_J_dw]
             if implicit:
-                # TODO: This will overwrite?
-                # TODO: Ao should be dependent on height of water
                 _alpha_uw = _alpha_w
                 _alpha_dw = _alpha_w
                 _beta_uw = _beta_w
@@ -1863,6 +1960,37 @@ class SuperLink():
                 np.add.at(b, i[~bc], -_chi_uwl[~bc] + _chi_dwm[~bc])
             else:
                 pass
+        if n_p:
+            bc_up = bc[_J_up]
+            bc_dp = bc[_J_dp]
+            if implicit:
+                _alpha_up = _alpha_p
+                _alpha_dp = _alpha_p
+                _beta_up = _beta_p
+                _beta_dp = _beta_p
+                _chi_up = _chi_p
+                _chi_dp = _chi_p
+                _alpha_upm.fill(0)
+                _beta_dpl.fill(0)
+                _chi_upl.fill(0)
+                _chi_dpm.fill(0)
+                _P_diag.fill(0)
+                # Set diagonal
+                np.add.at(_alpha_upm, _J_up, _alpha_up)
+                np.add.at(_beta_dpl, _J_dp, _beta_dp)
+                _P_diag = -_beta_dpl + _alpha_upm
+                # Set off-diagonal
+                self.P[i[~bc], i[~bc]] = _P_diag[i[~bc]]
+                self.P[_J_up[~bc_up], _J_dp[~bc_up]] = 0.0
+                self.P[_J_dp[~bc_dp], _J_up[~bc_dp]] = 0.0
+                np.add.at(self.P, (_J_up[~bc_up], _J_dp[~bc_up]), _beta_up[~bc_up])
+                np.add.at(self.P, (_J_dp[~bc_dp], _J_up[~bc_dp]), -_alpha_dp[~bc_dp])
+                # Set right-hand side
+                np.add.at(_chi_upl, _J_up, _chi_up)
+                np.add.at(_chi_dpm, _J_dp, _chi_dp)
+                np.add.at(b, i[~bc], -_chi_upl[~bc] + _chi_dpm[~bc])
+            else:
+                pass
         # Ensure boundary condition is specified
         b[bc] = H_bc[bc]
         # Export instance variables
@@ -1881,16 +2009,20 @@ class SuperLink():
         B = self.B
         O = self.O
         W = self.W
+        P = self.P
+        n_o = self.n_o
+        n_w = self.n_w
+        n_p = self.n_p
         _z_inv_j = self._z_inv_j
         _sparse = self._sparse
         min_depth = self.min_depth
         max_depth = self.max_depth
         # Does the system have control assets?
-        has_control = (self.orifices is not None) or (self.weirs is not None)
+        has_control = n_o + n_w + n_p
         # Get right-hand size
         if has_control:
             if implicit:
-                l = A + O + W
+                l = A + O + W + P
                 r = b
             else:
                 # TODO: Broken
@@ -2002,9 +2134,6 @@ class SuperLink():
         _Cwt = self._Cwt
         _s_w = self._s_w
         _L_w = self._L_w
-        _alpha_ww = np.zeros(self.n_w, dtype=float)
-        _beta_ww = np.zeros(self.n_w, dtype=float)
-        _chi_ww = np.zeros(self.n_w, dtype=float)
         _Hw = self._Hw
         if u is None:
             u = np.zeros(self.n_w, dtype=float)
@@ -2034,6 +2163,37 @@ class SuperLink():
         _Qw_next = (-1)**(1 - _omega_w) * np.sqrt(_gamma_ww * _Hw)
         # Export instance variables
         self._Qw = _Qw_next
+
+    def solve_pump_flows(self, u=None):
+        # Import instance variables
+        H_j = self.H_j
+        _z_inv_j = self._z_inv_j
+        _J_up = self._J_up
+        _J_dp = self._J_dp
+        _z_p = self._z_p
+        _dHp_max = self._dHp_max
+        _dHp_min = self._dHp_min
+        _ap_h = self._ap_h
+        _ap_q = self._ap_h
+        _Qp = self._Qp
+        _alpha_pp = np.zeros(self.n_p, dtype=float)
+        _beta_pp = np.zeros(self.n_p, dtype=float)
+        _chi_pp = np.zeros(self.n_p, dtype=float)
+        if u is None:
+            u = np.zeros(self.n_p, dtype=float)
+        # Specify pump heads at previous timestep
+        _H_up = H_j[_J_up]
+        _H_dp = H_j[_J_dp]
+        _z_inv_up = _z_inv_j[_J_up]
+        # Create conditionals
+        _dHp = _H_dp - _H_up
+        _dHp[_dHp > _dHp_max] = _dHp_max
+        _dHp[_dHp < _dHp_min] = _dHp_min
+        cond_0 = _H_up > _z_inv_up + _z_p
+        # Compute universal coefficients
+        _Qp_next = u * np.sqrt(np.maximum(_ap_q**2 * (1 - (_dHp)**2 / _ap_h**2), 0.0))
+        _Qp_next[~cond_0] = 0.0
+        self._Qp = _Qp_next
 
     def solve_superlink_depths(self):
         # Import instance variables
@@ -2607,7 +2767,7 @@ class SuperLink():
         self._dx_ik = dxdx.ravel()
         self._fixed = _fixed
 
-    def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, dt=None,
+    def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True):
         _method = self._method
         _exit_hydraulics = self._exit_hydraulics
@@ -2630,6 +2790,8 @@ class SuperLink():
             self.orifice_flow_coefficients(u=u_o)
         if self.weirs is not None:
             self.weir_flow_coefficients(u=u_w)
+        if self.pumps is not None:
+            self.pump_flow_coefficients(u=u_p)
         self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
@@ -2639,6 +2801,8 @@ class SuperLink():
             self.solve_orifice_flows(u=u_o)
         if self.weirs is not None:
             self.solve_weir_flows(u=u_w)
+        if self.pumps is not None:
+            self.solve_pump_flows(u=u_p)
         self.solve_superlink_depths()
         if _exit_hydraulics:
             self.exit_conditions()
