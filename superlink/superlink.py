@@ -10,7 +10,7 @@ import superlink.storage
 class SuperLink():
     def __init__(self, superlinks, superjunctions,
                  links=None, junctions=None,
-                 transects={}, storages={}, orifices=None,
+                 transects={}, storages={}, orifices=None, weirs=None,
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False):
@@ -33,6 +33,7 @@ class SuperLink():
         self.transects = transects
         self.storages = storages
         self.orifices = orifices
+        self.weirs = weirs
         self._dt = dt
         self._sparse = sparse
         self._method = method
@@ -113,10 +114,11 @@ class SuperLink():
             self._z_o = self.orifices['z_o'].values.astype(float)
             self._y_max_o = self.orifices['y_max'].values.astype(float)
             self._orient_o = self.orifices['orientation'].values
-            self.p = self.orifices.shape[0]
-            self._alpha_o = np.zeros(self.p, dtype=float)
-            self._beta_o = np.zeros(self.p, dtype=float)
-            self._chi_o = np.zeros(self.p, dtype=float)
+            self.n_o = self.orifices.shape[0]
+            self._Qo = np.zeros(self.n_o, dtype=float)
+            self._alpha_o = np.zeros(self.n_o, dtype=float)
+            self._beta_o = np.zeros(self.n_o, dtype=float)
+            self._chi_o = np.zeros(self.n_o, dtype=float)
             self._alpha_uom = np.zeros(self.M, dtype=float)
             self._beta_dol = np.zeros(self.M, dtype=float)
             self._chi_uol = np.zeros(self.M, dtype=float)
@@ -129,7 +131,8 @@ class SuperLink():
             self._z_o = np.array([], dtype=float)
             self._y_max_o = np.array([], dtype=float)
             self._orient_o = np.array([])
-            self.p = 0
+            self.n_o = 0
+            self._Qo = np.array([], dtype=float)
             self._alpha_o = np.array([], dtype=float)
             self._beta_o = np.array([], dtype=float)
             self._chi_o = np.array([], dtype=float)
@@ -137,6 +140,45 @@ class SuperLink():
             self._beta_dol = np.array([], dtype=float)
             self._chi_uol = np.array([], dtype=float)
             self._chi_dom = np.array([], dtype=float)
+        # Handle weirs
+        if weirs is not None:
+            self._J_uw = self.weirs['sj_0'].values.astype(int)
+            self._J_dw = self.weirs['sj_1'].values.astype(int)
+            self._Cwr = self.weirs['Cr'].values.astype(float)
+            self._Cwt = self.weirs['Ct'].values.astype(float)
+            self._L_w = self.weirs['L'].values.astype(float)
+            self._s_w = self.weirs['s'].values.astype(float)
+            self._z_w = self.weirs['z_w'].values.astype(float)
+            self._y_max_w = self.weirs['y_max'].values.astype(float)
+            self.n_w = self.weirs.shape[0]
+            self._Hw = np.zeros(self.n_w, dtype=float)
+            self._Qw = np.zeros(self.n_w, dtype=float)
+            self._alpha_w = np.zeros(self.n_w, dtype=float)
+            self._beta_w = np.zeros(self.n_w, dtype=float)
+            self._chi_w = np.zeros(self.n_w, dtype=float)
+            self._alpha_uwm = np.zeros(self.M, dtype=float)
+            self._beta_dwl = np.zeros(self.M, dtype=float)
+            self._chi_uwl = np.zeros(self.M, dtype=float)
+            self._chi_dwm = np.zeros(self.M, dtype=float)
+        else:
+            self._J_uw = np.array([], dtype=int)
+            self._J_dw = np.array([], dtype=int)
+            self._Cwr = np.array([], dtype=float)
+            self._Cwt = np.array([], dtype=float)
+            self._L_w = np.array([], dtype=float)
+            self._s_w = np.array([], dtype=float)
+            self._z_w = np.array([], dtype=float)
+            self._y_max_w = np.array([], dtype=float)
+            self.n_w = 0
+            self._Hw = np.array([], dtype=float)
+            self._Qw = np.array([], dtype=float)
+            self._alpha_w = np.array([], dtype=float)
+            self._beta_w = np.array([], dtype=float)
+            self._chi_w = np.array([], dtype=float)
+            self._alpha_uwm = np.array([], dtype=float)
+            self._beta_dwl = np.array([], dtype=float)
+            self._chi_uwl = np.array([], dtype=float)
+            self._chi_dwm = np.array([], dtype=float)
         # Enforce minimum depth
         self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
@@ -189,13 +231,13 @@ class SuperLink():
         self.b = np.zeros(self.M)
         self.bc = self.superjunctions['bc'].values.astype(bool)
         if sparse:
-            self.B = scipy.sparse.lil_matrix((self.M, self.p))
-        else:
-            self.B = np.zeros((self.M, self.p))
-        if sparse:
+            self.B = scipy.sparse.lil_matrix((self.M, self.n_o))
             self.O = scipy.sparse.lil_matrix((self.M, self.M))
+            self.W = scipy.sparse.lil_matrix((self.M, self.M))
         else:
+            self.B = np.zeros((self.M, self.n_o))
             self.O = np.zeros((self.M, self.M))
+            self.W = np.zeros((self.M, self.M))
         # TODO: Should these be size NK?
         self._alpha_ukm = np.zeros(self.M, dtype=float)
         self._beta_dkl = np.zeros(self.M, dtype=float)
@@ -212,9 +254,12 @@ class SuperLink():
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Other parameters
         # self._Qo_t = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
-        self._Qo, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
+        # TODO: Needs to be changed
+        # self._Qo, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
+        # self._Qw = np.zeros(self.n_w, dtype=float)
         # self._Qo_t_min = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
         self._O_diag = np.zeros(self.M)
+        self._W_diag = np.zeros(self.M)
         # Superlink end hydraulic geometries
         self._A_uk = np.copy(self._A_ik[self._i_1k])
         self._A_dk = np.copy(self._A_ik[self._i_nk])
@@ -864,6 +909,12 @@ class SuperLink():
     def gamma_o(self, Q_o_t, Ao, Co=0.67, g=9.81):
         num = 2 * g * Co**2 * Ao**2
         den = np.abs(Q_o_t)
+        return num, den
+
+    @safe_divide
+    def gamma_w(self, Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
+        num = (Cwr * L_w * H_w_t + Cwt * s_w * H_w_t**2)**2
+        den = np.abs(Q_w_t)
         return num, den
 
     def configure_hydraulic_geometry(self):
@@ -1557,7 +1608,7 @@ class SuperLink():
         _beta_o = self._beta_o
         _chi_o = self._chi_o
         if u is None:
-            u = 0.0
+            u = np.zeros(self.n_o, dtype=float)
         # Specify orifice heads at previous timestep
         _H_uo = H_j[_J_uo]
         _H_do = H_j[_J_do]
@@ -1576,27 +1627,95 @@ class SuperLink():
                   _z_o + _z_inv_uo)
         # Fill coefficient arrays
         # Submerged on both sides
-        _alpha_o[cond_0 & cond_1] = _gamma_o * _omega_o * (-1)**(1 - _omega_o) * u**2
-        _beta_o[cond_0 & cond_1] = _gamma_o * (1 - _omega_o) * (-1)**(1 - _omega_o) * u**2
-        _chi_o[cond_0 & cond_1] = (_gamma_o * (-1)**(1 - _omega_o) * u**2
-                                      * (- _z_inv_uo - _z_o - _tau_o * _y_max_o * u / 2))
+        a = (cond_0 & cond_1)
+        _alpha_o[a] = _gamma_o[a] * _omega_o[a] * (-1)**(1 - _omega_o[a]) * u[a]**2
+        _beta_o[a] = _gamma_o[a] * (1 - _omega_o[a]) * (-1)**(1 - _omega_o[a]) * u[a]**2
+        _chi_o[a] = (_gamma_o[a] * (-1)**(1 - _omega_o[a]) * u[a]**2
+                                      * (- _z_inv_uo[a] - _z_o[a] -
+                                         _tau_o[a] * _y_max_o[a] * u[a] / 2))
         # Submerged on one side
-        _alpha_o[cond_0 & ~cond_1] = _gamma_o * u**2
-        _beta_o[cond_0 & ~cond_1] = -_gamma_o * u**2
-        _chi_o[cond_0 & ~cond_1] = 0.0
+        b = (cond_0 & ~cond_1)
+        _alpha_o[b] = _gamma_o[b] * u[b]**2
+        _beta_o[b] = -_gamma_o[b] * u[b]**2
+        _chi_o[b] = 0.0
         # Weir flow on one side
-        _alpha_o[~cond_0 & cond_2] = _gamma_o * _omega_o * (-1)**(1 - _omega_o) / _y_max_o**2
-        _beta_o[~cond_0 & cond_2] = _gamma_o * (1 - _omega_o) * (-1)**(1 - _omega_o) / _y_max_o**2
-        _chi_o[~cond_0 & cond_2] = (_gamma_o * (-1)**(1 - _omega_o)
-                                      * (- _z_inv_uo - _z_o)) / _y_max_o**2
+        c = (~cond_0 & cond_2)
+        _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2
+        _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2
+        _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
+                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2
         # No flow
-        _alpha_o[~cond_0 & ~cond_2] = 0.0
-        _beta_o[~cond_0 & ~cond_2] = 0.0
-        _chi_o[~cond_0 & ~cond_2] = 0.0
+        d = (~cond_0 & ~cond_2)
+        _alpha_o[d] = 0.0
+        _beta_o[d] = 0.0
+        _chi_o[d] = 0.0
         # Export instance variables
         self._alpha_o = _alpha_o
         self._beta_o = _beta_o
         self._chi_o = _chi_o
+
+    def weir_flow_coefficients(self, u=None):
+        # Import instance variables
+        H_j = self.H_j
+        _z_inv_j = self._z_inv_j
+        _J_uw = self._J_uw
+        _J_dw = self._J_dw
+        _z_w = self._z_w
+        _y_max_w = self._y_max_w
+        _Qw = self._Qw
+        _Cwr = self._Cwr
+        _Cwt = self._Cwt
+        _s_w = self._s_w
+        _L_w = self._L_w
+        _alpha_w = self._alpha_w
+        _beta_w = self._beta_w
+        _chi_w = self._chi_w
+        _Hw = self._Hw
+        if u is None:
+            u = np.zeros(self.n_w, dtype=float)
+        # Specify orifice heads at previous timestep
+        _H_uw = H_j[_J_uw]
+        _H_dw = H_j[_J_dw]
+        _z_inv_uw = _z_inv_j[_J_uw]
+        # Create indicator functions
+        _omega_w = (_H_uw >= _H_dw).astype(float)
+        # Create conditionals
+        cond_0 = (_omega_w * _H_uw + (1 - _omega_w) * _H_dw >
+                  _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+        cond_1 = ((1 - _omega_w) * _H_uw + _omega_w * _H_dw >
+                  _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+        # Effective heads
+        a = (cond_0 & cond_1)
+        b = (cond_0 & ~cond_1)
+        c = (~cond_0)
+        _Hw[a] = _H_uw[a] - _H_dw[a]
+        _Hw[b] = (_omega_w[b] * _H_uw[b] + (1 - _omega_w[b]) * _H_dw[b]
+                     + (-_z_inv_uw[b] - _z_w[b] - (1 - u[b]) * _y_max_w[b]))
+        _Hw[c] = 0.0
+        _Hw = np.abs(_Hw)
+        # Compute universal coefficients
+        _gamma_w = self.gamma_w(_Qw, _Hw, _L_w, _s_w, _Cwr, _Cwt)
+        # Fill coefficient arrays
+        # Submerged on both sides
+        a = (cond_0 & cond_1)
+        _alpha_w[a] = _gamma_w[a]
+        _beta_w[a] = -_gamma_w[a]
+        _chi_w[a] = 0.0
+        # Submerged on one side
+        b = (cond_0 & ~cond_1)
+        _alpha_w[b] = _gamma_w[b] * _omega_w[b] * (-1)**(1 - _omega_w[b])
+        _beta_w[b] = _gamma_w[b] * (1 - _omega_w[b]) * (-1)**(1 - _omega_w[b])
+        _chi_w[b] = (_gamma_w[b] * (-1)**(1 - _omega_w[b]) *
+                                    (- _z_inv_uw[b] - _z_w[b] - (1 - u[b]) * _y_max_w[b]))
+        # No flow
+        c = (~cond_0)
+        _alpha_w[c] = 0.0
+        _beta_w[c] = 0.0
+        _chi_w[c] = 0.0
+        # Export instance variables
+        self._alpha_w = _alpha_w
+        self._beta_w = _beta_w
+        self._chi_w = _chi_w
 
     def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
@@ -1618,7 +1737,6 @@ class SuperLink():
         _A_sj = self._A_sj
         _J_uo = self._J_uo
         _J_do = self._J_do
-        _Ao = self._Ao
         _alpha_o = self._alpha_o
         _beta_o = self._beta_o
         _chi_o = self._chi_o
@@ -1626,8 +1744,18 @@ class SuperLink():
         _beta_dol = self._beta_dol
         _chi_uol = self._chi_uol
         _chi_dom = self._chi_dom
-        _sparse = self._sparse
         _O_diag = self._O_diag
+        _J_uw = self._J_uw
+        _J_dw = self._J_dw
+        _alpha_w = self._alpha_w
+        _beta_w = self._beta_w
+        _chi_w = self._chi_w
+        _alpha_uwm = self._alpha_uwm
+        _beta_dwl = self._beta_dwl
+        _chi_uwl = self._chi_uwl
+        _chi_dwm = self._chi_dwm
+        _W_diag = self._W_diag
+        _sparse = self._sparse
         M = self.M
         H_j = self.H_j
         bc = self.bc
@@ -1698,9 +1826,43 @@ class SuperLink():
                 np.add.at(b, i[~bc], -_chi_uol[~bc] + _chi_dom[~bc])
             else:
                 # TODO: Broken
-                _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
-                self.B[_J_uo[~bc_uo]] = _Qo_u[~bc_uo]
-                self.B[_J_do[~bc_do]] = _Qo_d[~bc_do]
+                # _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
+                # self.B[_J_uo[~bc_uo]] = _Qo_u[~bc_uo]
+                # self.B[_J_do[~bc_do]] = _Qo_d[~bc_do]
+                pass
+        if _J_uw.size:
+            bc_uw = bc[_J_uw]
+            bc_dw = bc[_J_dw]
+            if implicit:
+                # TODO: This will overwrite?
+                # TODO: Ao should be dependent on height of water
+                _alpha_uw = _alpha_w
+                _alpha_dw = _alpha_w
+                _beta_uw = _beta_w
+                _beta_dw = _beta_w
+                _chi_uw = _chi_w
+                _chi_dw = _chi_w
+                _alpha_uwm.fill(0)
+                _beta_dwl.fill(0)
+                _chi_uwl.fill(0)
+                _chi_dwm.fill(0)
+                _W_diag.fill(0)
+                # Set diagonal
+                np.add.at(_alpha_uwm, _J_uw, _alpha_uw)
+                np.add.at(_beta_dwl, _J_dw, _beta_dw)
+                _W_diag = -_beta_dwl + _alpha_uwm
+                # Set off-diagonal
+                self.W[i[~bc], i[~bc]] = _W_diag[i[~bc]]
+                self.W[_J_uw[~bc_uw], _J_dw[~bc_uw]] = 0.0
+                self.W[_J_dw[~bc_dw], _J_uw[~bc_dw]] = 0.0
+                np.add.at(self.W, (_J_uw[~bc_uw], _J_dw[~bc_uw]), _beta_uw[~bc_uw])
+                np.add.at(self.W, (_J_dw[~bc_dw], _J_uw[~bc_dw]), -_alpha_dw[~bc_dw])
+                # Set right-hand side
+                np.add.at(_chi_uwl, _J_uw, _chi_uw)
+                np.add.at(_chi_dwm, _J_dw, _chi_dw)
+                np.add.at(b, i[~bc], -_chi_uwl[~bc] + _chi_dwm[~bc])
+            else:
+                pass
         # Ensure boundary condition is specified
         b[bc] = H_bc[bc]
         # Export instance variables
@@ -1718,18 +1880,23 @@ class SuperLink():
         b = self.b
         B = self.B
         O = self.O
+        W = self.W
         _z_inv_j = self._z_inv_j
         _sparse = self._sparse
         min_depth = self.min_depth
         max_depth = self.max_depth
+        # Does the system have control assets?
+        has_control = (self.orifices is not None) or (self.weirs is not None)
         # Get right-hand size
-        if u is not None:
+        if has_control:
             if implicit:
-                l = A + O
+                l = A + O + W
                 r = b
             else:
-                l = A
-                r = b + np.squeeze(B @ u)
+                # TODO: Broken
+                # l = A
+                # r = b + np.squeeze(B @ u)
+                pass
         else:
             l = A
             r = b
@@ -1770,11 +1937,11 @@ class SuperLink():
         _y_max_o = self._y_max_o
         _Co = self._Co
         _Ao = self._Ao
-        _alpha_oo = np.zeros(self.p)
-        _beta_oo = np.zeros(self.p)
-        _chi_oo = np.zeros(self.p)
+        _alpha_oo = np.zeros(self.n_o, dtype=float)
+        _beta_oo = np.zeros(self.n_o, dtype=float)
+        _chi_oo = np.zeros(self.n_o, dtype=float)
         if u is None:
-            u = 0.0
+            u = np.zeros(self.n_o, dtype=float)
         g = 9.81
         # Specify orifice heads at previous timestep
         _H_uo = H_j[_J_uo]
@@ -1794,28 +1961,79 @@ class SuperLink():
                   _z_o + _z_inv_uo)
         # Fill coefficient arrays
         # Submerged on both sides
-        _alpha_oo[cond_0 & cond_1] = _gamma_oo * _omega_o * (-1)**(1 - _omega_o) * u**2
-        _beta_oo[cond_0 & cond_1] = _gamma_oo * (1 - _omega_o) * (-1)**(1 - _omega_o) * u**2
-        _chi_oo[cond_0 & cond_1] = (_gamma_oo * (-1)**(1 - _omega_o) * u**2
-                                      * (- _z_inv_uo - _z_o - _tau_o * _y_max_o * u / 2))
+        a = (cond_0 & cond_1)
+        _alpha_oo[a] = _gamma_oo[a] * _omega_o[a] * (-1)**(1 - _omega_o[a]) * u[a]**2
+        _beta_oo[a] = _gamma_oo[a] * (1 - _omega_o[a]) * (-1)**(1 - _omega_o[a]) * u[a]**2
+        _chi_oo[a] = (_gamma_oo[a] * (-1)**(1 - _omega_o[a]) * u[a]**2
+                                      * (- _z_inv_uo[a] - _z_o[a]
+                                         - _tau_o[a] * _y_max_o[a] * u[a] / 2))
         # Submerged on one side
-        _alpha_oo[cond_0 & ~cond_1] = _gamma_oo * u**2
-        _beta_oo[cond_0 & ~cond_1] = -_gamma_oo * u**2
-        _chi_oo[cond_0 & ~cond_1] = 0.0
+        b = (cond_0 & ~cond_1)
+        _alpha_oo[b] = _gamma_oo[b] * u[b]**2
+        _beta_oo[b] = -_gamma_oo[b] * u[b]**2
+        _chi_oo[b] = 0.0
         # Weir flow on one side
-        _alpha_oo[~cond_0 & cond_2] = _gamma_oo * _omega_o * (-1)**(1 - _omega_o) / _y_max_o**2
-        _beta_oo[~cond_0 & cond_2] = _gamma_oo * (1 - _omega_o) * (-1)**(1 - _omega_o) / _y_max_o**2
-        _chi_oo[~cond_0 & cond_2] = (_gamma_oo * (-1)**(1 - _omega_o)
-                                      * (- _z_inv_uo - _z_o)) / _y_max_o**2
+        c = (~cond_0 & cond_2)
+        _alpha_oo[c] = _gamma_oo[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2
+        _beta_oo[c] = _gamma_oo[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2
+        _chi_oo[c] = (_gamma_oo[c] * (-1)**(1 - _omega_o[c])
+                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2
         # No flow
-        _alpha_oo[~cond_0 & ~cond_2] = 0.0
-        _beta_oo[~cond_0 & ~cond_2] = 0.0
-        _chi_oo[~cond_0 & ~cond_2] = 0.0
+        d = (~cond_0 & ~cond_2)
+        _alpha_oo[d] = 0.0
+        _beta_oo[d] = 0.0
+        _chi_oo[d] = 0.0
         # Compute flow
         _Qo_next = (-1)**(1 - _omega_o) * np.sqrt(np.abs(
-                _alpha_oo * H_j[_J_uo] + _beta_oo * H_j[_J_do] + _chi_oo))
+                _alpha_oo * _H_uo + _beta_oo * _H_do + _chi_oo))
         # Export instance variables
         self._Qo = _Qo_next
+
+    def solve_weir_flows(self, u=None):
+        # Import instance variables
+        H_j = self.H_j
+        _z_inv_j = self._z_inv_j
+        _J_uw = self._J_uw
+        _J_dw = self._J_dw
+        _z_w = self._z_w
+        _y_max_w = self._y_max_w
+        _Qw = self._Qw
+        _Cwr = self._Cwr
+        _Cwt = self._Cwt
+        _s_w = self._s_w
+        _L_w = self._L_w
+        _alpha_ww = np.zeros(self.n_w, dtype=float)
+        _beta_ww = np.zeros(self.n_w, dtype=float)
+        _chi_ww = np.zeros(self.n_w, dtype=float)
+        _Hw = self._Hw
+        if u is None:
+            u = np.zeros(self.n_w, dtype=float)
+        # Specify orifice heads at previous timestep
+        _H_uw = H_j[_J_uw]
+        _H_dw = H_j[_J_dw]
+        _z_inv_uw = _z_inv_j[_J_uw]
+        # Create indicator functions
+        _omega_w = (_H_uw >= _H_dw).astype(float)
+        # Create conditionals
+        cond_0 = (_omega_w * _H_uw + (1 - _omega_w) * _H_dw >
+                  _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+        cond_1 = ((1 - _omega_w) * _H_uw + _omega_w * _H_dw >
+                  _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+        # Effective heads
+        a = (cond_0 & cond_1)
+        b = (cond_0 & ~cond_1)
+        c = (~cond_0)
+        _Hw[a] = _H_uw[a] - _H_dw[a]
+        _Hw[b] = (_omega_w[b] * _H_uw[b] + (1 - _omega_w[b]) * _H_dw[b]
+                     + (-_z_inv_uw[b] - _z_w[b] - (1 - u[b]) * _y_max_w[b]))
+        _Hw[c] = 0.0
+        _Hw = np.abs(_Hw)
+        # Compute universal coefficient
+        _gamma_ww = (_Cwr * _L_w * _Hw + _Cwt * _s_w * _Hw**2)**2
+        # Compute flow
+        _Qw_next = (-1)**(1 - _omega_w) * np.sqrt(_gamma_ww * _Hw)
+        # Export instance variables
+        self._Qw = _Qw_next
 
     def solve_superlink_depths(self):
         # Import instance variables
@@ -2389,9 +2607,12 @@ class SuperLink():
         self._dx_ik = dxdx.ravel()
         self._fixed = _fixed
 
-    def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False, implicit=True):
+    def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, dt=None,
+             first_time=False, implicit=True):
         _method = self._method
         _exit_hydraulics = self._exit_hydraulics
+        if not implicit:
+            raise NotImplementedError('Not implemented')
         self.link_hydraulic_geometry()
         self.upstream_hydraulic_geometry()
         self.downstream_hydraulic_geometry()
@@ -2406,14 +2627,18 @@ class SuperLink():
         self.superlink_downstream_head_coefficients()
         self.superlink_flow_coefficients()
         if self.orifices is not None:
-            self.orifice_flow_coefficients(u=u)
-        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in, u=u,
+            self.orifice_flow_coefficients(u=u_o)
+        if self.weirs is not None:
+            self.weir_flow_coefficients(u=u_w)
+        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
-        self.solve_sparse_matrix(u=u, implicit=implicit)
+        self.solve_sparse_matrix(implicit=implicit)
         self.solve_superlink_flows()
         if self.orifices is not None:
-            self.solve_orifice_flows(u=u)
+            self.solve_orifice_flows(u=u_o)
+        if self.weirs is not None:
+            self.solve_weir_flows(u=u_w)
         self.solve_superlink_depths()
         if _exit_hydraulics:
             self.exit_conditions()
