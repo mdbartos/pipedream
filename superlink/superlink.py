@@ -1669,22 +1669,22 @@ class SuperLink():
         # Fill coefficient arrays
         # Submerged on both sides
         a = (cond_0 & cond_1)
-        _alpha_o[a] = _gamma_o[a] * _omega_o[a] * (-1)**(1 - _omega_o[a]) * u[a]**2
-        _beta_o[a] = _gamma_o[a] * (1 - _omega_o[a]) * (-1)**(1 - _omega_o[a]) * u[a]**2
-        _chi_o[a] = (_gamma_o[a] * (-1)**(1 - _omega_o[a]) * u[a]**2
-                                      * (- _z_inv_uo[a] - _z_o[a] -
-                                         _tau_o[a] * _y_max_o[a] * u[a] / 2))
+        _alpha_o[a] = _gamma_o[a] * u[a]**2
+        _beta_o[a] = -_gamma_o[a] * u[a]**2
+        _chi_o[a] = 0.0
         # Submerged on one side
         b = (cond_0 & ~cond_1)
-        _alpha_o[b] = _gamma_o[b] * u[b]**2
-        _beta_o[b] = -_gamma_o[b] * u[b]**2
-        _chi_o[b] = 0.0
-        # Weir flow on one side
+        _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+                                      * (- _z_inv_uo[b] - _z_o[b] -
+                                         _tau_o[b] * _y_max_o[b] * u[b] / 2))
+        # Weir flow
         c = (~cond_0 & cond_2)
-        _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2
-        _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2
+        _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+        _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
         _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
-                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2
+                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
         # No flow
         d = (~cond_0 & ~cond_2)
         _alpha_o[d] = 0.0
@@ -2094,22 +2094,22 @@ class SuperLink():
         # Fill coefficient arrays
         # Submerged on both sides
         a = (cond_0 & cond_1)
-        _alpha_oo[a] = _gamma_oo[a] * _omega_o[a] * (-1)**(1 - _omega_o[a]) * u[a]**2
-        _beta_oo[a] = _gamma_oo[a] * (1 - _omega_o[a]) * (-1)**(1 - _omega_o[a]) * u[a]**2
-        _chi_oo[a] = (_gamma_oo[a] * (-1)**(1 - _omega_o[a]) * u[a]**2
-                                      * (- _z_inv_uo[a] - _z_o[a]
-                                         - _tau_o[a] * _y_max_o[a] * u[a] / 2))
+        _alpha_oo[a] = _gamma_oo[a] * u[a]**2
+        _beta_oo[a] = -_gamma_oo[a] * u[a]**2
+        _chi_oo[a] = 0.0
         # Submerged on one side
         b = (cond_0 & ~cond_1)
-        _alpha_oo[b] = _gamma_oo[b] * u[b]**2
-        _beta_oo[b] = -_gamma_oo[b] * u[b]**2
-        _chi_oo[b] = 0.0
+        _alpha_oo[b] = _gamma_oo[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _beta_oo[b] = _gamma_oo[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _chi_oo[b] = (_gamma_oo[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+                                      * (- _z_inv_uo[b] - _z_o[b]
+                                         - _tau_o[b] * _y_max_o[b] * u[b] / 2))
         # Weir flow on one side
         c = (~cond_0 & cond_2)
-        _alpha_oo[c] = _gamma_oo[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2
-        _beta_oo[c] = _gamma_oo[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2
+        _alpha_oo[c] = _gamma_oo[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+        _beta_oo[c] = _gamma_oo[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
         _chi_oo[c] = (_gamma_oo[c] * (-1)**(1 - _omega_o[c])
-                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2
+                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
         # No flow
         d = (~cond_0 & ~cond_2)
         _alpha_oo[d] = 0.0

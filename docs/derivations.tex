@@ -940,5 +940,234 @@ For the example network in Ji (1998):
   \end{bmatrix}
 \end{equation}
 
+\section{Representing orifices}
+
+For orifices, six different flow cases are possible:
+
+\begin{itemize}
+\item Side-mounted orifice with both sides submerged
+\item Side-mounted orifice with one side submerged
+\item Side-mounted orifice with weir-like flow
+\item Bottom-mounted orifice with both sides submerged
+\item Bottom-mounted orifice with one side submerged
+\item No-flow condition
+\end{itemize}
+
+The governing equations for each condition are presented here:
+
+\subsubsection*{Side-mounted orifice with both sides submerged}
+
+This flow regime occurs when both of the following conditions are met:
+
+\begin{itemize}
+\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o + u y_{max,o}$
+\item $\min(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o + \frac{u y_{max,o}}{2}$
+\end{itemize}
+
+The effective head is computed as:
+
+\begin{equation}
+  H_{e,o} = | H_{uo} - H_{do} |
+\end{equation}
+
+And the flow is computed as:
+
+\begin{equation}
+ Q_o = \text{sgn}(H_{uo} - H_{do}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
+\end{equation}
+
+\subsubsection*{Side-mounted orifice with one side submerged}
+
+This flow regime occurs when both of the following conditions are met:
+
+\begin{itemize}
+\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o + u y_{max,o}$
+\item $\min(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) < z_o + \frac{u y_{max,o}}{2}$
+\end{itemize}
+
+The effective head is computed as:
+
+\begin{equation}
+  H_{e,o} = \cdot \bigl[ \max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,do}) - (z_o + \frac{u y_{max,o}}{2}) \bigr]
+\end{equation}
+
+And the flow is computed as:
+
+\begin{equation}
+ Q_o = \text{sgn}(H_{uo} - H_{do}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
+\end{equation}
+
+\subsubsection*{Side-mounted orifice with weir-like flow}
+
+This flow regime occurs when both of the following conditions are met:
+
+\begin{itemize}
+\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o$
+\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) < z_o + u y_{max,o}$
+\end{itemize}
+
+The effective head is computed as:
+
+\begin{equation}
+  H_{e,o} = \max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) - z_{o}
+\end{equation}
+
+And the flow is computed as:
+
+\begin{equation}
+ Q_o = \frac{C_o A_o \sqrt{g}}{u y_{max,o}} \sqrt{H_{e,o}}
+\end{equation}
+
+\subsubsection*{Bottom-mounted orifice with both sides submerged}
+
+This flow regime occurs when both of the following conditions are met:
+
+\begin{itemize}
+\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o$
+\item $\min(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o$
+\end{itemize}
+
+The effective head is computed as:
+
+\begin{equation}
+  H_{e,o} = | H_{uo} - H_{do} |
+\end{equation}
+
+And the flow is computed as:
+
+\begin{equation}
+ Q_o = \text{sgn}(H_{uo} - H_{do}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
+\end{equation}
+
+\subsubsection*{Bottom-mounted orifice with one side submerged}
+
+This flow regime occurs when both of the following conditions are met:
+
+\begin{itemize}
+\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o$
+\item $\min(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) < z_o$
+\end{itemize}
+
+The effective head is computed as:
+
+\begin{equation}
+  H_{e,o} = \cdot \bigl[ \max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,do}) - z_o \bigr]
+\end{equation}
+
+And the flow is computed as:
+
+\begin{equation}
+ Q_o = \text{sgn}(H_{uo} - H_{do}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
+\end{equation}
+
+\subsubsection*{No-flow condition}
+
+This flow regime occurs when the following condition is met:
+
+\begin{itemize}
+\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) \leq z_o$
+\end{itemize}
+
+In this case, the effective head and flow are both zero:
+
+\begin{equation}
+  H_{e,o} = 0
+\end{equation}
+
+\begin{equation}
+  Q_{o} = 0
+\end{equation}
+
+\subsection{Representing orifice equations in the solution matrix}
+
+Orifices can be represented in the solution matrix as follows.
+
+Define the following indicator functions:
+
+\begin{equation}
+  \Omega(H_{juo}, H_{jdo}) = 
+  \begin{cases}
+    1, & H_{juo} \geq H_{jdo} \\
+    0, & o/w
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+  \tau(o) = 
+  \begin{cases}
+    1, & \text{orifice $o$ is side-mounted} \\
+    0, & \text{orifice $o$ is bottom-mounted}
+  \end{cases}
+\end{equation}
+
+Similarly, define the following boolean-valued functions to represent the
+following flow conditions:
+
+\paragraph{Submerged on high-head side}
+
+\begin{equation}
+  \Theta_{o,1} = \Omega H_{uo} + (1 - \Omega) H_{do} > z_o + z_{inv,juo} + \tau u y_{max,o}
+\end{equation}
+
+\paragraph{Submerged on low-head side}
+
+\begin{equation}
+  \Theta_{o,2} = (1 - \Omega) H_{uo} + \Omega H_{do} > z_o + z_{inv,juo} + \frac{\tau u y_{max,o}}{2} 
+\end{equation}
+
+\paragraph{Above bottom rim on high-head side}
+
+\begin{equation}
+  \Theta_{o,3} = \Omega H_{uo} + (1 - \Omega) H_{do} > z_o + z_{inv,juo}
+\end{equation}
+
+The flow through an orifice can now be represented using the following
+linearized coefficient equation:
+
+\begin{equation}
+ Q_{o}^{t + \Delta t} = \alpha_{o} H_{uo}^{t + \Delta t} + \beta_{o} H_{do}^{t + \Delta t} + \chi_{o} 
+\end{equation}
+
+Where:
+
+% Should there be a 2 in the denominator of the second case?
+
+\begin{equation}
+  \alpha_{o} =
+  \begin{cases}
+   \gamma_o u^2, & \Theta_{o,1} \land \Theta_{o,2}\\
+   \gamma_o \Omega (-1)^{1 - \Omega} u^2, & \Theta_{o,1} \land \lnot \Theta_{o,2}\\
+   \frac{\gamma_o}{2 y_{max,o}^2} \Omega (-1)^{1 - \Omega}, & \lnot \Theta_{o,1} \land \Theta_{o,3} \\
+   0, & \lnot \Theta_{o,3}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+  \beta_{o} =
+  \begin{cases}
+   -\gamma_o u^2, & \Theta_{o,1} \land \Theta_{o,2}\\
+   \gamma_o (1 - \Omega) (-1)^{1 - \Omega} u^2, & \Theta_{o,1} \land \lnot \Theta_{o,2}\\
+   \frac{\gamma_o}{2 y_{max,o}^2} (1 - \Omega) (-1)^{1 - \Omega}, & \lnot \Theta_{o,1} \land \Theta_{o,3} \\
+   0, & \lnot \Theta_{o,3}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+  \chi_{o} =
+  \begin{cases}
+   0, & \Theta_{o,1} \land \Theta_{o,2}\\
+   \gamma_o (-1)^{1 - \Omega} (- z_{inv,uo} - z_o - \frac{\tau u y_{max,o}}{2}), & \Theta_{o,1} \land \lnot \Theta_{o,2} u^2\\
+   \frac{\gamma_o}{2 y_{max,o}^2} (- z_{inv,uo} - z_o), & \lnot \Theta_{o,1} \land \Theta_{o,3} \\
+   0, & \lnot \Theta_{o,3}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+ \gamma_o = \frac{2 g C_o^2 A_o^2}{|Q_o^t|} 
+\end{equation}
+
+These equations can be added to the solution matrix in much the same way as for the
+linearized superlink coefficients ($\alpha_{uk}, \beta_{uk}, \chi_{uk},
+\alpha_{dk}, \beta_{dk}, \chi_{dk}$).
 
 \end{document}
