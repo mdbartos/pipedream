@@ -64,13 +64,13 @@ Conservation of momentum:
 
 \section{Discretization of momentum}
 
-Starting with the conservation of momentum:
+Starting with the equation for conservation of momentum:
 
 \begin{equation}
   \frac{\partial Q}{\partial t} + \frac{\partial}{\partial x} (Q u) + g A \biggl(\frac{\partial h}{\partial x} - S_0 + S_f + S_L \biggr) = 0
 \end{equation}
 
-The following discretization scheme can be used:
+The following discretization scheme can be applied to link $ik$:
 
 \begin{equation}
   \begin{split}
@@ -189,6 +189,42 @@ Alternatively, assuming $u_{ik} < 0$ and $u_{i-1k} \approx u_{ik} \approx u_{i+1
     (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + (Q_{i+1k}^{t + \Delta t} - Q_{ik}^{t + \Delta t}) u_{I+1k} \\ + g A_{ik} (h_{I+1k}^{t + \Delta t} - h_{Ik}^{t + \Delta t}) + g A_{ik} (S_{f,ik} -
     g A_{ik} S_{o,ik} \Delta x_{ik} + S_{L,ik}) \Delta x_{ik}
   \end{split}
+\end{equation}
+
+\section{Discretization of continuity}
+
+Starting with the continuity equation:
+
+\begin{equation}
+  \frac{\partial A}{\partial t} + \frac{\partial Q}{\partial x} = q_0
+\end{equation}
+
+The following discretization scheme can be applied to junction $Ik$:
+
+\begin{equation}
+ Q_{ik}^{t + \Delta t} - Q_{i - 1k}^{t + \Delta t} + \biggl( \frac{B_{ik} \Delta x_{ik}}{2} + \frac{B_{i - 1k} \Delta x_{i - 1k}}{2} + A_{s,Ik} \biggr) \cdot \frac{h_{Ik}^{t + \Delta t} - h_{Ik}^t}{\Delta t} = Q_{0,Ik}
+\end{equation}
+
+Through substitution, the discretized continuity equation can be represented as follows: 
+
+\begin{equation}
+  \boxed{
+ Q_{ik}^{t + \Delta t} - Q_{i - 1k}^{t + \Delta t} + E_{Ik} h_{Ik}^{t + \Delta t} = D_{Ik}
+ }
+\end{equation}
+
+Where:
+
+\begin{equation}
+  \boxed{
+ E_{Ik} = \frac{1}{\Delta t} \biggl( \frac{B_{ik} \Delta x_{ik}}{2} + \frac{B_{i - 1k} \Delta x_{i - 1k}}{2} + A_{s,Ik}  \biggr) 
+ }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+ D_{Ik} = Q_{0,Ik} + \frac{h_{Ik}^t}{\Delta t} \biggl( \frac{B_{ik} \Delta x_{ik}}{2} + \frac{B_{i - 1k} \Delta x_{i - 1k}}{2} + A_{s,Ik}  \biggr) 
+ }
 \end{equation}
 
 \section{Recurrence relationships}
