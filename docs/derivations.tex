@@ -64,7 +64,13 @@ Conservation of momentum:
 
 \section{Discretization of momentum}
 
-Discretizing the momentum equation:
+Starting with the conservation of momentum:
+
+\begin{equation}
+  \frac{\partial Q}{\partial t} + \frac{\partial}{\partial x} (Q u) + g A \biggl(\frac{\partial h}{\partial x} - S_0 + S_f + S_L \biggr) = 0
+\end{equation}
+
+The following discretization scheme can be used:
 
 \begin{equation}
   \begin{split}
@@ -79,31 +85,42 @@ Discretizing the momentum equation:
 This equation can be written in terms of the following coefficient equation:
 
 \begin{equation}
+  \boxed{
   \begin{split}
     a_{ik} Q_{i - 1k}^{t + \Delta t} + b_{ik} Q_{ik}^{t + \Delta t} + c_{ik} Q_{i + 1k}^{t + \Delta t} =
     P_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
   \end{split}
+  }
 \end{equation}
 
 Where:
 
 \begin{equation}
+  \boxed{
   a_{ik} = - \max(u_{Ik}, 0)
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   c_{ik} = - \max(-u_{I+1k}, 0)
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   b_{ik} = \frac{\Delta x_{ik}}{\Delta t} + \frac{g n_{ik}^2 |Q_{ik}^t| \Delta x_{ik}}{A_{ik} R_{ik}^{4/3}} + \frac{A_{ik} |Q_{ik}^t|}{A_{cik}^2 C_{ik}^2} - a_{ik} - c_{ik}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   P_{ik} = Q_{ik} \frac{\Delta x_{ik}}{\Delta t} + g A_{ik} S_{o,ik} \Delta x_{ik}
+  }
 \end{equation}
 
-Substituting the coefficients:
+This coefficient equation can be verified by substituting the expressions for
+the coefficients:
 
 \begin{equation}
   \begin{split}
@@ -799,71 +816,70 @@ Where:
   \gamma_{dk} = \frac{|Q_{dk}^{t}|}{2 C_{dk}^2 A_{dk}^2 g}
 \end{align}
 
-\subsection{Boundary conditions using Ji's method}
+% \subsection{Boundary conditions using Ji's method}
 
-In a similar manner, one can define the superlink coefficients using the
-linearized boundary conditions from Ji (1998):
+% In a similar manner, one can define the superlink coefficients using the
+% linearized boundary conditions from Ji (1998):
 
-\begin{equation}
- h_{uk}^{t + \Delta t} = \kappa_{uk} Q_{uk}^{t + \Delta t} + \lambda_{uk} H_{juk}^{t + \Delta t} + \mu_{uk} 
-\end{equation}
+% \begin{equation}
+%  h_{uk}^{t + \Delta t} = \kappa_{uk} Q_{uk}^{t + \Delta t} + \lambda_{uk} H_{juk}^{t + \Delta t} + \mu_{uk} 
+% \end{equation}
 
-\begin{equation}
- h_{dk}^{t + \Delta t} = \kappa_{dk} Q_{dk}^{t + \Delta t} + \lambda_{dk} H_{jdk}^{t + \Delta t} + \mu_{dk} 
-\end{equation}
+% \begin{equation}
+%  h_{dk}^{t + \Delta t} = \kappa_{dk} Q_{dk}^{t + \Delta t} + \lambda_{dk} H_{jdk}^{t + \Delta t} + \mu_{dk} 
+% \end{equation}
 
-\begin{equation}
-  \kappa_{uk} = \frac{2 A_{uk} \Delta H_{uk}}{Q_{uk} (2 \Delta H_{uk} B_{uk} - A_{uk})}
-\end{equation}
+% \begin{equation}
+%   \kappa_{uk} = \frac{2 A_{uk} \Delta H_{uk}}{Q_{uk} (2 \Delta H_{uk} B_{uk} - A_{uk})}
+% \end{equation}
 
-\begin{equation}
-  \lambda_{uk} = - \frac{A_{uk}}{2 \Delta H_{uk} B_{uk} - A_{uk}}
-\end{equation}
+% \begin{equation}
+%   \lambda_{uk} = - \frac{A_{uk}}{2 \Delta H_{uk} B_{uk} - A_{uk}}
+% \end{equation}
 
-\begin{equation}
-  \mu_{uk} = \frac{A_{uk} (H_{juk} - h_{uk})}{2 \Delta H_{uk} B_{uk} - A_{uk}}
-\end{equation}
+% \begin{equation}
+%   \mu_{uk} = \frac{A_{uk} (H_{juk} - h_{uk})}{2 \Delta H_{uk} B_{uk} - A_{uk}}
+% \end{equation}
 
-\begin{equation}
-  \kappa_{dk} = \frac{2 A_{dk} \Delta H_{dk}}{Q_{dk} (2 \Delta H_{dk} B_{dk} + A_{dk})}
-\end{equation}
+% \begin{equation}
+%   \kappa_{dk} = \frac{2 A_{dk} \Delta H_{dk}}{Q_{dk} (2 \Delta H_{dk} B_{dk} + A_{dk})}
+% \end{equation}
 
-\begin{equation}
-  \lambda_{dk} = \frac{A_{dk}}{Q_{dk} (2 \Delta H_{dk} B_{dk} + A_{dk}}
-\end{equation}
+% \begin{equation}
+%   \lambda_{dk} = \frac{A_{dk}}{Q_{dk} (2 \Delta H_{dk} B_{dk} + A_{dk}}
+% \end{equation}
 
-\begin{equation}
-  \mu_{dk} = \frac{A_{dk} (h_{dk} - H_{jdk})}{2 \Delta H_{dk} B_{dk} + A_{uk}}
-\end{equation}
+% \begin{equation}
+%   \mu_{dk} = \frac{A_{dk} (h_{dk} - H_{jdk})}{2 \Delta H_{dk} B_{dk} + A_{uk}}
+% \end{equation}
 
-\begin{equation}
-  \alpha_{uk} = \frac{(1 - U_{Nk} \kappa_{dk}) X_{1k} \lambda_{uk} + \kappa_{dk} \lambda_{uk} Z_{1k} W_{Nk}}{D_k^{*}}
-\end{equation}
+% \begin{equation}
+%   \alpha_{uk} = \frac{(1 - U_{Nk} \kappa_{dk}) X_{1k} \lambda_{uk} + \kappa_{dk} \lambda_{uk} Z_{1k} W_{Nk}}{D_k^{*}}
+% \end{equation}
 
-\begin{equation}
-  \beta_{uk} = \frac{(1 - U_{Nk} \kappa_{dk}) X_{1k} \lambda_{uk} + \kappa_{dk} \lambda_{uk} Z_{1k} W_{Nk}}{D_k^{*}}
-\end{equation}
+% \begin{equation}
+%   \beta_{uk} = \frac{(1 - U_{Nk} \kappa_{dk}) X_{1k} \lambda_{uk} + \kappa_{dk} \lambda_{uk} Z_{1k} W_{Nk}}{D_k^{*}}
+% \end{equation}
 
-\begin{equation}
-  \chi_{uk} = \frac{(1 - U_{Nk} \kappa_{dk}) (X_{1k} \mu_{uk} + Z_{1k} \mu_{dk} + Y_{1k}) + (Z_{1k} \kappa_{dk})(W_{Nk} \mu_{uk} + U_{Nk} \mu_{dk} + V_{Nk})}{D_k^{*}}
-\end{equation}
+% \begin{equation}
+%   \chi_{uk} = \frac{(1 - U_{Nk} \kappa_{dk}) (X_{1k} \mu_{uk} + Z_{1k} \mu_{dk} + Y_{1k}) + (Z_{1k} \kappa_{dk})(W_{Nk} \mu_{uk} + U_{Nk} \mu_{dk} + V_{Nk})}{D_k^{*}}
+% \end{equation}
 
-\begin{equation}
-  \alpha_{dk} = \frac{(1 - X_{1k} \kappa_{uk}) W_{Nk} \lambda_{uk} + \kappa_{uk} \lambda_{uk} W_{Nk} X_{1k}}{D_k^{*}}
-\end{equation}
+% \begin{equation}
+%   \alpha_{dk} = \frac{(1 - X_{1k} \kappa_{uk}) W_{Nk} \lambda_{uk} + \kappa_{uk} \lambda_{uk} W_{Nk} X_{1k}}{D_k^{*}}
+% \end{equation}
 
-\begin{equation}
-  \beta_{dk} = \frac{(1 - X_{1k} \kappa_{uk}) U_{Nk} \lambda_{dk} + \kappa_{uk} \lambda_{dk} W_{Nk} Z_{1k}}{D_k^{*}}
-\end{equation}
+% \begin{equation}
+%   \beta_{dk} = \frac{(1 - X_{1k} \kappa_{uk}) U_{Nk} \lambda_{dk} + \kappa_{uk} \lambda_{dk} W_{Nk} Z_{1k}}{D_k^{*}}
+% \end{equation}
 
-\begin{equation}
-  \chi_{dk} = \frac{(1 - X_{1k} \kappa_{uk}) (W_{Nk} \mu_{uk} + U_{Nk} \mu_{dk} + V_{Nk}) + (W_{Nk} \kappa_{uk})(X_{1k} \mu_{uk} + Z_{1k} \mu_{dk} + Y_{1k})}{D_k^{*}}
-\end{equation}
+% \begin{equation}
+%   \chi_{dk} = \frac{(1 - X_{1k} \kappa_{uk}) (W_{Nk} \mu_{uk} + U_{Nk} \mu_{dk} + V_{Nk}) + (W_{Nk} \kappa_{uk})(X_{1k} \mu_{uk} + Z_{1k} \mu_{dk} + Y_{1k})}{D_k^{*}}
+% \end{equation}
 
-\begin{equation}
-  D_k^* = (X_{1k} \kappa_{uk} - 1)(U_{Nk} \kappa_{dk} - 1) - (Z_{1k} \kappa_{dk})(W_{Nk} \kappa_{uk})
-\end{equation}
-
+% \begin{equation}
+%   D_k^* = (X_{1k} \kappa_{uk} - 1)(U_{Nk} \kappa_{dk} - 1) - (Z_{1k} \kappa_{dk})(W_{Nk} \kappa_{uk})
+% \end{equation}
 
 \section{Forming the solution matrix}
 
@@ -903,27 +919,83 @@ Rearranging:
 
 \begin{equation}
   \begin{split}
-    \frac{A_{sj} (H_j^t)}{\Delta t} + \sum_{l=1}^{NBDj} \chi_{dk_l} - \sum_{m=1}^{NBUj} \chi_{uk_m} + Q_{o,j} \\
+    \biggl( \frac{A_{sj}}{\Delta t} + \sum_{m=1}^{NBUj} \alpha_{uk_m} - \sum_{l=1}^{NBDj} \beta_{dk_l} \biggr) H_j^{t + \Delta t} 
+    - \sum_{l=1}^{NBDj} \alpha_{dk_l} H_{juk_l}^{t + \Delta t} + \sum_{m=1}^{NBUj} \beta_{uk_m} H_{jdk_m}^{t + \Delta t} \\
     =
-    \biggl( \frac{A_{sj}}{\Delta t} + \sum_{m=1}^{NBUj} \alpha_{uk_m} - \sum_{l=1}^{NBDj} \beta_{dk_l} \biggr) H_j^{t + \Delta t} \\
-    - \sum_{l=1}^{NBDj} \alpha_{dk_l} H_{juk_l}^{t + \Delta t} + \sum_{m=1}^{NBUj} \beta_{uk_m} H_{jdk_m}^{t + \Delta t}
+    \frac{A_{sj} (H_j^t)}{\Delta t} + \sum_{l=1}^{NBDj} \chi_{dk_l} - \sum_{m=1}^{NBUj} \chi_{uk_m} + Q_{o,j}
   \end{split}
 \end{equation}
 
-For the example network in Ji (1998):
+The continuity equation for each superjunction can thus be redefined in terms of
+the following coefficients.
+
+\begin{equation}
+ \boxed{
+ F_{j,j} H_{j}^{t + \Delta t} + \sum_{\ell=1}^{NBDj} \Phi_{j,juk_\ell} H_{juk_\ell}^{t + \Delta t} + \sum_{m=1}^{NBUj} \Psi_{j,jdk_m} H_{jdk_m}^{t + \Delta t} = G_j
+ }
+\end{equation}
+
+Where:
+
+\begin{equation}
+  \boxed{
+  F_{j,j} = \frac{A_{sj}}{\Delta t} - \sum_{\ell=1}^{NBDj} \beta_{dk_\ell} + \sum_{m=1}^{NBUj} \alpha_{uk_m}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  \Phi_{j,juk_\ell} = - \alpha_{dk_\ell}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  \Psi_{j,jdk_m} = \beta_{uk_m}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  G_j = \frac{A_{sj}}{\Delta t} H_j^t + Q_{0,j} - \sum_{\ell=1}^{NBDj} \chi_{uk_\ell} + \sum_{m=1}^{NBUj} \chi_{dk_m}
+  }
+\end{equation}
+
+For the example network in Ji (1998), the sparse matrix equation is given as:
 
 \begin{equation}
   A x = b
 \end{equation}
 
 \begin{equation}
+  \begin{bmatrix}
+   F_{1,1} & \Psi_{1,2} & 0 & 0 & 0 & 0 \\
+   \Phi_{2,1} & \Psi_{2,2} & \Psi_{2,3} & 0 & \Psi_{2,5} & 0 \\
+   0 & \Phi{3,2} & F_{3,3} & \Psi_{3,4} & \Phi_{3,5} & 0 \\
+   0 & 0 & 0 & 1 & 0 & 0 \\
+   0 & \Phi_{5,2} & \Psi_{5,3} & 0 & F_{5,5} & \Psi_{5,6} \\
+   0 & 0 & 0 & 0 & 0 & 1 \\
+  \end{bmatrix}
+  \begin{bmatrix}
+    H_{1}^{t + \Delta t} \\ H_{2}^{t + \Delta t} \\ H_{3}^{t + \Delta t} \\ H_{4}^{t + \Delta t} \\
+    H_{5}^{t + \Delta t} \\ H_{6}^{t + \Delta t}
+  \end{bmatrix}
+  =
+  \begin{bmatrix}
+   G_1 \\ G_2 \\ G_3 \\ G_4 \\ G_5 \\ G_6 
+  \end{bmatrix}
+\end{equation}
+
+Expanding the coefficients:
+
+\begin{equation}
   A = 
   \begin{bmatrix}
-   ( \frac{A_{s0}}{\Delta t} + \alpha_{u0} ) & \beta_{u0} & 0 & 0 & 0 & 0 \\ 
-   - \alpha_{d0} & ( \frac{A_{s1}}{\Delta t} + \alpha_{u1} + \alpha_{u3} - \beta_{d0} ) & \beta_{u1} & 0 & \beta_{u3} & 0 \\
-   0 & - \alpha_{d1} & ( \frac{A_{s2}}{\Delta t} + \alpha_{u2} - \beta_{d1} - \beta_{d5} ) & \beta_{u2} & - \alpha_{d5} & 0 \\
+   ( \frac{A_{s1}}{\Delta t} + \alpha_{u1} ) & \beta_{u1} & 0 & 0 & 0 & 0 \\ 
+   - \alpha_{d1} & ( \frac{A_{s2}}{\Delta t} + \alpha_{u2} + \alpha_{u4} - \beta_{d1} ) & \beta_{u2} & 0 & \beta_{u4} & 0 \\
+   0 & - \alpha_{d2} & ( \frac{A_{s3}}{\Delta t} + \alpha_{u3} - \beta_{d2} - \beta_{d6} ) & \beta_{u3} & - \alpha_{d6} & 0 \\
    0 & 0 & 0 & 1 & 0 & 0 \\
-   0 & - \alpha_{d3} & \beta_{u5} & 0 & ( \frac{A_{s4}}{\Delta t} + \alpha_{u4} + \alpha_{u5} - \beta_{d3} ) & \beta_{u4} \\
+   0 & - \alpha_{d4} & \beta_{u6} & 0 & ( \frac{A_{s5}}{\Delta t} + \alpha_{u5} + \alpha_{u6} - \beta_{d4} ) & \beta_{u5} \\
    0 & 0 & 0 & 0 & 0 & 1 \\
   \end{bmatrix}
 \end{equation}
@@ -931,12 +1003,12 @@ For the example network in Ji (1998):
 \begin{equation}
   b = 
   \begin{bmatrix}
-    \frac{A_{s0} H_0^t}{\Delta t} - \chi_{u0} + Q_{o0} \\
-    \frac{A_{s1} H_1^t}{\Delta t} + \chi_{d0} - (\chi_{u1} + \chi_{u3}) + Q_{o1} \\
-    \frac{A_{s2} H_2^t}{\Delta t} + (\chi_{d1} + \chi_{d5}) - \chi_{u2} + Q_{02} \\
-    H_{3,bc} \\
-    \frac{A_{s4} H_4^t}{\Delta t} + \chi_{d3} - (\chi_{u4} + \chi_{u5}) + Q_{04} \\
-    H_{5,bc}
+    \frac{A_{s1} H_1^t}{\Delta t} - \chi_{u1} + Q_{0,1} \\
+    \frac{A_{s2} H_2^t}{\Delta t} + \chi_{d1} - (\chi_{u2} + \chi_{u4}) + Q_{0,2} \\
+    \frac{A_{s3} H_3^t}{\Delta t} + (\chi_{d2} + \chi_{d6}) - \chi_{u3} + Q_{0,3} \\
+    H_{4,bc} \\
+    \frac{A_{s5} H_5^t}{\Delta t} + \chi_{d4} - (\chi_{u5} + \chi_{u6}) + Q_{0,5} \\
+    H_{6,bc}
   \end{bmatrix}
 \end{equation}
 
