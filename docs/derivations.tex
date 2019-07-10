@@ -1100,25 +1100,37 @@ Define the following indicator functions:
   \end{cases}
 \end{equation}
 
-Similarly, define the following boolean-valued functions to represent the
+Similarly, define boolean-valued functions to represent the
 following flow conditions:
 
 \paragraph{Submerged on high-head side}
 
 \begin{equation}
-  \Theta_{o,1} = \Omega H_{uo} + (1 - \Omega) H_{do} > z_o + z_{inv,juo} + \tau u y_{max,o}
+  \Theta_{o,1} =
+  \begin{cases}
+    1, &   \Omega H_{uo} + (1 - \Omega) H_{do} > z_o + z_{inv,juo} + \tau u y_{max,o} \\
+    0, & o/w
+  \end{cases}
 \end{equation}
 
 \paragraph{Submerged on low-head side}
 
 \begin{equation}
-  \Theta_{o,2} = (1 - \Omega) H_{uo} + \Omega H_{do} > z_o + z_{inv,juo} + \frac{\tau u y_{max,o}}{2} 
+  \Theta_{o,2} =
+  \begin{cases}
+    1, & (1 - \Omega) H_{uo} + \Omega H_{do} > z_o + z_{inv,juo} + \frac{\tau u y_{max,o}}{2} \\
+    0, & o/w
+  \end{cases}
 \end{equation}
 
 \paragraph{Above bottom rim on high-head side}
 
 \begin{equation}
-  \Theta_{o,3} = \Omega H_{uo} + (1 - \Omega) H_{do} > z_o + z_{inv,juo}
+  \Theta_{o,3} = 
+  \begin{cases}
+    1, & \Omega H_{uo} + (1 - \Omega) H_{do} > z_o + z_{inv,juo} \\
+    0, & o/w
+  \end{cases}
 \end{equation}
 
 The flow through an orifice can now be represented using the following
@@ -1166,8 +1178,189 @@ Where:
  \gamma_o = \frac{2 g C_o^2 A_o^2}{|Q_o^t|} 
 \end{equation}
 
-These equations can be added to the solution matrix in much the same way as for the
+These equations can be added to the solution matrix in much the same way as the
 linearized superlink coefficients ($\alpha_{uk}, \beta_{uk}, \chi_{uk},
 \alpha_{dk}, \beta_{dk}, \chi_{dk}$).
+
+\section*{Representing weirs}
+
+This section discusses the governing equations for weirs, and explains how weirs
+can be incorporated into the solution matrix. Only transverse weirs will be considered.
+
+First, without loss of generality, assume all weirs can be represented as
+trapezoidal weirs (given that both rectangular and triangular weirs are special
+cases of the trapezoidal weir).
+
+The flow through a trapezoidal weir is the sum of the flow through the
+rectangular and triangular sections:
+
+\begin{align}
+  Q_w = Q_{wR} + Q_{wT} \\
+  = C_{wR} L_{w} H_{e,w}^{3/2} + C_{wT} s_{w} H_{e,w}^{5/2}
+\end{align}
+
+The flow at the next time step can thus be computed as:
+
+\begin{align}
+  Q_w^{t + \Delta t} = \frac{C_{wR} L_{w} H_{e,w} + C_{wT} s_{w} (H_{e,w}^{t})^2}{|Q_{w}^t|} H_{e,w}^{t + \Delta t}
+\end{align}
+
+\subsection*{Representing weirs in the solution matrix}
+
+Define the following indicator function:
+
+\begin{equation}
+  \Omega(H_{juw}, H_{jdw}) = 
+  \begin{cases}
+    1, & H_{juw} \geq H_{jdw} \\
+    0, & o/w
+  \end{cases}
+\end{equation}
+
+Similarly, define boolean-valued functions to represent the following flow conditions:
+
+\paragraph{Submerged on high-head side}
+
+\begin{equation}
+  \Theta_{w,1} =
+  \begin{cases}
+    1, &   \Omega H_{uw} + (1 - \Omega) H_{dw} > z_w + z_{inv,juw} + (1 - u) y_{max,w} \\
+    0, & o/w
+  \end{cases}
+\end{equation}
+
+\paragraph{Submerged on low-head side}
+
+\begin{equation}
+  \Theta_{w,2} =
+  \begin{cases}
+    1, & (1 - \Omega) H_{uw} + \Omega H_{dw} > z_o + z_{inv,juw} + (1 - u) y_{max,w} \\
+    0, & o/w
+  \end{cases}
+\end{equation}
+
+The flow through a weir can now be represented using the following linearized
+coefficient equation:
+
+\begin{equation}
+ Q_{w}^{t + \Delta t} = \alpha_{w} H_{uw}^{t + \Delta t} + \beta_{w} H_{dw}^{t + \Delta t} + \chi_{w} 
+\end{equation}
+
+Where:
+
+\begin{equation}
+  \alpha_{w} =
+  \begin{cases}
+   \gamma_w, & \Theta_{w,1} \land \Theta_{w,2}\\
+   \gamma_w \Omega (-1)^{1 - \Omega}, & \Theta_{w,1} \land \lnot \Theta_{w,2}\\
+   0, & \lnot \Theta_{w,1}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+  \beta_{o} =
+  \begin{cases}
+   -\gamma_w, & \Theta_{w,1} \land \Theta_{w,2}\\
+   \gamma_w (1 - \Omega) (-1)^{1 - \Omega}, & \Theta_{w,1} \land \lnot \Theta_{w,2}\\
+   0, & \lnot \Theta_{w,1}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+  \chi_{o} =
+  \begin{cases}
+   0, & \Theta_{w,1} \land \Theta_{w,2}\\
+   \gamma_w (-1)^{1 - \Omega} (- z_{inv,uw} - z_o - (1 - u) y_{max,w}), & \Theta_{w,1} \land \lnot \Theta_{w,2} u^2\\
+   0, & \lnot \Theta_{w,3}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+ \gamma_w = \frac{C_{wR} L_{w} H_{e,w} + C_{wT} s_{w} (H_{e,w}^{t})^2}{|Q_{w}^t|}
+\end{equation}
+
+\section{Representing pumps}
+
+The relationship between flow and head in a pump is usually defined by a pump
+curve. For this implementation, we assume that the flow/head relationship can be
+approximated by an ellipse centered at the origin.
+
+First, define the effective head for the pump as follows:
+
+\begin{equation}
+  \Delta H_{e,p} =
+  \begin{cases}
+    \Delta H_{max,p}, & H_{dp} - H_{up} > \Delta H_{max,p} \\
+    H_{dp} - H_{up}, & \Delta H_{min,p} < H_{dp} - H_{up} < \Delta H_{max,p} \\
+    \Delta H_{min,p}, & H_{dp} - H_{up} < \Delta H_{min,p}
+  \end{cases}
+\end{equation}
+
+Then, using the elliptical approximation, the flow through the pump can be
+represented as:
+
+\begin{equation}
+ Q_p = u \sqrt{a_q^2 \bigl( 1 - \frac{\Delta H_{e,p}^2}{a_h^2} \bigr)} 
+\end{equation}
+
+Define boolean-valued functions to represent the following flow conditions:
+
+\paragraph{Submerged inlet}
+
+\begin{equation}
+  \Theta_{p,1} =
+  \begin{cases}
+    1, & H_{up} \geq z_{inv,up} + z_p  \\
+    0, & o/w
+  \end{cases}
+\end{equation}
+
+\paragraph{Head in pump curve range}
+
+\begin{equation}
+  \Theta_{p,2} =
+  \begin{cases}
+    1, & \Delta H_{min,p} < H_{dp} - H_{up} < \Delta H_{max,p} \\
+    0, & o/w
+  \end{cases}
+\end{equation}
+
+The flow through a pump can now be represented using the following linearized
+coefficient equation:
+
+\begin{equation}
+ Q_{p}^{t + \Delta t} = \alpha_{p} H_{up}^{t + \Delta t} + \beta_{p} H_{dp}^{t + \Delta t} + \chi_{p} 
+\end{equation}
+
+\begin{equation}
+  \alpha_{p} =
+  \begin{cases}
+   \gamma_p u^2, & \Theta_{p,1} \land \Theta_{p,2}\\
+   0, & \Theta_{p,1} \land \lnot \Theta_{p,2}\\
+   0, & \lnot \Theta_{p,1}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+  \beta_{p} =
+  \begin{cases}
+   -\gamma_p u^2, & \Theta_{p,1} \land \Theta_{p,2}\\
+   0, & \Theta_{p,1} \land \lnot \Theta_{p,2}\\
+   0, & \lnot \Theta_{p,1}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+  \chi_{p} =
+  \begin{cases}
+   \frac{a_q^2}{|Q_p^t|}, & \Theta_{p,1} \land \Theta_{p,2}\\
+   u \sqrt{a_q^2 \bigl( 1 - \frac{(\Delta H_{e}^t)^2}{a_h^2} \bigr)}, & \Theta_{p,1} \land \lnot \Theta_{p,2}\\
+   0, & \lnot \Theta_{p,1}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+ \gamma_p = \frac{a_q^2 |H_{dp}^t - H_{up}^t|}{a_h^2 |Q_{p}^t|}
+\end{equation}
 
 \end{document}

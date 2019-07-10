@@ -1782,22 +1782,28 @@ class SuperLink():
         # Create conditionals
         assert (_dHp_min <= _dHp_max).all()
         _dHp = _H_dp - _H_up
+        cond_0 = _H_up > _z_inv_up + _z_p
+        cond_1 = (_dHp > _dHp_min) & (_dHp < _dHp_max)
         _dHp[_dHp > _dHp_max] = _dHp_max
         _dHp[_dHp < _dHp_min] = _dHp_min
-        cond_0 = _H_up > _z_inv_up + _z_p
         # Compute universal coefficients
         _gamma_p = self.gamma_p(_Qp, _dHp, _ap_q, _ap_h)
         # Fill coefficient arrays
         # Head in pump curve range
-        a = (cond_0)
+        a = (cond_0 & cond_1)
         _alpha_p[a] = _gamma_p[a] * u[a]**2
         _beta_p[a] = -_gamma_p[a] * u[a]**2
         _chi_p[a] = (_gamma_p[a] * _ap_h[a]**2 / np.abs(_dHp[a])) * u[a]**2
-        # Depth below inlet
-        b = (~cond_0)
+        # Head outside of pump curve range
+        b = (cond_0 & ~cond_1)
         _alpha_p[b] = 0.0
         _beta_p[b] = 0.0
-        _chi_p[b] = 0.0
+        _chi_p[b] = np.sqrt(np.maximum(_ap_q[b]**2 * (1 - _dHp[b]**2 / _ap_h[b]**2), 0.0)) * u[b]
+        # Depth below inlet
+        c = (~cond_0)
+        _alpha_p[c] = 0.0
+        _beta_p[c] = 0.0
+        _chi_p[c] = 0.0
         # Export instance variables
         self._alpha_p = _alpha_p
         self._beta_p = _beta_p
