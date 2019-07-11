@@ -23,28 +23,82 @@
     \hline
     Variable & Description \\
     \hline
-    $Q_{uk}$ & Discharge at upstream end of superlink k \\
-    $C_{uk}$ & Coefficient of discharge at upstream end of superlink k \\
-    $A_{uk}$ & Cross-sectional area of flow at upstream end of superlink k \\
-    $\Delta H_{uk}$ & Head difference at upstream end of superlink k \\
-    $H_{juk}$ & Head at junction upstream of superlink k (ground elevation + water depth) \\
-    $h_{uk}$ & Water depth at upstream of superlink k \\
-    $z_{inv, uk}$ & Invert elevation at upstream end of superlink k \\
-    $Q_{dk}$ & Discharge at downstream end of superlink k \\
-    $C_{dk}$ & Coefficient of discharge at downstream end of superlink k \\
-    $A_{dk}$ & Cross-sectional area of flow at downstream end of superlink k \\
-    $\Delta H_{dk}$ & Head difference at downstream end of superlink k \\
-    $H_{jdk}$ & Head at junction downstream of superlink k (ground elevation + water depth) \\
-    $h_{dk}$ & Water depth at downstream of superlink k \\
-    $z_{inv, dk}$ & Invert elevation at downstream end of superlink k \\
+    $a_{ik}, b_{ik}, c_{ik}, P_{ik}$ & Momentum coefficients \\
+    $a_h, q_q$ & Horizontal and vertical axis scaling factors for elliptical pump curve \\
+    $A_{o}$ & Maximum area of flow of orifice $o$\\
+    $A_{ik}$ & Cross-sectional area of flow at link $ik$ \\
+    $A_{dk}$ & Cross-sectional area of flow at downstream end of superlink $k$ \\
+    $A_{s,Ik}$ & Area of water surface at junction $Ik$ \\
+    $A_{sj}$ & Area of water surface at superjunction $j$ \\
+    $A_{uk}$ & Cross-sectional area of flow at upstream end of superlink $k$ \\
+    $B_{ik}$ & Top width of flow at link $ik$ \\
+    $C_{o}$ & Coefficient of discharge of orifice $o$ \\
+    $C_{dk}$ & Coefficient of discharge at downstream end of superlink $k$ \\
+    $C_{uk}$ & Coefficient of discharge at upstream end of superlink $k$ \\
+    $C_{wR}$ & Rectangular weir discharge coefficient for weir $w$ \\
+    $C_{wT}$ & Triangular weir discharge coefficient for weir $w$\\
+    $D_{Ik}, E_{Ik}$ & Continuity coefficients \\
+    $g$ & Acceleration due to gravity \\
+    $h_{dk}$ & Water depth at downstream of superlink $k$ \\
+    $h_{Ik}$ & Water depth at junction $Ik$ \\ 
+    $h_{uk}$ & Water depth at upstream of superlink $k$ \\
+    $H_j$ & Head at junction $j$ (invert elevation + water depth)\\
+    $H_{jdk}$ & Head at junction downstream of superlink $k$ (invert elevation + water depth) \\
+    $H_{juk}$ & Head at junction upstream of superlink $k$ (invert elevation + water depth) \\
+    $H_{juo}$ & Head at junction upstream of orifice $o$ (invert elevation + water depth) \\
+    $H_{jdo}$ & Head at junction downstream of orifice $o$ (invert elevation + water depth) \\
+    $\Delta H_{dk}$ & Head difference at downstream end of superlink $k$ \\
+    $\Delta H_{uk}$ & Head difference at upstream end of superlink $k$ \\
+    $L_w$ & Length of transverse weir $w$ \\
     $NBDj$ & Number of superlinks with downstream end attached to superjunction $j$ \\
     $NBUj$ & Number of superlinks with upstream end attached to superjunction $j$ \\
-    $H_j$ & Head at junction $j$ \\
-    $U_{Ik}, V_{Ik}, W_{Ik}$ & Coefficients \\
-    $X_{Ik}, Y_{Ik}, Z_{Ik}$ & Coefficients \\
+    $Q_{ik}$ & Discharge in link $ik$ \\
+    $Q_{Ik}$ & Discharge at junction $Ik$ \\
+    $Q_{o,Ik}$ & External flow input at junction $Ik$ \\
+    $Q_{o,j}$ & External flow input at superjunction $j$ \\
+    $Q_o$ & Discharge from orifice $o$ \\
+    $Q_{dk}$ & Discharge at downstream end of superlink $k$ \\
+    $Q_{uk}$ & Discharge at upstream end of superlink $k$ \\
     \hline
   \end{tabular}
 \end{table}
+
+\clearpage
+
+\begin{table}[!htb]
+  \centering
+  \begin{tabular}{l | l}
+    \hline
+    Variable & Description \\
+    \hline
+    $s_w$ & Side slope (run/rise) for triangular portion of weir $w$ \\
+    $S_{o,ik}$ & Channel bottom slope at link $ik$ \\
+    $S_{f,ik}$ & Friction head loss slope at link $ik$ \\
+    $S_{L,ik}$ & Local head loss slope at link $ik$ \\
+    $\Delta t$ & Time step \\
+    $u_{Ik}$ & Velocity of flow at junction $Ik$ \\
+    $U_{Ik}, V_{Ik}, W_{Ik}$ & Forward recurrence relation coefficients \\
+    $X_{Ik}, Y_{Ik}, Z_{Ik}$ & Backward recurrence relation coefficients \\
+    $\Delta x_{ik}$ & Length of link $ik$ \\
+    $y_{max,o}$ & Maximum height of orifice $o$ \\
+    $y_{max,w}$ & Maximum height of weir $w$ \\
+    $z_{inv, j}$ & Invert elevation of superjunction $j$ \\
+    $z_{inv, dk}$ & Invert elevation at downstream end of superlink $k$ \\
+    $z_{inv, uk}$ & Invert elevation at upstream end of superlink $k$ \\
+    $z_{inv, jdo}$ & Invert elevation of superjunction at downstream end of orifice $o$ \\
+    $z_{inv, juo}$ & Invert elevation of superjunction at upstream end of orifice $o$ \\
+    $z_{inv, jdp}$ & Invert elevation of superjunction at downstream end of pump $p$ \\
+    $z_{inv, jup}$ & Invert elevation of superjunction at upstream end of pump $p$ \\
+    $z_{inv, jdw}$ & Invert elevation of superjunction at downstream end of weir $w$ \\
+    $z_{inv, juw}$ & Invert elevation of superjunction at upstream end of weir $w$ \\
+    $z_o$ & Offset elevation of orifice $o$ \\
+    $z_p$ & Offset elevation of pump $p$ \\
+    $z_w$ & Offset elevation of weir $w$ \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\clearpage
 
 \section{Basic equations}
 
@@ -153,6 +207,8 @@ Assuming $u_{ik} > 0$ and $u_{i-1k} \approx u_{ik} \approx u_{i+1k}$:
   \end{split}
 \end{equation}
 
+Which further simplifies to the original combined mass and momentum balance:
+
 \begin{equation}
   \begin{split}
     (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + (Q_{ik}^{t + \Delta t} - Q_{i - 1k}^{t + \Delta t}) u_{Ik} \\ + g A_{ik} (h_{I+1k}^{t + \Delta t} - h_{Ik}^{t + \Delta t}) + g A_{ik} (S_{f,ik} -
@@ -183,6 +239,8 @@ Alternatively, assuming $u_{ik} < 0$ and $u_{i-1k} \approx u_{ik} \approx u_{i+1
     g A_{ik} S_{o,ik} \Delta x_{ik} + g A_{ik} (h_{Ik}^{t + \Delta t} - h_{I+1k}^{t + \Delta t})
   \end{split}
 \end{equation}
+
+Which simplifies to the original combined mass and momentum balance:
 
 \begin{equation}
   \begin{split}
@@ -217,21 +275,26 @@ Where:
 
 \begin{equation}
   \boxed{
- E_{Ik} = \frac{1}{\Delta t} \biggl( \frac{B_{ik} \Delta x_{ik}}{2} + \frac{B_{i - 1k} \Delta x_{i - 1k}}{2} + A_{s,Ik}  \biggr) 
+ D_{Ik} = Q_{0,Ik} + \frac{h_{Ik}^t}{\Delta t} \biggl( \frac{B_{ik} \Delta x_{ik}}{2} + \frac{B_{i - 1k} \Delta x_{i - 1k}}{2} + A_{s,Ik}  \biggr) 
  }
 \end{equation}
 
 \begin{equation}
   \boxed{
- D_{Ik} = Q_{0,Ik} + \frac{h_{Ik}^t}{\Delta t} \biggl( \frac{B_{ik} \Delta x_{ik}}{2} + \frac{B_{i - 1k} \Delta x_{i - 1k}}{2} + A_{s,Ik}  \biggr) 
+ E_{Ik} = \frac{1}{\Delta t} \biggl( \frac{B_{ik} \Delta x_{ik}}{2} + \frac{B_{i - 1k} \Delta x_{i - 1k}}{2} + A_{s,Ik}  \biggr) 
  }
 \end{equation}
 
 \section{Recurrence relationships}
 
+The SUPERLINK algorithm uses a series of recurrence relationships to embed
+channel dynamics into the solution matrix. In this section, the forward and
+backward recurrence relations for each superlink are derived.
+
 \subsection{Forward recurrence}
 
-Starting at the upstream end of superlink k:
+Starting at the upstream end of superlink k, the continuity and momentum
+equations can be written as:
 
 \begin{equation}
   Q_{2k}^{t + \Delta t} - Q_{1k}^{t + \Delta t} + E_{2k} h_{2k}^{t + \Delta t} = D_{2k}
@@ -242,7 +305,8 @@ Starting at the upstream end of superlink k:
    a_{1k} Q_{0k}^{t + \Delta t} + b_{1k} Q_{1k}^{t + \Delta t} + c_{1k} Q_{2k}^{t + \Delta t} = P_{1k} + g A_{1k} (h_{1k}^{t + \Delta t} - h_{2k}^{t + \Delta t})
 \end{equation}
 
-Assuming $Q_{0k}^{t + \Delta t} = Q_{1k}^{t + \Delta t}$:
+Assuming $Q_{0k}^{t + \Delta t} = Q_{1k}^{t + \Delta t}$, the continuity and
+momentum equations can be combined as follows:
 
 \begin{equation}
   a_{1k} Q_{1k}^{t + \Delta t} + b_{1k} Q_{1k}^{t + \Delta t} + c_{1k} (Q_{1k}^{t + \Delta t} - E_{2k} h_{2k}^{t + \Delta t} + D_{2k}) = P_{1k} + g A_{1k} (h_{1k}^{t + \Delta t} - h_{2k}^{t + \Delta t})
@@ -261,7 +325,7 @@ Assuming $Q_{0k}^{t + \Delta t} = Q_{1k}^{t + \Delta t}$:
    Q_{1k}^{t + \Delta t} = \frac{( E_{2k} c_{1k} - g A_{1k} ) h_{2k}^{t + \Delta t} + (P_{1k} -  D_{2k} c_{1k}) + g A_{1k} h_{1k}^{t + \Delta t}}{a_{1k} + b_{1k} + c_{1k}}
 \end{equation}
 
-Thus for the upstream end of superlink k:
+Thus for the upstream end of superlink k, the following equation holds:
 
 \begin{equation}
   \boxed{
@@ -295,7 +359,7 @@ Where:
   } 
 \end{equation}
 
-For the next element downstream:
+For the next element downstream, the continuity and momentum equations can be written:
 
 \begin{equation}
   Q_{3k}^{t + \Delta t} - Q_{2k}^{t + \Delta t} + E_{3k} h_{3k}^{t + \Delta t} = D_{3k}
@@ -306,7 +370,7 @@ For the next element downstream:
    a_{2k} Q_{1k}^{t + \Delta t} + b_{2k} Q_{2k}^{t + \Delta t} + c_{2k} Q_{3k}^{t + \Delta t} = P_{2k} + g A_{2k} (h_{2k}^{t + \Delta t} - h_{3k}^{t + \Delta t})
 \end{equation}
 
-Substituting:
+Combining the two equations together and simplifying yields the following equation:
 
 \begin{equation}
   \begin{split}
@@ -324,7 +388,7 @@ Substituting:
 \end{equation}
 
 Multiplying $h_{2k}^{t + \Delta t}$ by $(U_{1k} - E_{2k}) / (U_{1k} - E_{2k})$
-and rearranging:
+and rearranging yields:
 
 \begin{equation}
   \begin{split}
@@ -388,7 +452,8 @@ Generalizing for $i = 2$, $I = 2$:
   \end{split}
 \end{equation}
 
-Condensing in terms of coefficients:
+Condensing in terms of the coefficients yields the following recurrence relation for the mass
+and momentum balance in the forward direction: 
 
 \begin{equation}
   \boxed{
@@ -426,7 +491,8 @@ Where:
 
 \subsection{Backward recurrence}
 
-Starting at the downstream end of superlink k:
+Starting at the downstream end of superlink k, the continuity and momentum
+equations can be written as:
 
 \begin{equation}
   Q_{nk}^{t + \Delta t} - Q_{nk - 1}^{t + \Delta t} + E_{Nk} h_{Nk}^{t + \Delta t} = D_{Nk}
@@ -437,7 +503,8 @@ Starting at the downstream end of superlink k:
    a_{nk} Q_{nk - 1}^{t + \Delta t} + b_{nk} Q_{nk}^{t + \Delta t} + c_{nk} Q_{nk + 1}^{t + \Delta t} = P_{nk} + g A_{nk} (h_{Nk}^{t + \Delta t} - h_{Nk+1}^{t + \Delta t})
 \end{equation}
 
-Assuming $Q_{nk}^{t + \Delta t} = Q_{nk+1}^{t + \Delta t}$:
+Assuming $Q_{nk}^{t + \Delta t} = Q_{nk+1}^{t + \Delta t}$, the continuity and
+momentum equations can be combined and simplified as follows:
 
 \begin{equation}
   a_{nk} (Q_{nk}^{t + \Delta t} + E_{Nk} h_{Nk}^{t + \Delta t} - D_{Nk}) + b_{nk} Q_{nk}^{t + \Delta t} + c_{nk} Q_{nk}^{t + \Delta t} = P_{nk} + g A_{nk} (h_{Nk}^{t + \Delta t} - h_{Nk + 1}^{t + \Delta t})
@@ -451,12 +518,12 @@ Assuming $Q_{nk}^{t + \Delta t} = Q_{nk+1}^{t + \Delta t}$:
   (a_{nk} + b_{nk} + c_{nk}) Q_{nk}^{t + \Delta t} = ( g A_{nk} - E_{Nk} a_{nk} ) h_{Nk}^{t + \Delta t} + (P_{nk} +  D_{Nk} a_{nk}) - g A_{nk} h_{Nk + 1}^{t + \Delta t}
 \end{equation}
 
-
 \begin{equation}
   Q_{nk}^{t + \Delta t} = \frac{( g A_{nk} -  E_{Nk} a_{nk} ) h_{Nk}^{t + \Delta t} + (P_{nk} +  D_{Nk} a_{nk}) - g A_{nk} h_{Nk + 1}^{t + \Delta t}}{(a_{nk} + b_{nk} + c_{nk})}
 \end{equation}
 
-Thus for the downstream end of superlink k:
+Thus for the downstream end of superlink k, the mass and momentum balance can be
+represented by the following equation:
 
 \begin{equation}
   \boxed{
@@ -490,7 +557,7 @@ Where:
   } 
 \end{equation}
 
-For the next element upstream:
+For the next element upstream, the continuity and momentum equations can be written:
 
 \begin{equation}
   Q_{nk - 1}^{t + \Delta t} - Q_{nk - 2}^{t + \Delta t} + E_{Nk - 1} h_{Nk - 1}^{t + \Delta t} = D_{Nk - 1}
@@ -580,7 +647,8 @@ Generalizing for $i = nk - 1$, $I = Nk - 1$:
   \end{split}
 \end{equation}
 
-Condensing in terms of coefficients:
+Condensing in terms of the coefficients yields the following recurrence relation for the mass
+and momentum balance in the backwards direction: 
 
 \begin{equation}
   \boxed{
@@ -643,7 +711,9 @@ Squaring and rearranging provides the depth boundary condition at the upstream e
 \end{equation}
 
 \begin{equation}
+  \boxed{
   h_{uk} = -\frac{|Q_{uk}^{t}| Q_{uk}^{t + \Delta t}}{ 2 C_{uk}^2 A_{uk}^2 g} + H_{juk} - z_{inv, uk}
+  }
 \end{equation}
 
 \subsection{Depth at downstream end of superlink}
@@ -672,7 +742,9 @@ end:
 \end{equation}
 
 \begin{equation}
+  \boxed{
   h_{dk} = \frac{|Q_{dk}^{t}| Q_{dk}^{t + \Delta t}}{2 C_{dk}^2 A_{dk}^2 g} + H_{jdk} - z_{inv, dk}
+  }
 \end{equation}
 
 \subsection{Superlink boundary conditions}
@@ -810,47 +882,75 @@ Arranging in terms of the unknown heads:
   \end{split}
 \end{equation}
 
-Finally, the upstream and downstream flows can be expressed as:
+Finally, the flow rates at the upstream and downstream ends of superlink $k$ can be expressed as:
 
-\begin{align}
+\begin{equation}
+  \boxed{
  Q_{uk}^{t + \Delta t} = \alpha_{uk} H_{juk}^{t + \Delta t} + \beta_{uk} H_{jdk}^{t + \Delta t} + \chi_{uk} \\ 
+ }
+\end{equation}
+
+\begin{equation}
+  \boxed{
  Q_{dk}^{t + \Delta t} = \alpha_{dk} H_{juk}^{t + \Delta t} + \beta_{dk} H_{jdk}^{t + \Delta t} + \chi_{dk} 
-\end{align}
+ }
+\end{equation}
 
 Where:
 
 \begin{equation}
+  \boxed{
   \alpha_{uk} = \frac{(1 - U_{Nk} \gamma_{dk}) X_{1k} + Z_{1k} \gamma_{dk} W_{Nk}}{D_k^*}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \beta_{uk} = \frac{(1 - U_{Nk} \gamma_{dk}) Z_{1k} + Z_{1k} \gamma_{dk} U_{Nk}}{D_k^*}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \chi_{uk} = \frac{(1 - U_{Nk} \gamma_{dk})(Y_{1k} - X_{1k} z_{inv, uk} - Z_{1k} z_{inv, dk})  + (Z_{1k} \gamma_{dk})(V_{Nk} - W_{Nk} z_{inv, uk} - U_{Nk} z_{inv, dk})}{D_k^*}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \alpha_{dk} = \frac{(1 - X_{1k} \gamma_{uk}) W_{Nk} + W_{Nk} \gamma_{uk} X_{1k}}{D_k^*}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \beta_{dk} = \frac{(1 - X_{1k} \gamma_{uk}) U_{Nk} + W_{Nk} \gamma_{uk} Z_{1k}}{D_k^*}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \chi_{dk} = \frac{(1 - X_{1k} \gamma_{uk})(V_{Nk} - W_{Nk} z_{inv, uk} - U_{Nk} z_{inv, dk})  + (W_{Nk} \gamma_{uk})(Y_{1k} - X_{1k} z_{inv, uk} - Z_{1k} z_{inv, dk})}{D_k^*}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   D_k^* = (X_{1k} \gamma_{uk} - 1)(U_{Nk} \gamma_{dk} - 1) - (Z_{1k} \gamma_{dk})(W_{Nk} \gamma_{uk})
+  }
 \end{equation}
 
-\begin{align}
+\begin{equation}
+  \boxed{
   \gamma_{uk} = -\frac{|Q_{uk}^{t}|}{2 C_{uk}^2 A_{uk}^2 g} \\
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
   \gamma_{dk} = \frac{|Q_{dk}^{t}|}{2 C_{dk}^2 A_{dk}^2 g}
-\end{align}
+  }
+\end{equation}
 
 % \subsection{Boundary conditions using Ji's method}
 
@@ -1063,6 +1163,8 @@ For orifices, six different flow cases are possible:
 \item No-flow condition
 \end{itemize}
 
+\subsection{Governing equations for orifices}
+
 The governing equations for each condition are presented here:
 
 \subsubsection*{Side-mounted orifice with both sides submerged}
@@ -1070,20 +1172,20 @@ The governing equations for each condition are presented here:
 This flow regime occurs when both of the following conditions are met:
 
 \begin{itemize}
-\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o + u y_{max,o}$
-\item $\min(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o + \frac{u y_{max,o}}{2}$
+\item $\max(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) > z_o + \omega y_{max,o}$
+\item $\min(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) > z_o + \frac{\omega y_{max,o}}{2}$
 \end{itemize}
 
 The effective head is computed as:
 
 \begin{equation}
-  H_{e,o} = | H_{uo} - H_{do} |
+  H_{e,o} = | H_{juo} - H_{jdo} |
 \end{equation}
 
 And the flow is computed as:
 
 \begin{equation}
- Q_o = \text{sgn}(H_{uo} - H_{do}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
+ Q_o = \text{sgn}(H_{juo} - H_{jdo}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
 \end{equation}
 
 \subsubsection*{Side-mounted orifice with one side submerged}
@@ -1091,20 +1193,20 @@ And the flow is computed as:
 This flow regime occurs when both of the following conditions are met:
 
 \begin{itemize}
-\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o + u y_{max,o}$
-\item $\min(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) < z_o + \frac{u y_{max,o}}{2}$
+\item $\max(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) > z_o + \omega y_{max,o}$
+\item $\min(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) < z_o + \frac{\omega y_{max,o}}{2}$
 \end{itemize}
 
 The effective head is computed as:
 
 \begin{equation}
-  H_{e,o} = \cdot \bigl[ \max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,do}) - (z_o + \frac{u y_{max,o}}{2}) \bigr]
+  H_{e,o} = \cdot \bigl[ \max(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,jdo}) - (z_o + \frac{\omega y_{max,o}}{2}) \bigr]
 \end{equation}
 
 And the flow is computed as:
 
 \begin{equation}
- Q_o = \text{sgn}(H_{uo} - H_{do}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
+ Q_o = \text{sgn}(H_{juo} - H_{jdo}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
 \end{equation}
 
 \subsubsection*{Side-mounted orifice with weir-like flow}
@@ -1112,20 +1214,20 @@ And the flow is computed as:
 This flow regime occurs when both of the following conditions are met:
 
 \begin{itemize}
-\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o$
-\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) < z_o + u y_{max,o}$
+\item $\max(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) > z_o$
+\item $\max(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) < z_o + \omega y_{max,o}$
 \end{itemize}
 
 The effective head is computed as:
 
 \begin{equation}
-  H_{e,o} = \max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) - z_{o}
+  H_{e,o} = \max(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) - z_{o}
 \end{equation}
 
 And the flow is computed as:
 
 \begin{equation}
- Q_o = \frac{C_o A_o \sqrt{g}}{u y_{max,o}} \sqrt{H_{e,o}}
+ Q_o = \frac{C_o A_o \sqrt{g}}{\omega y_{max,o}} \sqrt{H_{e,o}}
 \end{equation}
 
 \subsubsection*{Bottom-mounted orifice with both sides submerged}
@@ -1133,20 +1235,20 @@ And the flow is computed as:
 This flow regime occurs when both of the following conditions are met:
 
 \begin{itemize}
-\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o$
-\item $\min(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o$
+\item $\max(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) > z_o$
+\item $\min(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) > z_o$
 \end{itemize}
 
 The effective head is computed as:
 
 \begin{equation}
-  H_{e,o} = | H_{uo} - H_{do} |
+  H_{e,o} = | H_{juo} - H_{jdo} |
 \end{equation}
 
 And the flow is computed as:
 
 \begin{equation}
- Q_o = \text{sgn}(H_{uo} - H_{do}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
+ Q_o = \text{sgn}(H_{juo} - H_{jdo}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
 \end{equation}
 
 \subsubsection*{Bottom-mounted orifice with one side submerged}
@@ -1154,8 +1256,8 @@ And the flow is computed as:
 This flow regime occurs when both of the following conditions are met:
 
 \begin{itemize}
-\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) > z_o$
-\item $\min(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) < z_o$
+\item $\max(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) > z_o$
+\item $\min(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) < z_o$
 \end{itemize}
 
 The effective head is computed as:
@@ -1167,7 +1269,7 @@ The effective head is computed as:
 And the flow is computed as:
 
 \begin{equation}
- Q_o = \text{sgn}(H_{uo} - H_{do}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
+ Q_o = \text{sgn}(H_{juo} - H_{jdo}) \cdot C_o A_o \sqrt{2 g H_{e,o}} 
 \end{equation}
 
 \subsubsection*{No-flow condition}
@@ -1175,7 +1277,7 @@ And the flow is computed as:
 This flow regime occurs when the following condition is met:
 
 \begin{itemize}
-\item $\max(H_{uo} - z_{inv,uo}, H_{do} - z_{inv,uo}) \leq z_o$
+\item $\max(H_{juo} - z_{inv,juo}, H_{jdo} - z_{inv,juo}) \leq z_o$
 \end{itemize}
 
 In this case, the effective head and flow are both zero:
@@ -1218,7 +1320,7 @@ following flow conditions:
 \begin{equation}
   \Theta_{o,1} =
   \begin{cases}
-    1, &   \Omega H_{uo} + (1 - \Omega) H_{do} > z_o + z_{inv,juo} + \tau u y_{max,o} \\
+    1, &   \Omega H_{juo} + (1 - \Omega) H_{jdo} > z_o + z_{inv,juo} + \tau \omega y_{max,o} \\
     0, & o/w
   \end{cases}
 \end{equation}
@@ -1228,7 +1330,7 @@ following flow conditions:
 \begin{equation}
   \Theta_{o,2} =
   \begin{cases}
-    1, & (1 - \Omega) H_{uo} + \Omega H_{do} > z_o + z_{inv,juo} + \frac{\tau u y_{max,o}}{2} \\
+    1, & (1 - \Omega) H_{juo} + \Omega H_{jdo} > z_o + z_{inv,juo} + \frac{\tau \omega y_{max,o}}{2} \\
     0, & o/w
   \end{cases}
 \end{equation}
@@ -1238,7 +1340,7 @@ following flow conditions:
 \begin{equation}
   \Theta_{o,3} = 
   \begin{cases}
-    1, & \Omega H_{uo} + (1 - \Omega) H_{do} > z_o + z_{inv,juo} \\
+    1, & \Omega H_{juo} + (1 - \Omega) H_{jdo} > z_o + z_{inv,juo} \\
     0, & o/w
   \end{cases}
 \end{equation}
@@ -1247,7 +1349,9 @@ The flow through an orifice can now be represented using the following
 linearized coefficient equation:
 
 \begin{equation}
- Q_{o}^{t + \Delta t} = \alpha_{o} H_{uo}^{t + \Delta t} + \beta_{o} H_{do}^{t + \Delta t} + \chi_{o} 
+  \boxed{
+ Q_{o}^{t + \Delta t} = \alpha_{o} H_{juo}^{t + \Delta t} + \beta_{o} H_{jdo}^{t + \Delta t} + \chi_{o} 
+ }
 \end{equation}
 
 Where:
@@ -1255,37 +1359,45 @@ Where:
 % Should there be a 2 in the denominator of the second case?
 
 \begin{equation}
+  \boxed{
   \alpha_{o} =
   \begin{cases}
-   \gamma_o u^2, & \Theta_{o,1} \land \Theta_{o,2}\\
-   \gamma_o \Omega (-1)^{1 - \Omega} u^2, & \Theta_{o,1} \land \lnot \Theta_{o,2}\\
+   \gamma_o \omega^2, & \Theta_{o,1} \land \Theta_{o,2}\\
+   \gamma_o \Omega (-1)^{1 - \Omega} \omega^2, & \Theta_{o,1} \land \lnot \Theta_{o,2}\\
    \frac{\gamma_o}{2 y_{max,o}^2} \Omega (-1)^{1 - \Omega}, & \lnot \Theta_{o,1} \land \Theta_{o,3} \\
    0, & \lnot \Theta_{o,3}
   \end{cases}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \beta_{o} =
   \begin{cases}
-   -\gamma_o u^2, & \Theta_{o,1} \land \Theta_{o,2}\\
-   \gamma_o (1 - \Omega) (-1)^{1 - \Omega} u^2, & \Theta_{o,1} \land \lnot \Theta_{o,2}\\
+   -\gamma_o \omega^2, & \Theta_{o,1} \land \Theta_{o,2}\\
+   \gamma_o (1 - \Omega) (-1)^{1 - \Omega} \omega^2, & \Theta_{o,1} \land \lnot \Theta_{o,2}\\
    \frac{\gamma_o}{2 y_{max,o}^2} (1 - \Omega) (-1)^{1 - \Omega}, & \lnot \Theta_{o,1} \land \Theta_{o,3} \\
    0, & \lnot \Theta_{o,3}
   \end{cases}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \chi_{o} =
   \begin{cases}
    0, & \Theta_{o,1} \land \Theta_{o,2}\\
-   \gamma_o (-1)^{1 - \Omega} (- z_{inv,uo} - z_o - \frac{\tau u y_{max,o}}{2}), & \Theta_{o,1} \land \lnot \Theta_{o,2} u^2\\
+   \gamma_o (-1)^{1 - \Omega} (- z_{inv,uo} - z_o - \frac{\tau \omega y_{max,o}}{2}), & \Theta_{o,1} \land \lnot \Theta_{o,2} u^2\\
    \frac{\gamma_o}{2 y_{max,o}^2} (- z_{inv,uo} - z_o), & \lnot \Theta_{o,1} \land \Theta_{o,3} \\
    0, & \lnot \Theta_{o,3}
   \end{cases}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
  \gamma_o = \frac{2 g C_o^2 A_o^2}{|Q_o^t|} 
+ }
 \end{equation}
 
 These equations can be added to the solution matrix in much the same way as the
@@ -1332,25 +1444,32 @@ And the elements of $b_o$ defined by:
 This section discusses the governing equations for weirs, and explains how weirs
 can be incorporated into the solution matrix. Only transverse weirs will be considered.
 
+\subsection{Governing equations for weirs}
+
 First, without loss of generality, assume all weirs can be represented as
 trapezoidal weirs (given that both rectangular and triangular weirs are special
 cases of the trapezoidal weir).
+
+The effective head on a weir can be defined as:
+
+\begin{equation}
+  H_{e,w} = \max{ \biggl(\max{(H_{juw}, H_{jdw})} - (z_w + z_{inv,juw} + (1 - \omega) y_{max,w}), 0 \biggr)}
+\end{equation}
 
 The flow through a trapezoidal weir is the sum of the flow through the
 rectangular and triangular sections:
 
 \begin{align}
-  Q_w = Q_{wR} + Q_{wT} \\
-  = C_{wR} L_{w} H_{e,w}^{3/2} + C_{wT} s_{w} H_{e,w}^{5/2}
+  Q_w = C_{wR} L_{w} H_{e,w}^{3/2} + C_{wT} s_{w} H_{e,w}^{5/2}
 \end{align}
 
-The flow at the next time step can thus be computed as:
+The flow at the next time step can thus be estimated as:
 
 \begin{align}
   Q_w^{t + \Delta t} = \frac{C_{wR} L_{w} H_{e,w}^t + C_{wT} s_{w} (H_{e,w}^{t})^2}{|Q_{w}^t|} H_{e,w}^{t + \Delta t}
 \end{align}
 
-\subsection*{Representing weirs in the solution matrix}
+\subsection{Representing weirs in the solution matrix}
 
 Define the following indicator function:
 
@@ -1369,7 +1488,7 @@ Similarly, define boolean-valued functions to represent the following flow condi
 \begin{equation}
   \Theta_{w,1} =
   \begin{cases}
-    1, &   \Omega H_{uw} + (1 - \Omega) H_{dw} > z_w + z_{inv,juw} + (1 - u) y_{max,w} \\
+    1, &   \Omega H_{juw} + (1 - \Omega) H_{jdw} > z_w + z_{inv,juw} + (1 - \omega) y_{max,w} \\
     0, & o/w
   \end{cases}
 \end{equation}
@@ -1379,7 +1498,7 @@ Similarly, define boolean-valued functions to represent the following flow condi
 \begin{equation}
   \Theta_{w,2} =
   \begin{cases}
-    1, & (1 - \Omega) H_{uw} + \Omega H_{dw} > z_o + z_{inv,juw} + (1 - u) y_{max,w} \\
+    1, & (1 - \Omega) H_{juw} + \Omega H_{jdw} > z_o + z_{inv,juw} + (1 - \omega) y_{max,w} \\
     0, & o/w
   \end{cases}
 \end{equation}
@@ -1388,40 +1507,50 @@ The flow through a weir can now be represented using the following linearized
 coefficient equation:
 
 \begin{equation}
- Q_{w}^{t + \Delta t} = \alpha_{w} H_{uw}^{t + \Delta t} + \beta_{w} H_{dw}^{t + \Delta t} + \chi_{w} 
+  \boxed{
+ Q_{w}^{t + \Delta t} = \alpha_{w} H_{juw}^{t + \Delta t} + \beta_{w} H_{jdw}^{t + \Delta t} + \chi_{w} 
+ }
 \end{equation}
 
 Where:
 
 \begin{equation}
+  \boxed{
   \alpha_{w} =
   \begin{cases}
    \gamma_w, & \Theta_{w,1} \land \Theta_{w,2}\\
    \gamma_w \Omega (-1)^{1 - \Omega}, & \Theta_{w,1} \land \lnot \Theta_{w,2}\\
    0, & \lnot \Theta_{w,1}
   \end{cases}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \beta_{w} =
   \begin{cases}
    -\gamma_w, & \Theta_{w,1} \land \Theta_{w,2}\\
    \gamma_w (1 - \Omega) (-1)^{1 - \Omega}, & \Theta_{w,1} \land \lnot \Theta_{w,2}\\
    0, & \lnot \Theta_{w,1}
   \end{cases}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \chi_{w} =
   \begin{cases}
    0, & \Theta_{w,1} \land \Theta_{w,2}\\
-   \gamma_w (-1)^{1 - \Omega} [- z_{inv,uw} - z_o - (1 - u) y_{max,w}], & \Theta_{w,1} \land \lnot \Theta_{w,2} \\
+   \gamma_w (-1)^{1 - \Omega} [- z_{inv,juw} - z_w - (1 - \omega) y_{max,w}], & \Theta_{w,1} \land \lnot \Theta_{w,2} \\
    0, & \lnot \Theta_{w,3}
   \end{cases}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
  \gamma_w = \frac{C_{wR} L_{w} H_{e,w}^t + C_{wT} s_{w} (H_{e,w}^{t})^2}{|Q_{w}^t|}
+ }
 \end{equation}
 
 Thus, a system with weirs can be represented as:
@@ -1462,18 +1591,21 @@ And the elements of $b_w$ defined by:
 
 \section{Representing pumps}
 
+\subsection{Governing equations for pumps}
+
 The relationship between flow and head in a pump is usually defined by a pump
 curve. For this implementation, we assume that the flow/head relationship can be
-approximated by an ellipse centered at the origin.
+approximated by an ellipse centered at the origin defined over the support
+$[H_{min,p}, H_{max,p}]$.
 
 First, define the effective head for the pump as follows:
 
 \begin{equation}
-  \Delta H_{e,p} =
+  H_{e,p} =
   \begin{cases}
-    \Delta H_{max,p}, & H_{dp} - H_{up} > \Delta H_{max,p} \\
-    H_{dp} - H_{up}, & \Delta H_{min,p} < H_{dp} - H_{up} < \Delta H_{max,p} \\
-    \Delta H_{min,p}, & H_{dp} - H_{up} < \Delta H_{min,p}
+    H_{max,p}, & H_{jdp} - H_{jup} > H_{max,p} \\
+    H_{jdp} - H_{jup}, & H_{min,p} < H_{jdp} - H_{jup} < H_{max,p} \\
+    H_{min,p}, & H_{jdp} - H_{jup} < H_{min,p}
   \end{cases}
 \end{equation}
 
@@ -1481,8 +1613,10 @@ Then, using the elliptical approximation, the flow through the pump can be
 represented as:
 
 \begin{equation}
- Q_p = u \sqrt{a_q^2 \bigl( 1 - \frac{\Delta H_{e,p}^2}{a_h^2} \bigr)} 
+ Q_p = \omega \sqrt{a_q^2 \bigl( 1 - \frac{H_{e,p}^2}{a_h^2} \bigr)} 
 \end{equation}
+
+\subsection{Representing pumps in the solution matrix}
 
 Define boolean-valued functions to represent the following flow conditions:
 
@@ -1491,7 +1625,7 @@ Define boolean-valued functions to represent the following flow conditions:
 \begin{equation}
   \Theta_{p,1} =
   \begin{cases}
-    1, & H_{up} \geq z_{inv,up} + z_p  \\
+    1, & H_{jup} \geq z_{inv,jup} + z_p  \\
     0, & o/w
   \end{cases}
 \end{equation}
@@ -1501,7 +1635,7 @@ Define boolean-valued functions to represent the following flow conditions:
 \begin{equation}
   \Theta_{p,2} =
   \begin{cases}
-    1, & \Delta H_{min,p} < H_{dp} - H_{up} < \Delta H_{max,p} \\
+    1, &  H_{min,p} < H_{jdp} - H_{jup} <  H_{max,p} \\
     0, & o/w
   \end{cases}
 \end{equation}
@@ -1510,38 +1644,48 @@ The flow through a pump can now be represented using the following linearized
 coefficient equation:
 
 \begin{equation}
- Q_{p}^{t + \Delta t} = \alpha_{p} H_{up}^{t + \Delta t} + \beta_{p} H_{dp}^{t + \Delta t} + \chi_{p} 
+  \boxed{
+ Q_{p}^{t + \Delta t} = \alpha_{p} H_{jup}^{t + \Delta t} + \beta_{p} H_{jdp}^{t + \Delta t} + \chi_{p} 
+ }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \alpha_{p} =
   \begin{cases}
-   \gamma_p u^2, & \Theta_{p,1} \land \Theta_{p,2}\\
+   \gamma_p \omega^2, & \Theta_{p,1} \land \Theta_{p,2}\\
    0, & \Theta_{p,1} \land \lnot \Theta_{p,2}\\
    0, & \lnot \Theta_{p,1}
   \end{cases}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \beta_{p} =
   \begin{cases}
-   -\gamma_p u^2, & \Theta_{p,1} \land \Theta_{p,2}\\
+   -\gamma_p \omega^2, & \Theta_{p,1} \land \Theta_{p,2}\\
    0, & \Theta_{p,1} \land \lnot \Theta_{p,2}\\
    0, & \lnot \Theta_{p,1}
   \end{cases}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
   \chi_{p} =
   \begin{cases}
    \frac{a_q^2}{|Q_p^t|}, & \Theta_{p,1} \land \Theta_{p,2}\\
-   u \sqrt{a_q^2 \bigl( 1 - \frac{(\Delta H_{e}^t)^2}{a_h^2} \bigr)}, & \Theta_{p,1} \land \lnot \Theta_{p,2}\\
+   \omega \sqrt{a_q^2 \bigl( 1 - \frac{( H_{e,p}^t)^2}{a_h^2} \bigr)}, & \Theta_{p,1} \land \lnot \Theta_{p,2}\\
    0, & \lnot \Theta_{p,1}
   \end{cases}
+  }
 \end{equation}
 
 \begin{equation}
+  \boxed{
  \gamma_p = \frac{a_q^2 |H_{dp}^t - H_{up}^t|}{a_h^2 |Q_{p}^t|}
+ }
 \end{equation}
 
 Thus, a system with pumps can be represented as:
