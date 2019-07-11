@@ -997,6 +997,8 @@ Where:
   }
 \end{equation}
 
+\subsection*{Solution matrix equation for example network}
+
 For the example network in Ji (1998), the sparse matrix equation is given as:
 
 \begin{equation}
@@ -1288,9 +1290,44 @@ Where:
 
 These equations can be added to the solution matrix in much the same way as the
 linearized superlink coefficients ($\alpha_{uk}, \beta_{uk}, \chi_{uk},
-\alpha_{dk}, \beta_{dk}, \chi_{dk}$).
+\alpha_{dk}, \beta_{dk}, \chi_{dk}$). The system of equations is now represented
+by the following matrix equation:
 
-\section*{Representing weirs}
+\begin{equation}
+  (A + O) x = b + b_o
+\end{equation}
+
+With the $A$ matrix and $b$ vector representing the original SUPERLINK system.
+The $O$ matrix and $b_o$ vector represent the orifice equations. The elements of
+$O$ are defined by the following coefficients:
+
+\begin{equation}
+  \boxed{
+  F_{j,j}^o = - \sum_{\ell=1}^{NBDj} \beta_{o_\ell} + \sum_{m=1}^{NBUj} \alpha_{o_m}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  \Phi_{j,juo_\ell}^o = - \alpha_{o_\ell}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  \Psi_{j,jdo_m}^o = \beta_{o_m}
+  }
+\end{equation}
+
+And the elements of $b_o$ defined by:
+
+\begin{equation}
+  \boxed{
+  G_j^o = - \sum_{\ell=1}^{NBDj} \chi_{o_\ell} + \sum_{m=1}^{NBUj} \chi_{o_m}
+  }
+\end{equation}
+
+\section{Representing weirs}
 
 This section discusses the governing equations for weirs, and explains how weirs
 can be incorporated into the solution matrix. Only transverse weirs will be considered.
@@ -1310,7 +1347,7 @@ rectangular and triangular sections:
 The flow at the next time step can thus be computed as:
 
 \begin{align}
-  Q_w^{t + \Delta t} = \frac{C_{wR} L_{w} H_{e,w} + C_{wT} s_{w} (H_{e,w}^{t})^2}{|Q_{w}^t|} H_{e,w}^{t + \Delta t}
+  Q_w^{t + \Delta t} = \frac{C_{wR} L_{w} H_{e,w}^t + C_{wT} s_{w} (H_{e,w}^{t})^2}{|Q_{w}^t|} H_{e,w}^{t + \Delta t}
 \end{align}
 
 \subsection*{Representing weirs in the solution matrix}
@@ -1366,7 +1403,7 @@ Where:
 \end{equation}
 
 \begin{equation}
-  \beta_{o} =
+  \beta_{w} =
   \begin{cases}
    -\gamma_w, & \Theta_{w,1} \land \Theta_{w,2}\\
    \gamma_w (1 - \Omega) (-1)^{1 - \Omega}, & \Theta_{w,1} \land \lnot \Theta_{w,2}\\
@@ -1375,16 +1412,52 @@ Where:
 \end{equation}
 
 \begin{equation}
-  \chi_{o} =
+  \chi_{w} =
   \begin{cases}
    0, & \Theta_{w,1} \land \Theta_{w,2}\\
-   \gamma_w (-1)^{1 - \Omega} (- z_{inv,uw} - z_o - (1 - u) y_{max,w}), & \Theta_{w,1} \land \lnot \Theta_{w,2} u^2\\
+   \gamma_w (-1)^{1 - \Omega} [- z_{inv,uw} - z_o - (1 - u) y_{max,w}], & \Theta_{w,1} \land \lnot \Theta_{w,2} \\
    0, & \lnot \Theta_{w,3}
   \end{cases}
 \end{equation}
 
 \begin{equation}
- \gamma_w = \frac{C_{wR} L_{w} H_{e,w} + C_{wT} s_{w} (H_{e,w}^{t})^2}{|Q_{w}^t|}
+ \gamma_w = \frac{C_{wR} L_{w} H_{e,w}^t + C_{wT} s_{w} (H_{e,w}^{t})^2}{|Q_{w}^t|}
+\end{equation}
+
+Thus, a system with weirs can be represented as:
+
+\begin{equation}
+  (A + W) x = b + b_w
+\end{equation}
+
+With the $A$ matrix and $b$ vector representing the original SUPERLINK system.
+The $W$ matrix and $b_w$ vector represent the weir equations. The elements of
+$W$ are defined by the following coefficients:
+
+\begin{equation}
+  \boxed{
+  F_{j,j}^w = - \sum_{\ell=1}^{NBDj} \beta_{w_\ell} + \sum_{m=1}^{NBUj} \alpha_{w_m}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  \Phi_{j,juw_\ell}^w = - \alpha_{w_\ell}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  \Psi_{j,jdw_m}^w = \beta_{w_m}
+  }
+\end{equation}
+
+And the elements of $b_w$ defined by:
+
+\begin{equation}
+  \boxed{
+  G_j^w = - \sum_{\ell=1}^{NBDj} \chi_{w_\ell} + \sum_{m=1}^{NBUj} \chi_{w_m}
+  }
 \end{equation}
 
 \section{Representing pumps}
@@ -1469,6 +1542,42 @@ coefficient equation:
 
 \begin{equation}
  \gamma_p = \frac{a_q^2 |H_{dp}^t - H_{up}^t|}{a_h^2 |Q_{p}^t|}
+\end{equation}
+
+Thus, a system with pumps can be represented as:
+
+\begin{equation}
+  (A + P) x = b + b_p
+\end{equation}
+
+With the $A$ matrix and $b$ vector representing the original SUPERLINK system.
+The $P$ matrix and $b_p$ vector represent the weir equations. The elements of
+$P$ are defined by the following coefficients:
+
+\begin{equation}
+  \boxed{
+  F_{j,j}^p = - \sum_{\ell=1}^{NBDj} \beta_{p_\ell} + \sum_{m=1}^{NBUj} \alpha_{p_m}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  \Phi_{j,jup_\ell}^p = - \alpha_{p_\ell}
+  }
+\end{equation}
+
+\begin{equation}
+  \boxed{
+  \Psi_{j,jdp_m}^p = \beta_{p_m}
+  }
+\end{equation}
+
+And the elements of $b_p$ defined by:
+
+\begin{equation}
+  \boxed{
+  G_j^p = - \sum_{\ell=1}^{NBDj} \chi_{p_\ell} + \sum_{m=1}^{NBUj} \chi_{p_m}
+  }
 \end{equation}
 
 \end{document}
