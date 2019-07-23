@@ -14,7 +14,7 @@ class SuperLink():
                  orifices=None, weirs=None, pumps=None,
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
-                 exit_hydraulics=False):
+                 exit_hydraulics=False, end_length=0.05):
         self.superlinks = superlinks
         self.superjunctions = superjunctions
         if links is None:
@@ -22,7 +22,7 @@ class SuperLink():
             generate_elems = True
             num_elems = 4
             total_elems = num_elems + 1
-            self.configure_internals()
+            self.configure_internals(end_length=end_length)
             links = self.links
             junctions = self.junctions
         else:
@@ -406,7 +406,7 @@ class SuperLink():
         self._ix_h = _ix_h
         self._ix_q = _ix_q
 
-    def configure_internals(self):
+    def configure_internals(self, end_length=0.05):
         """
         Generate internal structure of each superlink (links and junctions).
         """
@@ -471,8 +471,8 @@ class SuperLink():
         _J_dk = superlinks['sj_1'].values.astype(int)
         x[upstream_nodes] = 0.
         x[downstream_nodes] = dx_j
-        x[upstream_nodes + 1] = np.minimum(0.05 * dx_j, 10)
-        x[downstream_nodes - 1] = dx_j - np.minimum(0.05 * dx_j, 10)
+        x[upstream_nodes + 1] = np.minimum(end_length * dx_j, 10)
+        x[downstream_nodes - 1] = dx_j - np.minimum(end_length * dx_j, 10)
         _b0 = _z_inv_j[_J_uk] + inoffset
         _b1 = _z_inv_j[_J_dk] + outoffset
         _m = (_b1 - _b0) / dx_j
@@ -1420,21 +1420,34 @@ class SuperLink():
         end_links = self.backward_I_i[end_nodes]
         backward = self.backward_I_i[middle_nodes]
         forward = self.forward_I_i[middle_nodes]
+        # TODO: Check control volumes
+        # _E_Ik[start_nodes] = self.E_Ik(_B_ik[start_links], _dx_ik[start_links],
+        #                                 _B_ik[start_links], _dx_ik[start_links],
+        #                                 _A_SIk[start_nodes], _dt)
+        # _E_Ik[end_nodes] = self.E_Ik(_B_ik[end_links], _dx_ik[end_links],
+        #                                 _B_ik[end_links], _dx_ik[end_links],
+        #                                 _A_SIk[end_nodes], _dt)
         _E_Ik[start_nodes] = self.E_Ik(_B_ik[start_links], _dx_ik[start_links],
-                                        _B_ik[start_links], _dx_ik[start_links],
-                                        _A_SIk[start_nodes], _dt)
-        _E_Ik[end_nodes] = self.E_Ik(_B_ik[end_links], _dx_ik[end_links],
-                                        _B_ik[end_links], _dx_ik[end_links],
+                                        0.0, 0.0, _A_SIk[start_nodes], _dt)
+        _E_Ik[end_nodes] = self.E_Ik(0.0, 0.0, _B_ik[end_links], _dx_ik[end_links],
                                         _A_SIk[end_nodes], _dt)
         _E_Ik[middle_nodes] = self.E_Ik(_B_ik[forward], _dx_ik[forward],
                                         _B_ik[backward], _dx_ik[backward],
                                         _A_SIk[middle_nodes], _dt)
+        # _D_Ik[start_nodes] = self.D_Ik(_Q_0Ik[start_nodes], _B_ik[start_links],
+        #                                 _dx_ik[start_links], _B_ik[start_links],
+        #                                 _dx_ik[start_links], _A_SIk[start_nodes],
+        #                                 _h_Ik[start_nodes], _dt)
+        # _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], _B_ik[end_links],
+        #                                 _dx_ik[end_links], _B_ik[end_links],
+        #                                 _dx_ik[end_links], _A_SIk[end_nodes],
+        #                                 _h_Ik[end_nodes], _dt)
         _D_Ik[start_nodes] = self.D_Ik(_Q_0Ik[start_nodes], _B_ik[start_links],
-                                        _dx_ik[start_links], _B_ik[start_links],
-                                        _dx_ik[start_links], _A_SIk[start_nodes],
+                                        _dx_ik[start_links], 0.0,
+                                        0.0, _A_SIk[start_nodes],
                                         _h_Ik[start_nodes], _dt)
-        _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], _B_ik[end_links],
-                                        _dx_ik[end_links], _B_ik[end_links],
+        _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], 0.0,
+                                        0.0, _B_ik[end_links],
                                         _dx_ik[end_links], _A_SIk[end_nodes],
                                         _h_Ik[end_nodes], _dt)
         _D_Ik[middle_nodes] = self.D_Ik(_Q_0Ik[middle_nodes], _B_ik[forward],
@@ -2730,6 +2743,73 @@ class SuperLink():
         t_2 = W_Im1k * h_1k
         return t_0 + t_1 + t_2
 
+    def solve_internals_exact(self):
+        NK = self.NK
+        nk = self.nk
+        _kI = self._kI
+        _ki = self._ki
+        _I_1k = self._I_1k
+        _I_Np1k = self._I_Np1k
+        _Q_uk = self._Q_uk
+        _Q_dk = self._Q_dk
+        _h_Ik = self._h_Ik
+        _Q_ik = self._Q_ik
+        _D_Ik = self._D_Ik
+        _E_Ik = self._E_Ik
+        _a_ik = self._a_ik
+        _b_ik = self._b_ik
+        _c_ik = self._c_ik
+        _P_ik = self._P_ik
+        _A_SIk = self._A_SIk
+        _A_ik = self._A_ik
+        _dt = self._dt
+        min_depth = self.min_depth
+        g = 9.81
+        # For each superlink...
+        for k in range(NK):
+            # Set up solution matrix
+            nlinks = nk[k]
+            njunctions = nlinks + 1
+            N = nlinks + njunctions
+            I_k = (_kI == k)
+            i_k = (_ki == k)
+            rows = np.arange(0, N, 2)
+            cols = np.arange(0, njunctions)
+            Q_u = _Q_uk[k]
+            Q_d = _Q_dk[k]
+            Ak = np.zeros((N, N))
+            bk = np.zeros(N)
+            # Fill right-hand side matrix
+            Ak[rows, cols] = _E_Ik[I_k]
+            Ak[rows[:-1], njunctions + cols[:-1]] = 1.
+            Ak[rows[1:], njunctions + cols[:-1]] = -1.
+            Ak[1 + rows[:-1], cols[:-1]] = g * _A_ik[i_k]
+            Ak[1 + rows[:-1], cols[1:]] = -g * _A_ik[i_k]
+            Ak[1 + rows[:-1], njunctions + cols[:-1]] = _b_ik[i_k]
+            Ak[1 + rows[1:-1], njunctions + cols[:-2]] = _a_ik[i_k][1:]
+            Ak[1 + rows[:-2], njunctions + cols[1:-1]] = _c_ik[i_k][:-1]
+            # Fill left-hand side vector
+            bk[rows] = _D_Ik[I_k]
+            bk[1 + rows[:-1]] = _P_ik[i_k]
+            bk[0] += Q_u
+            bk[-1] -= Q_d
+            bk[1] -= _a_ik[i_k][0] * Q_u
+            bk[-2] -= _c_ik[i_k][-1] * Q_d
+            # Solve superlink equations simultaneously
+            x = scipy.linalg.solve(Ak, bk)
+            # Write new depths
+            _h_Ik[I_k] = x[:njunctions]
+            # Write new flows
+            _Q_ik[i_k] = x[njunctions:]
+        # Impose minimum depth
+        _h_Ik = np.maximum(_h_Ik, 0.0)
+        # Ensure consistency with inlet and outlet depths
+        self._h_uk = _h_Ik[_I_1k]
+        self._h_dk = _h_Ik[_I_Np1k]
+        # Export instance variables
+        self._h_Ik = _h_Ik
+        self._Q_ik = _Q_ik
+
     def exit_conditions(self):
         """
         Determine which superlinks have exit depths below the pipe crown elevation.
@@ -2954,7 +3034,9 @@ class SuperLink():
             self.solve_critical_depth()
             # self.solve_normal_depth()
             self.solve_exit_hydraulics()
-        if _method == 'lsq':
+        if _method == 'x':
+            self.solve_internals_exact()
+        elif _method == 'lsq':
             self.solve_internals_lsq()
         elif _method == 'b':
             self.solve_internals_backwards()
