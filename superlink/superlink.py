@@ -8,18 +8,34 @@ import superlink.geometry
 import superlink.storage
 
 class SuperLink():
-    def __init__(self, superlinks, superjunctions, links, junctions,
-                 transects={}, storages={}, orifices=None,
+    def __init__(self, superlinks, superjunctions,
+                 links=None, junctions=None,
+                 transects={}, storages={},
+                 orifices=None, weirs=None, pumps=None,
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
-                 exit_hydraulics=False):
+                 exit_hydraulics=False, end_length=0.05):
         self.superlinks = superlinks
         self.superjunctions = superjunctions
-        self.links = links
-        self.junctions = junctions
+        if links is None:
+            assert junctions is None
+            generate_elems = True
+            num_elems = 4
+            total_elems = num_elems + 1
+            self.configure_internals(end_length=end_length)
+            links = self.links
+            junctions = self.junctions
+        else:
+            generate_elems = False
+            num_elems = None
+            total_elems = None
+            self.links = links
+            self.junctions = junctions
         self.transects = transects
         self.storages = storages
         self.orifices = orifices
+        self.weirs = weirs
+        self.pumps = pumps
         self._dt = dt
         self._sparse = sparse
         self._method = method
@@ -40,6 +56,10 @@ class SuperLink():
         self._is_start[self.start_nodes] = True
         self._is_end[self.end_nodes] = True
         self.middle_nodes = self._I[(~self._is_start) & (~self._is_end)]
+        # Dimensions
+        self.M = len(superjunctions)
+        self.NK = len(superlinks)
+        self.nk = np.bincount(self._ki)
         # Create forward and backward indexers
         self.forward_I_I = np.copy(self._I)
         self.forward_I_I[self._Ik] = self._Ip1k
@@ -83,6 +103,8 @@ class SuperLink():
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(float)
         self._S_o_ik = ((self._z_inv_Ik[self._Ik] - self._z_inv_Ik[self._Ip1k])
                         / self._dx_ik)
+        self._x_Ik = np.zeros(self._I.size)
+        self._x_Ik[~self._is_start] = links.groupby('k')['dx'].cumsum().values
         # TODO: Allow specifying initial flows
         self._Q_0Ik = np.zeros(self._I.size, dtype=float)
         # Handle orifices
@@ -90,12 +112,110 @@ class SuperLink():
             self._J_uo = self.orifices['sj_0'].values.astype(int)
             self._J_do = self.orifices['sj_1'].values.astype(int)
             self._Ao = self.orifices['A'].values.astype(float)
-            self.p = self.orifices.shape[0]
+            self._Co = self.orifices['C'].values.astype(float)
+            self._z_o = self.orifices['z_o'].values.astype(float)
+            self._y_max_o = self.orifices['y_max'].values.astype(float)
+            self._orient_o = self.orifices['orientation'].values
+            self.n_o = self.orifices.shape[0]
+            self._Qo = np.zeros(self.n_o, dtype=float)
+            self._alpha_o = np.zeros(self.n_o, dtype=float)
+            self._beta_o = np.zeros(self.n_o, dtype=float)
+            self._chi_o = np.zeros(self.n_o, dtype=float)
+            self._alpha_uom = np.zeros(self.M, dtype=float)
+            self._beta_dol = np.zeros(self.M, dtype=float)
+            self._chi_uol = np.zeros(self.M, dtype=float)
+            self._chi_dom = np.zeros(self.M, dtype=float)
         else:
             self._J_uo = np.array([], dtype=int)
             self._J_do = np.array([], dtype=int)
             self._Ao = np.array([], dtype=float)
-            self.p = 0
+            self._Co = np.array([], dtype=float)
+            self._z_o = np.array([], dtype=float)
+            self._y_max_o = np.array([], dtype=float)
+            self._orient_o = np.array([])
+            self.n_o = 0
+            self._Qo = np.array([], dtype=float)
+            self._alpha_o = np.array([], dtype=float)
+            self._beta_o = np.array([], dtype=float)
+            self._chi_o = np.array([], dtype=float)
+            self._alpha_uom = np.array([], dtype=float)
+            self._beta_dol = np.array([], dtype=float)
+            self._chi_uol = np.array([], dtype=float)
+            self._chi_dom = np.array([], dtype=float)
+        # Handle weirs
+        if weirs is not None:
+            self._J_uw = self.weirs['sj_0'].values.astype(int)
+            self._J_dw = self.weirs['sj_1'].values.astype(int)
+            self._Cwr = self.weirs['Cr'].values.astype(float)
+            self._Cwt = self.weirs['Ct'].values.astype(float)
+            self._L_w = self.weirs['L'].values.astype(float)
+            self._s_w = self.weirs['s'].values.astype(float)
+            self._z_w = self.weirs['z_w'].values.astype(float)
+            self._y_max_w = self.weirs['y_max'].values.astype(float)
+            self.n_w = self.weirs.shape[0]
+            self._Hw = np.zeros(self.n_w, dtype=float)
+            self._Qw = np.zeros(self.n_w, dtype=float)
+            self._alpha_w = np.zeros(self.n_w, dtype=float)
+            self._beta_w = np.zeros(self.n_w, dtype=float)
+            self._chi_w = np.zeros(self.n_w, dtype=float)
+            self._alpha_uwm = np.zeros(self.M, dtype=float)
+            self._beta_dwl = np.zeros(self.M, dtype=float)
+            self._chi_uwl = np.zeros(self.M, dtype=float)
+            self._chi_dwm = np.zeros(self.M, dtype=float)
+        else:
+            self._J_uw = np.array([], dtype=int)
+            self._J_dw = np.array([], dtype=int)
+            self._Cwr = np.array([], dtype=float)
+            self._Cwt = np.array([], dtype=float)
+            self._L_w = np.array([], dtype=float)
+            self._s_w = np.array([], dtype=float)
+            self._z_w = np.array([], dtype=float)
+            self._y_max_w = np.array([], dtype=float)
+            self.n_w = 0
+            self._Hw = np.array([], dtype=float)
+            self._Qw = np.array([], dtype=float)
+            self._alpha_w = np.array([], dtype=float)
+            self._beta_w = np.array([], dtype=float)
+            self._chi_w = np.array([], dtype=float)
+            self._alpha_uwm = np.array([], dtype=float)
+            self._beta_dwl = np.array([], dtype=float)
+            self._chi_uwl = np.array([], dtype=float)
+            self._chi_dwm = np.array([], dtype=float)
+        # Handle pumps
+        if pumps is not None:
+            self._J_up = self.pumps['sj_0'].values.astype(int)
+            self._J_dp = self.pumps['sj_1'].values.astype(int)
+            self._z_p = self.pumps['z_p'].values.astype(float)
+            self._ap_h = self.pumps['a_h'].values.astype(float)
+            self._ap_q = self.pumps['a_q'].values.astype(float)
+            self._dHp_max = self.pumps['dH_max'].values.astype(float)
+            self._dHp_min = self.pumps['dH_min'].values.astype(float)
+            self.n_p = self.pumps.shape[0]
+            self._Qp = np.zeros(self.n_p, dtype=float)
+            self._alpha_p = np.zeros(self.n_p, dtype=float)
+            self._beta_p = np.zeros(self.n_p, dtype=float)
+            self._chi_p = np.zeros(self.n_p, dtype=float)
+            self._alpha_upm = np.zeros(self.M, dtype=float)
+            self._beta_dpl = np.zeros(self.M, dtype=float)
+            self._chi_upl = np.zeros(self.M, dtype=float)
+            self._chi_dpm = np.zeros(self.M, dtype=float)
+        else:
+            self._J_up = np.array([], dtype=int)
+            self._J_dp = np.array([], dtype=int)
+            self._z_p = np.array([], dtype=float)
+            self._ap_h = np.array([], dtype=float)
+            self._ap_q = np.array([], dtype=float)
+            self._dHp_max = np.array([], dtype=float)
+            self._dHp_min = np.array([], dtype=float)
+            self.n_p = 0
+            self._Qp = np.array([], dtype=float)
+            self._alpha_p = np.array([], dtype=float)
+            self._beta_p = np.array([], dtype=float)
+            self._chi_p = np.array([], dtype=float)
+            self._alpha_upm = np.array([], dtype=float)
+            self._beta_dpl = np.array([], dtype=float)
+            self._chi_upl = np.array([], dtype=float)
+            self._chi_dpm = np.array([], dtype=float)
         # Enforce minimum depth
         self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
@@ -103,10 +223,6 @@ class SuperLink():
         self._Pe_ik = np.zeros(self._ik.size)
         self._R_ik = np.zeros(self._ik.size)
         self._B_ik = np.zeros(self._ik.size)
-        # self._Q_ik_f = np.zeros_like(self._Q_ik)
-        # self._Q_ik_b = np.zeros_like(self._Q_ik)
-        # self._h_Ik_f = np.zeros_like(self._h_Ik)
-        # self._h_Ik_b = np.zeros_like(self._h_Ik)
         # Node velocities
         self._u_Ik = np.zeros(self._Ik.size, dtype=float)
         self._u_Ip1k = np.zeros(self._Ip1k.size, dtype=float)
@@ -145,9 +261,6 @@ class SuperLink():
         self._J_dk = self.superlinks['sj_1'].values.astype(int)
         self._z_inv_dk = self._z_inv_Ik[self._I_Np1k]
         # Sparse matrix coefficients
-        self.M = len(superjunctions)
-        self.NK = len(superlinks)
-        self.nk = np.bincount(self._ki)
         if sparse:
             self.A = scipy.sparse.lil_matrix((self.M, self.M))
         else:
@@ -155,13 +268,15 @@ class SuperLink():
         self.b = np.zeros(self.M)
         self.bc = self.superjunctions['bc'].values.astype(bool)
         if sparse:
-            self.B = scipy.sparse.lil_matrix((self.M, self.p))
-        else:
-            self.B = np.zeros((self.M, self.p))
-        if sparse:
+            self.B = scipy.sparse.lil_matrix((self.M, self.n_o))
             self.O = scipy.sparse.lil_matrix((self.M, self.M))
+            self.W = scipy.sparse.lil_matrix((self.M, self.M))
+            self.P = scipy.sparse.lil_matrix((self.M, self.M))
         else:
+            self.B = np.zeros((self.M, self.n_o))
             self.O = np.zeros((self.M, self.M))
+            self.W = np.zeros((self.M, self.M))
+            self.P = np.zeros((self.M, self.M))
         # TODO: Should these be size NK?
         self._alpha_ukm = np.zeros(self.M, dtype=float)
         self._beta_dkl = np.zeros(self.M, dtype=float)
@@ -177,10 +292,9 @@ class SuperLink():
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
         # Other parameters
-        # self._Qo_t = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
-        self._Qo_t, _ = self.B_j(self._J_uo, self._J_do, self._Ao, self.H_j)
-        # self._Qo_t_min = self.min_Qo(self._J_uo, self._J_do, self._Ao, self.H_j)
         self._O_diag = np.zeros(self.M)
+        self._W_diag = np.zeros(self.M)
+        self._P_diag = np.zeros(self.M)
         # Superlink end hydraulic geometries
         self._A_uk = np.copy(self._A_ik[self._i_1k])
         self._A_dk = np.copy(self._A_ik[self._i_nk])
@@ -204,6 +318,7 @@ class SuperLink():
             self.lsq_indexers()
         # Iteration counter
         self.iter_count = 0
+        self.t = 0
         # Initialize to stable state
         self.step(dt=1e-6, first_time=True)
 
@@ -211,18 +326,18 @@ class SuperLink():
         """
         Initialize matrices and indices for least-squares computation.
         """
-        _ik = self._ik
-        _ki = self._ki
-        _kI = self._kI
-        _I = self._I
-        _I_start = self._I_start
-        _I_end = self._I_end
-        _I_1k = self._I_1k
-        _I_Nk = self._I_Nk
-        _I_Np1k = self._I_Np1k
-        _i_1k = self._i_1k
-        _i_nk = self._i_nk
-        _sparse = self._sparse
+        _ik = self._ik              # Link index
+        _ki = self._ki              # Index of superlink containing link ik
+        _kI = self._kI              # Index of superlink containing junction Ik
+        _I = self._I                # Indices of all junctions
+        _I_start = self._I_start    # Junction is at upstream end of superlink (y/n)
+        _I_end = self._I_end        # Junction is at downstream end of superlink (y/n)
+        _I_1k = self._I_1k          # Index of first junction in superlink k
+        _I_Nk = self._I_Nk          # Index of penultimate junction in superlink k
+        _I_Np1k = self._I_Np1k      # Index of last junction in superlink k
+        _i_1k = self._i_1k          # Index of first link in superlink k
+        _i_nk = self._i_nk          # Index of last link in superlink k
+        _sparse = self._sparse      # Use sparse data structure (y/n)
         # Create forward and backward indexers
         _I_f = np.ones(_I.size, dtype=bool)
         _I_b = np.ones(_I.size, dtype=bool)
@@ -290,6 +405,118 @@ class SuperLink():
         self._ubound = _ubound
         self._ix_h = _ix_h
         self._ix_q = _ix_q
+
+    def configure_internals(self, end_length=0.05):
+        """
+        Generate internal structure of each superlink (links and junctions).
+        """
+        # Import instance variables
+        superlinks = self.superlinks            # Table of superlinks
+        superjunctions = self.superjunctions    # Table of superjunctions
+        # Set parameters
+        njunctions_fixed = 4
+        njunctions = njunctions_fixed + 1
+        nlinks = njunctions - 1
+        link_ncols = 15
+        junction_ncols = 5
+        n_superlinks = len(superlinks)
+        NJ = njunctions * n_superlinks
+        NL = nlinks * n_superlinks
+        elems = np.repeat(njunctions_fixed, n_superlinks)
+        total_elems = elems + 1
+        upstream_nodes = np.cumsum(total_elems) - total_elems
+        downstream_nodes = np.cumsum(total_elems) - 2
+        # Configure links
+        links = pd.DataFrame(np.zeros((NL, link_ncols)))
+        links.columns = ['A_c', 'C', 'Q_0', 'ctrl', 'dx', 'g1', 'g2', 'g3', 'g4',
+                        'id', 'j_0', 'j_1', 'k', 'n', 'shape']
+        links['A_c'] = np.repeat(superlinks['A_c'].values, nlinks)
+        links['C'] = np.repeat(superlinks['C'].values, nlinks)
+        links['Q_0'] = np.repeat(superlinks['Q_0'].values, nlinks)
+        links['ctrl'] = np.repeat(superlinks['ctrl'].values, nlinks)
+        links['k'] = np.repeat(superlinks.index.values, nlinks)
+        links['shape'] = np.repeat(superlinks['shape'].values, nlinks)
+        links['n'] = np.repeat(superlinks['n'].values, nlinks)
+        links['g1'] = np.repeat(superlinks['g1'].values, nlinks)
+        links['g2'] = np.repeat(superlinks['g2'].values, nlinks)
+        links['g3'] = np.repeat(superlinks['g3'].values, nlinks)
+        links['g4'] = np.repeat(superlinks['g4'].values, nlinks)
+        links['id'] = links.index.values
+        j = np.arange(NJ)
+        links['j_0'] = np.delete(j, downstream_nodes + 1)
+        links['j_1'] = np.delete(j, upstream_nodes)
+        # Configure junctions
+        junctions = pd.DataFrame(np.zeros((NJ, junction_ncols)))
+        junctions.columns = ['A_s', 'h_0', 'id', 'k', 'z_inv']
+        junctions['A_s'] = np.repeat(superlinks['A_s'].values, njunctions)
+        junctions['h_0'] = np.repeat(superlinks['h_0'].values, njunctions)
+        junctions['k'] = np.repeat(superlinks.index.values, njunctions)
+        junctions['id'] = junctions.index.values
+        # Configure internal variables
+        x = np.zeros(NJ)
+        z = np.zeros(NJ)
+        dx = np.zeros(NL)
+        h = junctions['h_0'].values
+        Q = links['Q_0'].values
+        xx = x.reshape(-1, njunctions)
+        zz = z.reshape(-1, njunctions)
+        dxdx = dx.reshape(-1, nlinks)
+        hh = h.reshape(-1, njunctions)
+        QQ = Q.reshape(-1, nlinks)
+        dx_j = superlinks['dx'].values
+        _z_inv_j = superjunctions['z_inv'].values.astype(float)
+        inoffset = superlinks['in_offset'].values.astype(float)
+        outoffset = superlinks['out_offset'].values.astype(float)
+        _J_uk = superlinks['sj_0'].values.astype(int)
+        _J_dk = superlinks['sj_1'].values.astype(int)
+        x[upstream_nodes] = 0.
+        x[downstream_nodes] = dx_j
+        x[upstream_nodes + 1] = np.minimum(end_length * dx_j, 10)
+        x[downstream_nodes - 1] = dx_j - np.minimum(end_length * dx_j, 10)
+        _b0 = _z_inv_j[_J_uk] + inoffset
+        _b1 = _z_inv_j[_J_dk] + outoffset
+        _m = (_b1 - _b0) / dx_j
+        _x0 = (dx_j / 2)
+        _z0 = _m * _x0 + _b0
+        # Set junction invert elevations and positions
+        zz.flat[upstream_nodes] = _b0
+        zz.flat[downstream_nodes] = _b1
+        zz.flat[upstream_nodes + 1] = _b0 + _m * x[upstream_nodes + 1]
+        zz.flat[downstream_nodes - 1] = _b0 + _m * x[downstream_nodes -  1]
+        xx[:, -1] = _x0
+        zz[:, -1] = _z0
+        ix = np.argsort(xx)
+        _fixed = (ix < nlinks)
+        r, c = np.where(~_fixed)
+        cm1 = ix[r, c - 1]
+        cp1 = ix[r, c + 1]
+        frac = (xx[r, xx.shape[1] - 1] - xx[r, cm1]) / (xx[r, cp1] - xx[r, cm1])
+        # Set depths and flows
+        hh[:, -1] = (1 - frac) * hh[r, cm1] + (frac) * hh[r, cp1]
+        QQ[:, -1] = QQ[r, cm1]
+        # Write new variables
+        xx = np.take_along_axis(xx, ix, axis=-1)
+        zz = np.take_along_axis(zz, ix, axis=-1)
+        hh = np.take_along_axis(hh, ix, axis=-1)
+        dxdx = np.diff(xx)
+        _h_Ik = hh.ravel()
+        junctions['z_inv'] = zz.ravel()
+        junctions['h_0'] = hh.ravel()
+        links['dx'] = dxdx.ravel()
+        links['Q_0'] = QQ.ravel()
+        # Set start and end junctions on superlinks
+        superlinks['j_0'] = links.groupby('k')['j_0'].min()
+        superlinks['j_1'] = links.groupby('k')['j_1'].max()
+        # Export instance variables
+        self.junctions = junctions
+        self.links = links
+        self.superlinks = superlinks
+        self._fixed = _fixed
+        self._b0 = _b0
+        self._b1 = _b1
+        self._m = _m
+        self._x0 = _x0
+        self._z0 = _z0
 
     def safe_divide(function):
         """
@@ -582,36 +809,54 @@ class SuperLink():
 
     @safe_divide
     def kappa_uk(self, A_uk, dH_uk, Q_uk_t, B_uk):
+        """
+        Compute head coefficient 'kappa' for upstream end of superlink k
+        """
         num = 2 * A_uk * dH_uk
         den = Q_uk_t * (2 * dH_uk * B_uk - A_uk)
         return num, den
 
     @safe_divide
     def lambda_uk(self, A_uk, dH_uk, B_uk):
+        """
+        Compute head coefficient 'lambda' for upstream end of superlink k
+        """
         num = - A_uk
         den = 2 * dH_uk * B_uk - A_uk
         return num, den
 
     @safe_divide
     def mu_uk(self, A_uk, dH_uk, B_uk, z_inv_uk):
+        """
+        Compute head coefficient 'mu' for upstream end of superlink k
+        """
         num = A_uk * (dH_uk + z_inv_uk)
         den = 2 * dH_uk * B_uk - A_uk
         return num, den
 
     @safe_divide
     def kappa_dk(self, A_dk, dH_dk, Q_dk_t, B_dk):
+        """
+        Compute head coefficient 'kappa' for downstream end of superlink k
+        """
         num = 2 * A_dk * dH_dk
         den = Q_dk_t * (2 * dH_dk * B_dk + A_dk)
         return num, den
 
     @safe_divide
     def lambda_dk(self, A_dk, dH_dk, B_dk):
+        """
+        Compute head coefficient 'lambda' for downstream end of superlink k
+        """
         num = A_dk
         den = 2 * dH_dk * B_dk + A_dk
         return num, den
 
     @safe_divide
     def mu_dk(self, A_dk, dH_dk, B_dk, z_inv_dk):
+        """
+        Compute head coefficient 'mu' for downstream end of superlink k
+        """
         num = A_dk * (dH_dk - z_inv_dk)
         den = 2 * dH_dk * B_dk + A_dk
         return num, den
@@ -701,7 +946,7 @@ class SuperLink():
 
     def G_j(self, A_sj, dt, H_j, Q_0j, chi_ukl, chi_dkm):
         """
-        Compute solution vector b.
+        Compute elements of solution vector b.
         """
         t_0 = A_sj * H_j / dt
         t_1 = Q_0j
@@ -720,18 +965,42 @@ class SuperLink():
         return Qo_u, Qo_d
 
     @safe_divide
-    def theta_o(self, u, Qo_d_t, Ao, Co=0.67, g=9.81):
-        num = 2 * g * u**2 * Co**2 * Ao**2
-        den = np.abs(Qo_d_t)
+    def gamma_o(self, Q_o_t, Ao, Co=0.67, g=9.81):
+        """
+        Compute flow coefficient 'gamma' for orifice o.
+        """
+        num = 2 * g * Co**2 * Ao**2
+        den = np.abs(Q_o_t)
+        return num, den
+
+    @safe_divide
+    def gamma_w(self, Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
+        """
+        Compute flow coefficient 'gamma' for weir w.
+        """
+        num = (Cwr * L_w * H_w_t + Cwt * s_w * H_w_t**2)**2
+        den = np.abs(Q_w_t)
+        return num, den
+
+    @safe_divide
+    def gamma_p(self, Q_p_t, dH_p_t, a_q=1.0, a_h=1.0):
+        """
+        Compute flow coefficient 'gamma' for pump p.
+        """
+        num = a_q**2 * np.abs(dH_p_t)
+        den = a_h**2 * np.abs(Q_p_t)
         return num, den
 
     def configure_hydraulic_geometry(self):
+        """
+        Prepare data structures for hydraulic geometry computations.
+        """
         # Import instance variables
-        transects = self.transects
-        _shape_ik = self._shape_ik
-        _transect_ik = self._transect_ik
-        _link_start = self._link_start
-        _link_end = self._link_end
+        transects = self.transects          # Table of transects
+        _shape_ik = self._shape_ik          # Shape of link ik
+        _transect_ik = self._transect_ik    # Transect associated with link ik
+        _link_start = self._link_start      # Link is first link in superlink k
+        _link_end = self._link_end          # Link is last link in superlink k
         # Set attributes
         _geom_factory = {}
         _transect_factory = {}
@@ -778,10 +1047,13 @@ class SuperLink():
         self._dk_transect_indices = _dk_transect_indices
 
     def configure_storages(self):
+        """
+        Prepare data structures for computation of superjunction storage.
+        """
         # Import instance variables
-        storages = self.storages
-        _storage_type = self._storage_type
-        _storage_table = self._storage_table
+        storages = self.storages                # Table of storages
+        _storage_type = self._storage_type      # Type of storage (functional/tabular)
+        _storage_table = self._storage_table    # Tabular storages
         _storage_factory = {}
         _storage_indices = None
         # Separate storages into functional and tabular
@@ -803,19 +1075,22 @@ class SuperLink():
         self._tabular = _tabular
 
     def link_hydraulic_geometry(self):
-        # TODO: Should probably use forward_I_i instead of _ik directly
-        _ik = self._ik
-        _Ik = self._Ik
-        _Ip1k = self._Ip1k
-        _h_Ik = self._h_Ik
-        _A_ik = self._A_ik
-        _Pe_ik = self._Pe_ik
-        _R_ik = self._R_ik
-        _B_ik = self._B_ik
-        _dx_ik = self._dx_ik
-        _g1_ik = self._g1_ik
-        _g2_ik = self._g2_ik
-        _g3_ik = self._g3_ik
+        """
+        Compute hydraulic geometry for each link.
+        """
+        # Import instance variables
+        _ik = self._ik                 # Link index
+        _Ik = self._Ik                 # Junction index
+        _Ip1k = self._Ip1k             # Index of next junction
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _A_ik = self._A_ik             # Flow area at link ik
+        _Pe_ik = self._Pe_ik           # Hydraulic perimeter at link ik
+        _R_ik = self._R_ik             # Hydraulic radius at link ik
+        _B_ik = self._B_ik             # Top width at link ik
+        _dx_ik = self._dx_ik           # Length of link ik
+        _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
+        _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
+        _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
         _geom_factory = self._geom_factory
         _transect_factory = self._transect_factory
         _transect_indices = self._transect_indices
@@ -858,20 +1133,23 @@ class SuperLink():
         self._B_ik = _B_ik
 
     def upstream_hydraulic_geometry(self, area='avg'):
-        # TODO: Should probably use forward_I_i instead of _ik directly
-        _ik = self._ik
-        _Ik = self._Ik
-        _ki = self._ki
-        _h_Ik = self._h_Ik
-        _A_uk = self._A_uk
-        _B_uk = self._B_uk
-        _dx_ik = self._dx_ik
-        _g1_ik = self._g1_ik
-        _g2_ik = self._g2_ik
-        _g3_ik = self._g3_ik
-        _z_inv_uk = self._z_inv_uk
-        _J_uk = self._J_uk
-        H_j = self.H_j
+        """
+        Compute hydraulic geometry of upstream ends of superlinks.
+        """
+        # Import instance variables
+        _ik = self._ik                 # Link index
+        _Ik = self._Ik                 # Junction index
+        _ki = self._ki                 # Superlink index containing link ik
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _A_uk = self._A_uk             # Flow area at upstream end of superlink k
+        _B_uk = self._B_uk             # Top width at upstream end of superlink k
+        _dx_ik = self._dx_ik           # Length of link ik
+        _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
+        _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
+        _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
+        _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
+        _J_uk = self._J_uk             # Index of junction upstream of superlink k
+        H_j = self.H_j                 # Head at superjunction j
         _uk_geom_factory = self._uk_geom_factory
         _transect_factory = self._transect_factory
         _uk_transect_indices = self._uk_transect_indices
@@ -914,20 +1192,23 @@ class SuperLink():
         self._A_uk = _A_uk
 
     def downstream_hydraulic_geometry(self, area='avg'):
-        # TODO: Should probably use forward_I_i instead of _ik directly
-        _ik = self._ik
-        _ki = self._ki
-        _Ip1k = self._Ip1k
-        _h_Ik = self._h_Ik
-        _A_dk = self._A_dk
-        _B_dk = self._B_dk
-        _dx_ik = self._dx_ik
-        _g1_ik = self._g1_ik
-        _g2_ik = self._g2_ik
-        _g3_ik = self._g3_ik
-        _z_inv_dk = self._z_inv_dk
-        _J_dk = self._J_dk
-        H_j = self.H_j
+        """
+        Compute hydraulic geometry of downstream ends of superlinks.
+        """
+        # Import instance variables
+        _ik = self._ik                 # Link index
+        _Ip1k = self._Ip1k             # Next junction index
+        _ki = self._ki                 # Superlink index containing link ik
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _A_dk = self._A_dk             # Flow area at downstream end of superlink k
+        _B_dk = self._B_dk             # Top width at downstream end of superlink k
+        _dx_ik = self._dx_ik           # Length of link ik
+        _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
+        _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
+        _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
+        _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
+        _J_dk = self._J_dk             # Index of junction downstream of superlink k
+        H_j = self.H_j                 # Head at superjunction j
         _dk_geom_factory = self._dk_geom_factory
         _transect_factory = self._transect_factory
         _dk_transect_indices = self._dk_transect_indices
@@ -970,17 +1251,21 @@ class SuperLink():
         self._A_dk = _A_dk
 
     def compute_storage_areas(self):
-        _functional = self._functional
-        _tabular = self._tabular
-        _storage_factory = self._storage_factory
-        _storage_indices = self._storage_indices
-        _storage_a = self._storage_a
-        _storage_b = self._storage_b
-        _storage_c = self._storage_c
-        H_j = self.H_j
-        _z_inv_j = self._z_inv_j
-        min_depth = self.min_depth
-        _A_sj = self._A_sj
+        """
+        Compute surface area of superjunctions at current time step.
+        """
+        # Import instance variables
+        _functional = self._functional              # Superlinks with functional area curves
+        _tabular = self._tabular                    # Superlinks with tabular area curves
+        _storage_factory = self._storage_factory    # Dictionary of storage curves
+        _storage_indices = self._storage_indices    # Indices of storage curves
+        _storage_a = self._storage_a                # Coefficient of functional storage curve
+        _storage_b = self._storage_b                # Exponent of functional storage curve
+        _storage_c = self._storage_c                # Constant of functional storage curve
+        H_j = self.H_j                              # Head at superjunction j
+        _z_inv_j = self._z_inv_j                    # Invert elevation at superjunction j
+        min_depth = self.min_depth                  # Minimum depth allowed at superjunctions/nodes
+        _A_sj = self._A_sj                          # Surface area at superjunction j
         # Compute storage areas
         _h_j = np.maximum(H_j - _z_inv_j, min_depth)
         if _functional.any():
@@ -998,24 +1283,24 @@ class SuperLink():
 
     def node_velocities(self):
         """
-        Compute link hydraulic geometries and velocities.
+        Compute velocity of flow at each link and junction.
         """
-        # Import instance variables for better readability
-        # TODO: Should probably use forward_I_i instead of _ik directly
-        _ik = self._ik
-        _Ik = self._Ik
-        _Ip1k = self._Ip1k
-        _h_Ik = self._h_Ik
-        _A_ik = self._A_ik
-        _Pe_ik = self._Pe_ik
-        _R_ik = self._R_ik
-        _B_ik = self._B_ik
-        _Q_ik = self._Q_ik
-        _u_Ik = self._u_Ik
-        _u_Ip1k = self._u_Ip1k
-        backward_I_i = self.backward_I_i
-        forward_I_i = self.forward_I_i
-        _dx_ik = self._dx_ik
+        # Import instance variables
+        _ik = self._ik                       # Link index
+        _Ik = self._Ik                       # Junction index
+        _Ip1k = self._Ip1k                   # Next junction index
+        _h_Ik = self._h_Ik                   # Depth at junction Ik
+        _A_ik = self._A_ik                   # Flow area at link ik
+        _Pe_ik = self._Pe_ik                 # Hydraulic perimeter at link ik
+        _R_ik = self._R_ik                   # Hydraulic radius at link ik
+        _B_ik = self._B_ik                   # Top width at link ik
+        _Q_ik = self._Q_ik                   # Flow rate at link ik
+        _u_Ik = self._u_Ik                   # Flow velocity at junction Ik
+        _u_Ip1k = self._u_Ip1k               # Flow velocity at junction I + 1k
+        backward_I_i = self.backward_I_i     # Index of link before junction Ik
+        forward_I_i = self.forward_I_i       # Index of link after junction Ik
+        _dx_ik = self._dx_ik                 # Length of link ik
+        # Determine start and end nodes
         # TODO: Watch this
         _is_start_Ik = self._is_start[_Ik]
         _is_end_Ip1k = self._is_end[_Ip1k]
@@ -1039,14 +1324,18 @@ class SuperLink():
         self._u_Ip1k = _u_Ip1k
 
     def compute_flow_regime(self):
+        """
+        Compute Froude number for each link, and the average Froude number for each link.
+        Compute the inertial damping coefficient, sigma_ik.
+        """
         # Import instance variables
-        _u_ik = self._u_ik
-        _A_ik = self._A_ik
-        _B_ik = self._B_ik
-        _ki = self._ki
-        _kI = self._kI
-        NK = self.NK
-        nk = self.nk
+        _u_ik = self._u_ik    # Flow velocity at link ik
+        _A_ik = self._A_ik    # Flow area at link ik
+        _B_ik = self._B_ik    # Top width at link ik
+        _ki = self._ki        # Index of superlink containing link ik
+        _kI = self._kI        # Index of superlink containing junction Ik
+        NK = self.NK          # Number of superlinks
+        nk = self.nk          # Number of links in each superlink
         # Compute Froude number for each superlink and link
         _Fr_k = np.zeros(NK)
         _Fr_ik = self.Fr(_u_ik, _A_ik, _B_ik)
@@ -1065,23 +1354,29 @@ class SuperLink():
         self._sigma_ik = _sigma_ik
 
     def link_coeffs(self, _dt=None):
+        """
+        Compute link momentum coefficients: a_ik, b_ik, c_ik and P_ik.
+        """
         # Import instance variables
-        _u_Ik = self._u_Ik
-        _u_Ip1k = self._u_Ip1k
-        _dx_ik = self._dx_ik
-        _n_ik = self._n_ik
-        _Q_ik = self._Q_ik
-        _A_ik = self._A_ik
-        _R_ik = self._R_ik
-        _S_o_ik = self._S_o_ik
-        _A_c_ik = self._A_c_ik
-        _C_ik = self._C_ik
-        _ctrl = self._ctrl
-        inertial_damping = self.inertial_damping
+        _u_Ik = self._u_Ik         # Flow velocity at junction Ik
+        _u_Ip1k = self._u_Ip1k     # Flow velocity at junction I + 1k
+        _dx_ik = self._dx_ik       # Length of link ik
+        _n_ik = self._n_ik         # Manning's roughness of link ik
+        _Q_ik = self._Q_ik         # Flow rate at link ik
+        _A_ik = self._A_ik         # Flow area at link ik
+        _R_ik = self._R_ik         # Hydraulic radius at link ik
+        _S_o_ik = self._S_o_ik     # Channel bottom slope at link ik
+        _A_c_ik = self._A_c_ik     # Area of control structure at link ik
+        _C_ik = self._C_ik         # Discharge coefficient of control structure at link ik
+        _ctrl = self._ctrl         # Control structure exists at link ik (y/n)
+        inertial_damping = self.inertial_damping    # Use inertial damping (y/n)
+        # If using inertial damping, import coefficient
         if inertial_damping:
             _sigma_ik = self._sigma_ik
+        # Otherwise, set coefficient to unity
         else:
             _sigma_ik = 1
+        # If time step not specified, use instance time
         if _dt is None:
             _dt = self._dt
         # Compute link coefficients
@@ -1098,21 +1393,26 @@ class SuperLink():
         self._P_ik = _P_ik
 
     def node_coeffs(self, _Q_0Ik=None, _dt=None):
+        """
+        Compute nodal continuity coefficients: D_Ik and E_Ik.
+        """
         # Import instance variables
-        _I = self._I
-        start_nodes = self.start_nodes
-        end_nodes = self.end_nodes
-        middle_nodes = self.middle_nodes
-        forward_I_i = self.forward_I_i
-        backward_I_i = self.backward_I_i
-        _B_ik = self._B_ik
-        _dx_ik = self._dx_ik
-        _A_SIk = self._A_SIk
-        _h_Ik = self._h_Ik
-        _E_Ik = self._E_Ik
-        _D_Ik = self._D_Ik
+        _I = self._I                         # Indices of all junctions
+        start_nodes = self.start_nodes       # Upstream nodes of superlinks
+        end_nodes = self.end_nodes           # Downstream nodes of superlinks
+        middle_nodes = self.middle_nodes     # Non-boundary nodes of superlinks
+        forward_I_i = self.forward_I_i       # Index of link after junction Ik
+        backward_I_i = self.backward_I_i     # Index of link before junction Ik
+        _B_ik = self._B_ik                   # Top width of link ik
+        _dx_ik = self._dx_ik                 # Length of link ik
+        _A_SIk = self._A_SIk                 # Surface area of junction Ik
+        _h_Ik = self._h_Ik                   # Depth at junction Ik
+        _E_Ik = self._E_Ik                   # Continuity coefficient E_Ik
+        _D_Ik = self._D_Ik                   # Continuity coefficient D_Ik
+        # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
+        # If no nodal input specified, use zero input
         if _Q_0Ik is None:
             _Q_0Ik = np.zeros(_I.size)
         # Compute E_Ik and D_Ik
@@ -1120,21 +1420,34 @@ class SuperLink():
         end_links = self.backward_I_i[end_nodes]
         backward = self.backward_I_i[middle_nodes]
         forward = self.forward_I_i[middle_nodes]
+        # TODO: Check control volumes
+        # _E_Ik[start_nodes] = self.E_Ik(_B_ik[start_links], _dx_ik[start_links],
+        #                                 _B_ik[start_links], _dx_ik[start_links],
+        #                                 _A_SIk[start_nodes], _dt)
+        # _E_Ik[end_nodes] = self.E_Ik(_B_ik[end_links], _dx_ik[end_links],
+        #                                 _B_ik[end_links], _dx_ik[end_links],
+        #                                 _A_SIk[end_nodes], _dt)
         _E_Ik[start_nodes] = self.E_Ik(_B_ik[start_links], _dx_ik[start_links],
-                                        _B_ik[start_links], _dx_ik[start_links],
-                                        _A_SIk[start_nodes], _dt)
-        _E_Ik[end_nodes] = self.E_Ik(_B_ik[end_links], _dx_ik[end_links],
-                                        _B_ik[end_links], _dx_ik[end_links],
+                                        0.0, 0.0, _A_SIk[start_nodes], _dt)
+        _E_Ik[end_nodes] = self.E_Ik(0.0, 0.0, _B_ik[end_links], _dx_ik[end_links],
                                         _A_SIk[end_nodes], _dt)
         _E_Ik[middle_nodes] = self.E_Ik(_B_ik[forward], _dx_ik[forward],
                                         _B_ik[backward], _dx_ik[backward],
                                         _A_SIk[middle_nodes], _dt)
+        # _D_Ik[start_nodes] = self.D_Ik(_Q_0Ik[start_nodes], _B_ik[start_links],
+        #                                 _dx_ik[start_links], _B_ik[start_links],
+        #                                 _dx_ik[start_links], _A_SIk[start_nodes],
+        #                                 _h_Ik[start_nodes], _dt)
+        # _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], _B_ik[end_links],
+        #                                 _dx_ik[end_links], _B_ik[end_links],
+        #                                 _dx_ik[end_links], _A_SIk[end_nodes],
+        #                                 _h_Ik[end_nodes], _dt)
         _D_Ik[start_nodes] = self.D_Ik(_Q_0Ik[start_nodes], _B_ik[start_links],
-                                        _dx_ik[start_links], _B_ik[start_links],
-                                        _dx_ik[start_links], _A_SIk[start_nodes],
+                                        _dx_ik[start_links], 0.0,
+                                        0.0, _A_SIk[start_nodes],
                                         _h_Ik[start_nodes], _dt)
-        _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], _B_ik[end_links],
-                                        _dx_ik[end_links], _B_ik[end_links],
+        _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], 0.0,
+                                        0.0, _B_ik[end_links],
                                         _dx_ik[end_links], _A_SIk[end_nodes],
                                         _h_Ik[end_nodes], _dt)
         _D_Ik[middle_nodes] = self.D_Ik(_Q_0Ik[middle_nodes], _B_ik[forward],
@@ -1146,25 +1459,28 @@ class SuperLink():
         self._D_Ik = _D_Ik
 
     def forward_recurrence(self):
+        """
+        Compute forward recurrence coefficients: T_ik, U_Ik, V_Ik, and W_Ik.
+        """
         # Import instance variables
-        backward_I_I = self.backward_I_I
-        forward_I_I = self.forward_I_I
-        forward_I_i = self.forward_I_i
-        _I_end = self._I_end
-        _I_1k = self._I_1k
-        _I_2k = self._I_2k
-        _i_1k = self._i_1k
-        _A_ik = self._A_ik
-        _E_Ik = self._E_Ik
-        _D_Ik = self._D_Ik
-        _a_ik = self._a_ik
-        _b_ik = self._b_ik
-        _c_ik = self._c_ik
-        _P_ik = self._P_ik
-        _T_ik = self._T_ik
-        _U_Ik = self._U_Ik
-        _V_Ik = self._V_Ik
-        _W_Ik = self._W_Ik
+        backward_I_I = self.backward_I_I  # Index of junction before junction Ik
+        forward_I_I = self.forward_I_I    # Index of junction after junction Ik
+        forward_I_i = self.forward_I_i    # Index of link after junction Ik
+        _I_end = self._I_end              # Junction at downstream end of superlink (y/n)
+        _I_1k = self._I_1k                # Index of first junction in each superlink
+        _I_2k = self._I_2k                # Index of second junction in each superlink
+        _i_1k = self._i_1k                # Index of first link in each superlink
+        _A_ik = self._A_ik                # Flow area in link ik
+        _E_Ik = self._E_Ik                # Continuity coefficient E_Ik
+        _D_Ik = self._D_Ik                # Continuity coefficient D_Ik
+        _a_ik = self._a_ik                # Momentum coefficient a_ik
+        _b_ik = self._b_ik                # Momentum coefficient b_ik
+        _c_ik = self._c_ik                # Momentum coefficient c_ik
+        _P_ik = self._P_ik                # Momentum coefficient P_ik
+        _T_ik = self._T_ik                # Recurrence coefficient T_ik
+        _U_Ik = self._U_Ik                # Recurrence coefficient U_Ik
+        _V_Ik = self._V_Ik                # Recurrence coefficient V_Ik
+        _W_Ik = self._W_Ik                # Recurrence coefficient W_Ik
         # Compute coefficients for starting nodes
         _E_2k = _E_Ik[_I_2k]
         _D_2k = _D_Ik[_I_2k]
@@ -1180,12 +1496,10 @@ class SuperLink():
         # I = 2, i = 2
         _I_next = _I_2k[~_I_end[_I_2k]]
         # Loop from 2 -> Nk
-        # print('Forward recurrence')
         while _I_next.size:
             _Im1_next = backward_I_I[_I_next]
             _Ip1_next = forward_I_I[_I_next]
             _i_next = forward_I_i[_I_next]
-            # print('I = ', _I_next, 'i = ', _i_next, 'I-1 = ', _Im1_next, 'I+1 = ', _Ip1_next)
             _T_ik[_i_next] = self.T_ik(_a_ik[_i_next], _b_ik[_i_next], _c_ik[_i_next],
                                        _A_ik[_i_next], _E_Ik[_I_next], _U_Ik[_Im1_next])
             _U_Ik[_I_next] = self.U_Ik(_E_Ik[_Ip1_next], _c_ik[_i_next],
@@ -1209,24 +1523,27 @@ class SuperLink():
         self._W_Ik = _W_Ik
 
     def backward_recurrence(self):
+        """
+        Compute backward recurrence coefficients: O_ik, X_Ik, Y_Ik, and Z_Ik.
+        """
         # Import instance variables
-        backward_I_I = self.backward_I_I
-        forward_I_I = self.forward_I_I
-        forward_I_i = self.forward_I_i
-        _I_start = self._I_start
-        _I_Nk = self._I_Nk
-        _i_nk = self._i_nk
-        _A_ik = self._A_ik
-        _E_Ik = self._E_Ik
-        _D_Ik = self._D_Ik
-        _a_ik = self._a_ik
-        _b_ik = self._b_ik
-        _c_ik = self._c_ik
-        _P_ik = self._P_ik
-        _O_ik = self._O_ik
-        _X_Ik = self._X_Ik
-        _Y_Ik = self._Y_Ik
-        _Z_Ik = self._Z_Ik
+        backward_I_I = self.backward_I_I  # Index of junction before junction Ik
+        forward_I_I = self.forward_I_I    # Index of junction after junction Ik
+        forward_I_i = self.forward_I_i    # Index of link after junction Ik
+        _I_start = self._I_start          # Junction at upstream end of superlink (y/n)
+        _I_Nk = self._I_Nk                # Index of penultimate junction in each superlink
+        _i_nk = self._i_nk                # Index of last link in each superlink
+        _A_ik = self._A_ik                # Flow area in link ik
+        _E_Ik = self._E_Ik                # Continuity coefficient E_Ik
+        _D_Ik = self._D_Ik                # Continuity coefficient D_Ik
+        _a_ik = self._a_ik                # Momentum coefficient a_ik
+        _b_ik = self._b_ik                # Momentum coefficient b_ik
+        _c_ik = self._c_ik                # Momentum coefficient c_ik
+        _P_ik = self._P_ik                # Momentum coefficient P_ik
+        _O_ik = self._O_ik                # Recurrence coefficient O_ik
+        _X_Ik = self._X_Ik                # Recurrence coefficient X_Ik
+        _Y_Ik = self._Y_Ik                # Recurrence coefficient Y_Ik
+        _Z_Ik = self._Z_Ik                # Recurrence coefficient Z_Ik
         # Compute coefficients for starting nodes
         _E_Nk = _E_Ik[_I_Nk]
         _D_Nk = _D_Ik[_I_Nk]
@@ -1242,11 +1559,9 @@ class SuperLink():
         # I = Nk-1, i = nk-1
         _I_next = backward_I_I[_I_Nk[~_I_start[_I_Nk]]]
         # Loop from Nk - 1 -> 1
-        # print('Backward recurrence')
         while _I_next.size:
             _Ip1_next = forward_I_I[_I_next]
             _i_next = forward_I_i[_I_next]
-            # print('I = ', _I_next, 'i = ', _i_next, 'I+1 = ', _Ip1_next)
             _O_ik[_i_next] = self.O_ik(_a_ik[_i_next], _b_ik[_i_next], _c_ik[_i_next],
                                 _A_ik[_i_next], _E_Ik[_Ip1_next], _X_Ik[_Ip1_next])
             _X_Ik[_I_next] = self.X_Ik(_A_ik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
@@ -1270,19 +1585,22 @@ class SuperLink():
         self._Z_Ik = _Z_Ik
 
     def superlink_upstream_head_coefficients(self):
+        """
+        Compute upstream head coefficients for superlinks: kappa_uk, lambda_uk, and mu_uk.
+        """
         # Import instance variables
-        _I_1k = self._I_1k
-        _i_1k = self._i_1k
-        _h_Ik = self._h_Ik
-        _J_uk = self._J_uk
-        _z_inv_uk = self._z_inv_uk
-        _A_ik = self._A_ik
-        _B_ik = self._B_ik
-        _Q_ik = self._Q_ik
-        _bc_method = self._bc_method
-        H_j = self.H_j
-        _A_uk = self._A_uk
-        _B_uk = self._B_uk
+        _I_1k = self._I_1k             # Index of first junction in superlink k
+        _i_1k = self._i_1k             # Index of first link in superlink k
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _J_uk = self._J_uk             # Superjunction upstream of superlink k
+        _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
+        _A_ik = self._A_ik             # Flow area of link ik
+        _B_ik = self._B_ik             # Top width of link ik
+        _Q_ik = self._Q_ik             # Flow rate of link ik
+        _bc_method = self._bc_method   # Method for computing superlink boundary condition (j/z)
+        H_j = self.H_j                 # Head at superjunction j
+        _A_uk = self._A_uk             # Flow area at upstream end of superlink k
+        _B_uk = self._B_uk             # Top width at upstream end of superlink k
         # Placeholder discharge coefficient
         _C_uk = 0.67
         # Current upstream flows
@@ -1311,19 +1629,22 @@ class SuperLink():
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
 
     def superlink_downstream_head_coefficients(self):
+        """
+        Compute downstream head coefficients for superlinks: kappa_dk, lambda_dk, and mu_dk.
+        """
         # Import instance variables
-        _I_Np1k = self._I_Np1k
-        _i_nk = self._i_nk
-        _h_Ik = self._h_Ik
-        _J_dk = self._J_dk
-        _z_inv_dk = self._z_inv_dk
-        _A_ik = self._A_ik
-        _B_ik = self._B_ik
-        _Q_ik = self._Q_ik
-        _bc_method = self._bc_method
-        H_j = self.H_j
-        _A_dk = self._A_dk
-        _B_dk = self._B_dk
+        _I_Np1k = self._I_Np1k         # Index of last junction in superlink k
+        _i_nk = self._i_nk             # Index of last link in superlink k
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _J_dk = self._J_dk             # Superjunction downstream of superlink k
+        _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
+        _A_ik = self._A_ik             # Flow area of link ik
+        _B_ik = self._B_ik             # Top width of link ik
+        _Q_ik = self._Q_ik             # Flow rate of link ik
+        _bc_method = self._bc_method   # Method for computing superlink boundary condition (j/z)
+        H_j = self.H_j                 # Head at superjunction j
+        _A_dk = self._A_dk             # Flow area at downstream end of superlink k
+        _B_dk = self._B_dk             # Top width at downstream end of superlink k
         # Placeholder discharge coefficient
         _C_dk = 0.67
         # Current downstream flows
@@ -1353,21 +1674,25 @@ class SuperLink():
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
 
     def superlink_flow_coefficients(self):
+        """
+        Compute superlink flow coefficients: alpha_uk, beta_uk, chi_uk,
+        alpha_dk, beta_dk, chi_dk.
+        """
         # Import instance variables
-        _I_1k = self._I_1k
-        _I_Nk = self._I_Nk
-        _X_Ik = self._X_Ik
-        _Y_Ik = self._Y_Ik
-        _Z_Ik = self._Z_Ik
-        _U_Ik = self._U_Ik
-        _V_Ik = self._V_Ik
-        _W_Ik = self._W_Ik
-        _kappa_uk = self._kappa_uk
-        _kappa_dk = self._kappa_dk
-        _lambda_uk = self._lambda_uk
-        _lambda_dk = self._lambda_dk
-        _mu_uk = self._mu_uk
-        _mu_dk = self._mu_dk
+        _I_1k = self._I_1k              # Index of first junction in superlink k
+        _I_Nk = self._I_Nk              # Index of penultimate junction in superlink k
+        _X_Ik = self._X_Ik              # Backward recurrence coefficient X_Ik
+        _Y_Ik = self._Y_Ik              # Backward recurrence coefficient Y_Ik
+        _Z_Ik = self._Z_Ik              # Backward recurrence coefficient Z_Ik
+        _U_Ik = self._U_Ik              # Forward recurrence coefficient U_Ik
+        _V_Ik = self._V_Ik              # Forward recurrence coefficient V_Ik
+        _W_Ik = self._W_Ik              # Forward recurrence coefficient W_Ik
+        _kappa_uk = self._kappa_uk      # Upstream superlink head coefficient kappa_uk
+        _kappa_dk = self._kappa_dk      # Downstream superlink head coefficient kappa_dk
+        _lambda_uk = self._lambda_uk    # Upstream superlink head coefficient lambda_uk
+        _lambda_dk = self._lambda_dk    # Downstream superlink head coefficient lambda_dk
+        _mu_uk = self._mu_uk            # Upstream superlink head coefficient mu_uk
+        _mu_dk = self._mu_dk            # Downstream superlink head coefficient mu_dk
         # Compute D_k_star
         _D_k_star = self.D_k_star(_X_Ik[_I_1k], _kappa_uk, _U_Ik[_I_Nk],
                                   _kappa_dk, _Z_Ik[_I_1k], _W_Ik[_I_Nk])
@@ -1400,39 +1725,264 @@ class SuperLink():
         self._beta_dk = _beta_dk
         self._chi_dk = _chi_dk
 
+    def orifice_flow_coefficients(self, u=None):
+        """
+        Compute orifice flow coefficients: alpha_uo, beta_uo, chi_uo,
+        alpha_do, beta_do, chi_do.
+        """
+        # Import instance variables
+        H_j = self.H_j               # Head at superjunction j
+        _z_inv_j = self._z_inv_j     # Invert elevation at superjunction j
+        _J_uo = self._J_uo           # Index of superjunction upstream of orifice o
+        _J_do = self._J_do           # Index of superjunction downstream of orifice o
+        _z_o = self._z_o             # Elevation offset of bottom of orifice o
+        _orient_o = self._orient_o   # Orientation of orifice o (side/bottom)
+        _y_max_o = self._y_max_o     # Maximum height of orifice o
+        _Qo = self._Qo               # Current flow rate of orifice o
+        _Co = self._Co               # Discharge coefficient of orifice o
+        _Ao = self._Ao               # Maximum flow area of orifice o
+        _alpha_o = self._alpha_o     # Orifice flow coefficient alpha_o
+        _beta_o = self._beta_o       # Orifice flow coefficient beta_o
+        _chi_o = self._chi_o         # Orifice flow coefficient chi_o
+        # If no input signal, assume orifice is closed
+        if u is None:
+            u = np.zeros(self.n_o, dtype=float)
+        # Specify orifice heads at previous timestep
+        _H_uo = H_j[_J_uo]
+        _H_do = H_j[_J_do]
+        _z_inv_uo = _z_inv_j[_J_uo]
+        # Create indicator functions
+        _omega_o = (_H_uo >= _H_do).astype(float)
+        _tau_o = (_orient_o == 'side').astype(float)
+        # Compute universal coefficients
+        _gamma_o = self.gamma_o(_Qo, _Ao, _Co)
+        # Create conditionals
+        cond_0 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                  _z_o + _z_inv_uo + (_tau_o * _y_max_o * u))
+        cond_1 = ((1 - _omega_o) * _H_uo + _omega_o * _H_do >
+                  _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
+        cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                  _z_o + _z_inv_uo)
+        # Fill coefficient arrays
+        # Submerged on both sides
+        a = (cond_0 & cond_1)
+        _alpha_o[a] = _gamma_o[a] * u[a]**2
+        _beta_o[a] = -_gamma_o[a] * u[a]**2
+        _chi_o[a] = 0.0
+        # Submerged on one side
+        b = (cond_0 & ~cond_1)
+        _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+                                      * (- _z_inv_uo[b] - _z_o[b] -
+                                         _tau_o[b] * _y_max_o[b] * u[b] / 2))
+        # Weir flow
+        c = (~cond_0 & cond_2)
+        _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+        _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+        _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
+                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
+        # No flow
+        d = (~cond_0 & ~cond_2)
+        _alpha_o[d] = 0.0
+        _beta_o[d] = 0.0
+        _chi_o[d] = 0.0
+        # Export instance variables
+        self._alpha_o = _alpha_o
+        self._beta_o = _beta_o
+        self._chi_o = _chi_o
+
+    def weir_flow_coefficients(self, u=None):
+        """
+        Compute weir flow coefficients: alpha_uw, beta_uw, chi_uw,
+        alpha_dw, beta_dw, chi_dw.
+        """
+        # Import instance variables
+        H_j = self.H_j             # Head at superjunction j
+        _z_inv_j = self._z_inv_j   # Invert elevation of superjunction j
+        _J_uw = self._J_uw         # Index of superjunction upstream of weir w
+        _J_dw = self._J_dw         # Index of superjunction downstream of weir w
+        _z_w = self._z_w           # Elevation offset of bottom of weir w
+        _y_max_w = self._y_max_w   # Maximum height of weir w
+        _Qw = self._Qw             # Current flow rate through weir w
+        _Cwr = self._Cwr           # Discharge coefficient for rectangular section
+        _Cwt = self._Cwt           # Discharge coefficient for triangular section
+        _s_w = self._s_w           # Side slope of triangular section
+        _L_w = self._L_w           # Transverse length of rectangular section
+        _alpha_w = self._alpha_w   # Weir flow coefficient alpha_w
+        _beta_w = self._beta_w     # Weir flow coefficient beta_w
+        _chi_w = self._chi_w       # Weir flow coefficient chi_w
+        _Hw = self._Hw             # Current effective head above weir w
+        # If no input signal, assume weir is closed
+        if u is None:
+            u = np.zeros(self.n_w, dtype=float)
+        # Specify weir heads at previous timestep
+        _H_uw = H_j[_J_uw]
+        _H_dw = H_j[_J_dw]
+        _z_inv_uw = _z_inv_j[_J_uw]
+        # Create indicator functions
+        _omega_w = (_H_uw >= _H_dw).astype(float)
+        # Create conditionals
+        cond_0 = (_omega_w * _H_uw + (1 - _omega_w) * _H_dw >
+                  _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+        cond_1 = ((1 - _omega_w) * _H_uw + _omega_w * _H_dw >
+                  _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+        # Effective heads
+        a = (cond_0 & cond_1)
+        b = (cond_0 & ~cond_1)
+        c = (~cond_0)
+        _Hw[a] = _H_uw[a] - _H_dw[a]
+        _Hw[b] = (_omega_w[b] * _H_uw[b] + (1 - _omega_w[b]) * _H_dw[b]
+                     + (-_z_inv_uw[b] - _z_w[b] - (1 - u[b]) * _y_max_w[b]))
+        _Hw[c] = 0.0
+        _Hw = np.abs(_Hw)
+        # Compute universal coefficients
+        _gamma_w = self.gamma_w(_Qw, _Hw, _L_w, _s_w, _Cwr, _Cwt)
+        # Fill coefficient arrays
+        # Submerged on both sides
+        a = (cond_0 & cond_1)
+        _alpha_w[a] = _gamma_w[a]
+        _beta_w[a] = -_gamma_w[a]
+        _chi_w[a] = 0.0
+        # Submerged on one side
+        b = (cond_0 & ~cond_1)
+        _alpha_w[b] = _gamma_w[b] * _omega_w[b] * (-1)**(1 - _omega_w[b])
+        _beta_w[b] = _gamma_w[b] * (1 - _omega_w[b]) * (-1)**(1 - _omega_w[b])
+        _chi_w[b] = (_gamma_w[b] * (-1)**(1 - _omega_w[b]) *
+                                    (- _z_inv_uw[b] - _z_w[b] - (1 - u[b]) * _y_max_w[b]))
+        # No flow
+        c = (~cond_0)
+        _alpha_w[c] = 0.0
+        _beta_w[c] = 0.0
+        _chi_w[c] = 0.0
+        # Export instance variables
+        self._alpha_w = _alpha_w
+        self._beta_w = _beta_w
+        self._chi_w = _chi_w
+
+    def pump_flow_coefficients(self, u=None):
+        """
+        Compute pump flow coefficients: alpha_up, beta_up, chi_up,
+        alpha_dp, beta_dp, chi_dp.
+        """
+        # Import instance variables
+        H_j = self.H_j              # Head at superjunction j
+        _z_inv_j = self._z_inv_j    # Invert elevation at superjunction j
+        _J_up = self._J_up          # Index of superjunction upstream of pump p
+        _J_dp = self._J_dp          # Index of superjunction downstream of pump p
+        _z_p = self._z_p            # Offset of pump inlet above upstream invert elevation
+        _dHp_max = self._dHp_max    # Maximum pump head difference
+        _dHp_min = self._dHp_min    # Minimum pump head difference
+        _ap_h = self._ap_h          # Horizontal axis length of elliptical pump curve
+        _ap_q = self._ap_q          # Vertical axis length of elliptical pump curve
+        _Qp = self._Qp              # Current flow rate through pump p
+        _alpha_p = self._alpha_p    # Pump flow coefficient alpha_p
+        _beta_p = self._beta_p      # Pump flow coefficient beta_p
+        _chi_p = self._chi_p        # Pump flow coefficient chi_p
+        # If no input signal, assume pump is closed
+        if u is None:
+            u = np.zeros(self.n_p, dtype=float)
+        # Specify pump heads at previous timestep
+        _H_up = H_j[_J_up]
+        _H_dp = H_j[_J_dp]
+        _z_inv_up = _z_inv_j[_J_up]
+        # Create conditionals
+        assert (_dHp_min <= _dHp_max).all()
+        _dHp = _H_dp - _H_up
+        cond_0 = _H_up > _z_inv_up + _z_p
+        cond_1 = (_dHp > _dHp_min) & (_dHp < _dHp_max)
+        _dHp[_dHp > _dHp_max] = _dHp_max
+        _dHp[_dHp < _dHp_min] = _dHp_min
+        # Compute universal coefficients
+        _gamma_p = self.gamma_p(_Qp, _dHp, _ap_q, _ap_h)
+        # Fill coefficient arrays
+        # Head in pump curve range
+        a = (cond_0 & cond_1)
+        _alpha_p[a] = _gamma_p[a] * u[a]**2
+        _beta_p[a] = -_gamma_p[a] * u[a]**2
+        _chi_p[a] = (_gamma_p[a] * _ap_h[a]**2 / np.abs(_dHp[a])) * u[a]**2
+        # Head outside of pump curve range
+        b = (cond_0 & ~cond_1)
+        _alpha_p[b] = 0.0
+        _beta_p[b] = 0.0
+        _chi_p[b] = np.sqrt(np.maximum(_ap_q[b]**2 * (1 - _dHp[b]**2 / _ap_h[b]**2), 0.0)) * u[b]
+        # Depth below inlet
+        c = (~cond_0)
+        _alpha_p[c] = 0.0
+        _beta_p[c] = 0.0
+        _chi_p[c] = 0.0
+        # Export instance variables
+        self._alpha_p = _alpha_p
+        self._beta_p = _beta_p
+        self._chi_p = _chi_p
+
     def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
-        # TODO: May want to consider reconstructing A each time while debugging
+        """
+        Construct sparse matrices A, O, W, P and b.
+        """
         # Import instance variables
-        _k = self._k
-        _J_uk = self._J_uk
-        _J_dk = self._J_dk
-        _alpha_uk = self._alpha_uk
-        _alpha_dk = self._alpha_dk
-        _beta_uk = self._beta_uk
-        _beta_dk = self._beta_dk
-        _chi_uk = self._chi_uk
-        _chi_dk = self._chi_dk
-        _alpha_ukm = self._alpha_ukm
-        _beta_dkl = self._beta_dkl
-        _chi_ukl = self._chi_ukl
-        _chi_dkm = self._chi_dkm
-        _A_sj = self._A_sj
-        _J_uo = self._J_uo
-        _J_do = self._J_do
-        _Ao = self._Ao
-        _sparse = self._sparse
-        _O_diag = self._O_diag
-        M = self.M
-        H_j = self.H_j
-        bc = self.bc
-        _Qo_t = self._Qo_t
+        _k = self._k                     # Superlink indices
+        _J_uk = self._J_uk               # Index of superjunction upstream of superlink k
+        _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
+        _alpha_uk = self._alpha_uk       # Superlink flow coefficient
+        _alpha_dk = self._alpha_dk       # Superlink flow coefficient
+        _beta_uk = self._beta_uk         # Superlink flow coefficient
+        _beta_dk = self._beta_dk         # Superlink flow coefficient
+        _chi_uk = self._chi_uk           # Superlink flow coefficient
+        _chi_dk = self._chi_dk           # Superlink flow coefficient
+        _alpha_ukm = self._alpha_ukm     # Summation of superlink flow coefficients
+        _beta_dkl = self._beta_dkl       # Summation of superlink flow coefficients
+        _chi_ukl = self._chi_ukl         # Summation of superlink flow coefficients
+        _chi_dkm = self._chi_dkm         # Summation of superlink flow coefficients
+        _A_sj = self._A_sj               # Surface area of superjunction j
+        _J_uo = self._J_uo               # Index of superjunction upstream of orifice o
+        _J_do = self._J_do               # Index of superjunction upstream of orifice o
+        _alpha_o = self._alpha_o         # Orifice flow coefficient
+        _beta_o = self._beta_o           # Orifice flow coefficient
+        _chi_o = self._chi_o             # Orifice flow coefficient
+        _alpha_uom = self._alpha_uom     # Summation of orifice flow coefficients
+        _beta_dol = self._beta_dol       # Summation of orifice flow coefficients
+        _chi_uol = self._chi_uol         # Summation of orifice flow coefficients
+        _chi_dom = self._chi_dom         # Summation of orifice flow coefficients
+        _O_diag = self._O_diag           # Diagonal elements of matrix O
+        _J_uw = self._J_uw               # Index of superjunction upstream of weir w
+        _J_dw = self._J_dw               # Index of superjunction downstream of weir w
+        _alpha_w = self._alpha_w         # Weir flow coefficient
+        _beta_w = self._beta_w           # Weir flow coefficient
+        _chi_w = self._chi_w             # Weir flow coefficient
+        _alpha_uwm = self._alpha_uwm     # Summation of weir flow coefficients
+        _beta_dwl = self._beta_dwl       # Summation of weir flow coefficients
+        _chi_uwl = self._chi_uwl         # Summation of weir flow coefficients
+        _chi_dwm = self._chi_dwm         # Summation of weir flow coefficients
+        _W_diag = self._W_diag           # Diagonal elements of matrix W
+        _J_up = self._J_up               # Index of superjunction upstream of pump p
+        _J_dp = self._J_dp               # Index of superjunction downstream of pump p
+        _alpha_p = self._alpha_p         # Pump flow coefficient
+        _beta_p = self._beta_p           # Pump flow coefficient
+        _chi_p = self._chi_p             # Pump flow coefficient
+        _alpha_upm = self._alpha_upm     # Summation of pump flow coefficients
+        _beta_dpl = self._beta_dpl       # Summation of pump flow coefficients
+        _chi_upl = self._chi_upl         # Summation of pump flow coefficients
+        _chi_dpm = self._chi_dpm         # Summation of pump flow coefficients
+        _P_diag = self._P_diag           # Diagonal elements of matrix P
+        _sparse = self._sparse           # Use sparse matrix data structures (y/n)
+        n_o = self.n_o                   # Number of orifices in system
+        n_w = self.n_w                   # Number of weirs in system
+        n_p = self.n_p                   # Number of pumps in system
+        M = self.M                       # Number of superjunctions in system
+        H_j = self.H_j                   # Head at superjunction j
+        bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
+        # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
+        # If no boundary head specified, use current superjunction head
         if H_bc is None:
             H_bc = self.H_j
+        # If no flow input specified, assume zero external inflow
         if _Q_0j is None:
             _Q_0j = 0
+        # If no control input signal specified assume zero input
         if u is None:
             u = 0
         # Compute F_jj
@@ -1441,40 +1991,123 @@ class SuperLink():
         np.add.at(_alpha_ukm, _J_uk, _alpha_uk)
         np.add.at(_beta_dkl, _J_dk, _beta_dk)
         _F_jj = self.F_jj(_A_sj, _dt, _beta_dkl, _alpha_ukm)
-        # Set diagonals
+        # Set diagonal of A matrix
         i = np.arange(M)
         self.A[i[~bc], i[~bc]] = _F_jj[i[~bc]]
         self.A[i[bc], i[bc]] = 1
-        # Compute off-diagonals
+        # Compute off-diagonals of A Matrix
         bc_uk = bc[_J_uk]
         bc_dk = bc[_J_dk]
-        self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = _beta_uk[~bc_uk]
-        self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = -_alpha_dk[~bc_dk]
+        self.A[_J_uk[~bc_uk], _J_dk[~bc_uk]] = 0.0
+        self.A[_J_dk[~bc_dk], _J_uk[~bc_dk]] = 0.0
+        np.add.at(self.A, (_J_uk[~bc_uk], _J_dk[~bc_uk]), _beta_uk[~bc_uk])
+        np.add.at(self.A, (_J_dk[~bc_dk], _J_uk[~bc_dk]), -_alpha_dk[~bc_dk])
         # Compute G_j
         _chi_ukl.fill(0)
         _chi_dkm.fill(0)
         np.add.at(_chi_ukl, _J_uk, _chi_uk)
         np.add.at(_chi_dkm, _J_dk, _chi_dk)
         b = self.G_j(_A_sj, _dt, H_j, _Q_0j, _chi_ukl, _chi_dkm)
-        b[bc] = H_bc[bc]
         # Compute control matrix
-        if _J_uo.size:
+        if n_o:
             bc_uo = bc[_J_uo]
             bc_do = bc[_J_do]
             if implicit:
-                # TODO: This will overwrite?
-                # TODO: Ao should be dependent on height of water
-                _theta_o = self.theta_o(u, _Qo_t, _Ao)
+                _alpha_uo = _alpha_o
+                _alpha_do = _alpha_o
+                _beta_uo = _beta_o
+                _beta_do = _beta_o
+                _chi_uo = _chi_o
+                _chi_do = _chi_o
+                _alpha_uom.fill(0)
+                _beta_dol.fill(0)
+                _chi_uol.fill(0)
+                _chi_dom.fill(0)
                 _O_diag.fill(0)
-                np.add.at(_O_diag, _J_uo[~bc_uo], _theta_o[~bc_uo])
-                np.add.at(_O_diag, _J_do[~bc_do], _theta_o[~bc_do])
-                np.fill_diagonal(self.O, _O_diag)
-                self.O[_J_uo[~bc_uo], _J_do[~bc_uo]] = -_theta_o[~bc_uo]
-                self.O[_J_do[~bc_do], _J_uo[~bc_do]] = -_theta_o[~bc_do]
+                # Set diagonal
+                np.add.at(_alpha_uom, _J_uo, _alpha_uo)
+                np.add.at(_beta_dol, _J_do, _beta_do)
+                _O_diag = -_beta_dol + _alpha_uom
+                # Set off-diagonal
+                self.O[i[~bc], i[~bc]] = _O_diag[i[~bc]]
+                self.O[_J_uo[~bc_uo], _J_do[~bc_uo]] = 0.0
+                self.O[_J_do[~bc_do], _J_uo[~bc_do]] = 0.0
+                np.add.at(self.O, (_J_uo[~bc_uo], _J_do[~bc_uo]), _beta_uo[~bc_uo])
+                np.add.at(self.O, (_J_do[~bc_do], _J_uo[~bc_do]), -_alpha_do[~bc_do])
+                # Set right-hand side
+                np.add.at(_chi_uol, _J_uo, _chi_uo)
+                np.add.at(_chi_dom, _J_do, _chi_do)
+                np.add.at(b, i[~bc], -_chi_uol[~bc] + _chi_dom[~bc])
             else:
-                _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
-                self.B[_J_uo[~bc_uo]] = _Qo_u[~bc_uo]
-                self.B[_J_do[~bc_do]] = _Qo_d[~bc_do]
+                # TODO: Broken
+                # _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
+                # self.B[_J_uo[~bc_uo]] = _Qo_u[~bc_uo]
+                # self.B[_J_do[~bc_do]] = _Qo_d[~bc_do]
+                pass
+        if n_w:
+            bc_uw = bc[_J_uw]
+            bc_dw = bc[_J_dw]
+            if implicit:
+                _alpha_uw = _alpha_w
+                _alpha_dw = _alpha_w
+                _beta_uw = _beta_w
+                _beta_dw = _beta_w
+                _chi_uw = _chi_w
+                _chi_dw = _chi_w
+                _alpha_uwm.fill(0)
+                _beta_dwl.fill(0)
+                _chi_uwl.fill(0)
+                _chi_dwm.fill(0)
+                _W_diag.fill(0)
+                # Set diagonal
+                np.add.at(_alpha_uwm, _J_uw, _alpha_uw)
+                np.add.at(_beta_dwl, _J_dw, _beta_dw)
+                _W_diag = -_beta_dwl + _alpha_uwm
+                # Set off-diagonal
+                self.W[i[~bc], i[~bc]] = _W_diag[i[~bc]]
+                self.W[_J_uw[~bc_uw], _J_dw[~bc_uw]] = 0.0
+                self.W[_J_dw[~bc_dw], _J_uw[~bc_dw]] = 0.0
+                np.add.at(self.W, (_J_uw[~bc_uw], _J_dw[~bc_uw]), _beta_uw[~bc_uw])
+                np.add.at(self.W, (_J_dw[~bc_dw], _J_uw[~bc_dw]), -_alpha_dw[~bc_dw])
+                # Set right-hand side
+                np.add.at(_chi_uwl, _J_uw, _chi_uw)
+                np.add.at(_chi_dwm, _J_dw, _chi_dw)
+                np.add.at(b, i[~bc], -_chi_uwl[~bc] + _chi_dwm[~bc])
+            else:
+                pass
+        if n_p:
+            bc_up = bc[_J_up]
+            bc_dp = bc[_J_dp]
+            if implicit:
+                _alpha_up = _alpha_p
+                _alpha_dp = _alpha_p
+                _beta_up = _beta_p
+                _beta_dp = _beta_p
+                _chi_up = _chi_p
+                _chi_dp = _chi_p
+                _alpha_upm.fill(0)
+                _beta_dpl.fill(0)
+                _chi_upl.fill(0)
+                _chi_dpm.fill(0)
+                _P_diag.fill(0)
+                # Set diagonal
+                np.add.at(_alpha_upm, _J_up, _alpha_up)
+                np.add.at(_beta_dpl, _J_dp, _beta_dp)
+                _P_diag = -_beta_dpl + _alpha_upm
+                # Set off-diagonal
+                self.P[i[~bc], i[~bc]] = _P_diag[i[~bc]]
+                self.P[_J_up[~bc_up], _J_dp[~bc_up]] = 0.0
+                self.P[_J_dp[~bc_dp], _J_up[~bc_dp]] = 0.0
+                np.add.at(self.P, (_J_up[~bc_up], _J_dp[~bc_up]), _beta_up[~bc_up])
+                np.add.at(self.P, (_J_dp[~bc_dp], _J_up[~bc_dp]), -_alpha_dp[~bc_dp])
+                # Set right-hand side
+                np.add.at(_chi_upl, _J_up, _chi_up)
+                np.add.at(_chi_dpm, _J_dp, _chi_dp)
+                np.add.at(b, i[~bc], -_chi_upl[~bc] + _chi_dpm[~bc])
+            else:
+                pass
+        # Ensure boundary condition is specified
+        b[bc] = H_bc[bc]
         # Export instance variables
         self.b = b
         self._beta_dkl = _beta_dkl
@@ -1485,23 +2118,35 @@ class SuperLink():
             self.A = self.A.tocsr()
 
     def solve_sparse_matrix(self, u=None, implicit=True):
+        """
+        Solve sparse system Ax = b for superjunction heads at time t + dt.
+        """
         # Import instance variables
-        A = self.A
-        b = self.b
-        B = self.B
-        O = self.O
-        _z_inv_j = self._z_inv_j
-        _sparse = self._sparse
-        min_depth = self.min_depth
-        max_depth = self.max_depth
+        A = self.A                    # Superlink/superjunction matrix
+        b = self.b                    # Right-hand side vector
+        B = self.B                    # External control matrix
+        O = self.O                    # Orifice matrix
+        W = self.W                    # Weir matrix
+        P = self.P                    # Pump matrix
+        n_o = self.n_o                # Number of orifices
+        n_w = self.n_w                # Number of weirs
+        n_p = self.n_p                # Number of pumps
+        _z_inv_j = self._z_inv_j      # Invert elevation of superjunction j
+        _sparse = self._sparse        # Use sparse data structures (y/n)
+        min_depth = self.min_depth    # Minimum depth at superjunctions
+        max_depth = self.max_depth    # Maximum depth at superjunctions
+        # Does the system have control assets?
+        has_control = n_o + n_w + n_p
         # Get right-hand size
-        if u is not None:
+        if has_control:
             if implicit:
-                l = A + O
+                l = A + O + W + P
                 r = b
             else:
-                l = A
-                r = b + np.squeeze(B @ u)
+                # TODO: Broken
+                # l = A
+                # r = b + np.squeeze(B @ u)
+                pass
         else:
             l = A
             r = b
@@ -1509,21 +2154,27 @@ class SuperLink():
             H_j_next = scipy.sparse.linalg.spsolve(l, r)
         else:
             H_j_next = scipy.linalg.solve(l, r)
+        # Constrain heads based on allowed maximum/minimum depths
         H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
         H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        # Export instance variables
         self.H_j = H_j_next
 
     def solve_superlink_flows(self):
+        """
+        Solve for superlink boundary discharges given superjunction
+        heads at time t + dt.
+        """
         # Import instance variables
-        _J_uk = self._J_uk
-        _J_dk = self._J_dk
-        _alpha_uk = self._alpha_uk
-        _alpha_dk = self._alpha_dk
-        _beta_uk = self._beta_uk
-        _beta_dk = self._beta_dk
-        _chi_uk = self._chi_uk
-        _chi_dk = self._chi_dk
-        H_j = self.H_j
+        _J_uk = self._J_uk            # Index of superjunction upstream of superlink k
+        _J_dk = self._J_dk            # Index of superjunction downstream of superlink k
+        _alpha_uk = self._alpha_uk    # Superlink flow coefficient
+        _alpha_dk = self._alpha_dk    # Superlink flow coefficient
+        _beta_uk = self._beta_uk      # Superlink flow coefficient
+        _beta_dk = self._beta_dk      # Superlink flow coefficient
+        _chi_uk = self._chi_uk        # Superlink flow coefficient
+        _chi_dk = self._chi_dk        # Superlink flow coefficient
+        H_j = self.H_j                # Head at superjunction j
         # Compute flow at next time step
         _Q_uk_next = _alpha_uk * H_j[_J_uk] + _beta_uk * H_j[_J_dk] + _chi_uk
         _Q_dk_next = _alpha_dk * H_j[_J_uk] + _beta_dk * H_j[_J_dk] + _chi_dk
@@ -1532,31 +2183,169 @@ class SuperLink():
         self._Q_dk = _Q_dk_next
 
     def solve_orifice_flows(self, u=None):
+        """
+        Solve for orifice discharges given superjunction heads at time t + dt.
+        """
         # Import instance variables
-        _J_uo = self._J_uo
-        _J_do = self._J_do
-        _Ao = self._Ao
-        H_j = self.H_j
+        H_j = self.H_j                # Head at superjunction j
+        _z_inv_j = self._z_inv_j      # Invert elevation at superjunction j
+        _J_uo = self._J_uo            # Index of superjunction upstream of orifice o
+        _J_do = self._J_do            # Index of superjunction downstream of orifice o
+        _z_o = self._z_o              # Offset of orifice above upstream invert elevation
+        _orient_o = self._orient_o    # Orientation of orifice o (bottom/side)
+        _y_max_o = self._y_max_o      # Maximum height of orifice o
+        _Co = self._Co                # Discharge coefficient of orifice o
+        _Ao = self._Ao                # Maximum flow area of orifice o
+        # If no input signal, assume orifice is closed
         if u is None:
-            u = 0
-        # Compute orifice flows
-        _, _Qo_t = self.B_j(_J_uo, _J_do, u * _Ao, H_j)
+            u = np.zeros(self.n_o, dtype=float)
+        g = 9.81
+        # Create arrays to store flow coefficients for current time step
+        _alpha_oo = np.zeros(self.n_o, dtype=float)
+        _beta_oo = np.zeros(self.n_o, dtype=float)
+        _chi_oo = np.zeros(self.n_o, dtype=float)
+        # Specify orifice heads at previous timestep
+        _H_uo = H_j[_J_uo]
+        _H_do = H_j[_J_do]
+        _z_inv_uo = _z_inv_j[_J_uo]
+        # Create indicator functions
+        _omega_o = (_H_uo >= _H_do).astype(float)
+        _tau_o = (_orient_o == 'side').astype(float)
+        # Compute universal coefficients
+        _gamma_oo = 2 * g * _Co**2 * _Ao**2
+        # Create conditionals
+        cond_0 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                  _z_o + _z_inv_uo + (_tau_o * _y_max_o * u))
+        cond_1 = ((1 - _omega_o) * _H_uo + _omega_o * _H_do >
+                  _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
+        cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                  _z_o + _z_inv_uo)
+        # Fill coefficient arrays
+        # Submerged on both sides
+        a = (cond_0 & cond_1)
+        _alpha_oo[a] = _gamma_oo[a] * u[a]**2
+        _beta_oo[a] = -_gamma_oo[a] * u[a]**2
+        _chi_oo[a] = 0.0
+        # Submerged on one side
+        b = (cond_0 & ~cond_1)
+        _alpha_oo[b] = _gamma_oo[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _beta_oo[b] = _gamma_oo[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _chi_oo[b] = (_gamma_oo[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+                                      * (- _z_inv_uo[b] - _z_o[b]
+                                         - _tau_o[b] * _y_max_o[b] * u[b] / 2))
+        # Weir flow on one side
+        c = (~cond_0 & cond_2)
+        _alpha_oo[c] = _gamma_oo[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+        _beta_oo[c] = _gamma_oo[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+        _chi_oo[c] = (_gamma_oo[c] * (-1)**(1 - _omega_o[c])
+                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
+        # No flow
+        d = (~cond_0 & ~cond_2)
+        _alpha_oo[d] = 0.0
+        _beta_oo[d] = 0.0
+        _chi_oo[d] = 0.0
+        # Compute flow
+        _Qo_next = (-1)**(1 - _omega_o) * np.sqrt(np.abs(
+                _alpha_oo * _H_uo + _beta_oo * _H_do + _chi_oo))
         # Export instance variables
-        self._Qo_t = _Qo_t
+        self._Qo = _Qo_next
+
+    def solve_weir_flows(self, u=None):
+        """
+        Solve for weir discharges given superjunction heads at time t + dt.
+        """
+        # Import instance variables
+        H_j = self.H_j              # Head at superjunction j
+        _z_inv_j = self._z_inv_j    # Invert elevation of superjunction j
+        _J_uw = self._J_uw          # Index of superjunction upstream of weir w
+        _J_dw = self._J_dw          # Index of superjunction downstream of weir w
+        _z_w = self._z_w            # Offset of weir w above invert of upstream superjunction
+        _y_max_w = self._y_max_w    # Maximum height of weir w
+        _Qw = self._Qw              # Current flow rate through weir w
+        _Cwr = self._Cwr            # Discharge coefficient of rectangular portion of weir w
+        _Cwt = self._Cwt            # Discharge coefficient of triangular portion of weir w
+        _s_w = self._s_w            # Inverse side slope of triangular portion of weir w
+        _L_w = self._L_w            # Transverse length of rectangular portion of weir w
+        _Hw = self._Hw              # Current effective head on weir w
+        # If no input signal, assume weir is closed
+        if u is None:
+            u = np.zeros(self.n_w, dtype=float)
+        # Specify orifice heads at previous timestep
+        _H_uw = H_j[_J_uw]
+        _H_dw = H_j[_J_dw]
+        _z_inv_uw = _z_inv_j[_J_uw]
+        # Create indicator functions
+        _omega_w = (_H_uw >= _H_dw).astype(float)
+        # Create conditionals
+        cond_0 = (_omega_w * _H_uw + (1 - _omega_w) * _H_dw >
+                  _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+        cond_1 = ((1 - _omega_w) * _H_uw + _omega_w * _H_dw >
+                  _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+        # Effective heads
+        a = (cond_0 & cond_1)
+        b = (cond_0 & ~cond_1)
+        c = (~cond_0)
+        _Hw[a] = _H_uw[a] - _H_dw[a]
+        _Hw[b] = (_omega_w[b] * _H_uw[b] + (1 - _omega_w[b]) * _H_dw[b]
+                     + (-_z_inv_uw[b] - _z_w[b] - (1 - u[b]) * _y_max_w[b]))
+        _Hw[c] = 0.0
+        _Hw = np.abs(_Hw)
+        # Compute universal coefficient
+        _gamma_ww = (_Cwr * _L_w * _Hw + _Cwt * _s_w * _Hw**2)**2
+        # Compute flow
+        _Qw_next = (-1)**(1 - _omega_w) * np.sqrt(_gamma_ww * _Hw)
+        # Export instance variables
+        self._Qw = _Qw_next
+
+    def solve_pump_flows(self, u=None):
+        """
+        Solve for pump discharges given superjunction heads at time t + dt.
+        """
+        # Import instance variables
+        H_j = self.H_j              # Head at superjunction j
+        _z_inv_j = self._z_inv_j    # Invert elevation of superjunction j
+        _J_up = self._J_up          # Index of superjunction upstream of pump p
+        _J_dp = self._J_dp          # Index of superjunction downstream of pump p
+        _z_p = self._z_p            # Offset of pump inlet above upstream invert
+        _dHp_max = self._dHp_max    # Maximum pump head difference
+        _dHp_min = self._dHp_min    # Minimum pump head difference
+        _ap_h = self._ap_h          # Horizontal axis length of elliptical pump curve
+        _ap_q = self._ap_q          # Vertical axis length of elliptical pump curve
+        _Qp = self._Qp              # Current flow rate through pump p
+        # If no input signal, assume pump is closed
+        if u is None:
+            u = np.zeros(self.n_p, dtype=float)
+        # Specify pump heads at previous timestep
+        _H_up = H_j[_J_up]
+        _H_dp = H_j[_J_dp]
+        _z_inv_up = _z_inv_j[_J_up]
+        # Create conditionals
+        _dHp = _H_dp - _H_up
+        _dHp[_dHp > _dHp_max] = _dHp_max
+        _dHp[_dHp < _dHp_min] = _dHp_min
+        cond_0 = _H_up > _z_inv_up + _z_p
+        # Compute universal coefficients
+        _Qp_next = u * np.sqrt(np.maximum(_ap_q**2 * (1 - (_dHp)**2 / _ap_h**2), 0.0))
+        _Qp_next[~cond_0] = 0.0
+        self._Qp = _Qp_next
 
     def solve_superlink_depths(self):
+        """
+        Solve for depths at superlink ends given discharges and
+        superjunction heads at time t + dt.
+        """
         # Import instance variables
-        _J_uk = self._J_uk
-        _J_dk = self._J_dk
-        _kappa_uk = self._kappa_uk
-        _kappa_dk = self._kappa_dk
-        _lambda_uk = self._lambda_uk
-        _lambda_dk = self._lambda_dk
-        _mu_uk = self._mu_uk
-        _mu_dk = self._mu_dk
-        _Q_uk = self._Q_uk
-        _Q_dk = self._Q_dk
-        H_j = self.H_j
+        _J_uk = self._J_uk              # Index of superjunction upstream of superlink k
+        _J_dk = self._J_dk              # Index of superjunction downstream of superlink k
+        _kappa_uk = self._kappa_uk      # Superlink head coefficient
+        _kappa_dk = self._kappa_dk      # Superlink head coefficient
+        _lambda_uk = self._lambda_uk    # Superlink head coefficient
+        _lambda_dk = self._lambda_dk    # Superlink head coefficient
+        _mu_uk = self._mu_uk            # Superlink head coefficient
+        _mu_dk = self._mu_dk            # Superlink head coefficient
+        _Q_uk = self._Q_uk              # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk              # Flow rate at downstream end of superlink k
+        H_j = self.H_j                  # Head at superjunction j
         # Compute flow at next time step
         _h_uk_next = _kappa_uk * _Q_uk + _lambda_uk * H_j[_J_uk] + _mu_uk
         _h_dk_next = _kappa_dk * _Q_dk + _lambda_dk * H_j[_J_dk] + _mu_dk
@@ -1565,19 +2354,23 @@ class SuperLink():
         self._h_dk = _h_dk_next
 
     def solve_superlink_depths_alt(self):
+        """
+        Solve for depths at superlink ends given discharges and
+        superjunction heads at time t + dt.
+        """
         # Import instance variables
-        _I_1k = self._I_1k
-        _I_Nk = self._I_Nk
-        _U_Ik = self._U_Ik
-        _V_Ik = self._V_Ik
-        _W_Ik = self._W_Ik
-        _X_Ik = self._X_Ik
-        _Y_Ik = self._Y_Ik
-        _Z_Ik = self._Z_Ik
-        _Q_uk = self._Q_uk
-        _Q_dk = self._Q_dk
-        H_j = self.H_j
-        min_depth = self.min_depth
+        _I_1k = self._I_1k              # Index of first junction in superlink k
+        _I_Nk = self._I_Nk              # Index of penultimate junction in superlink k
+        _U_Ik = self._U_Ik              # Forward recurrence coefficient
+        _V_Ik = self._V_Ik              # Forward recurrence coefficient
+        _W_Ik = self._W_Ik              # Forward recurrence coefficient
+        _X_Ik = self._X_Ik              # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik              # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik              # Backward recurrence coefficient
+        _Q_uk = self._Q_uk              # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk              # Flow rate at downstream end of superlink k
+        H_j = self.H_j                  # Head at superjunction j
+        min_depth = self.min_depth      # Minimum allowable depth at superjunction j
         # Compute flow at next time step
         det = (_X_Ik[_I_1k] * _U_Ik[_I_Nk]) - (_Z_Ik[_I_1k] * _W_Ik[_I_Nk])
         det[det == 0] = np.inf
@@ -1593,42 +2386,45 @@ class SuperLink():
         self._h_dk = _h_dk_next
 
     def solve_internals_lsq(self):
+        """
+        Solve for internal states of each superlink using least squares approximation.
+        """
         # Import instance variables
-        _I_1k = self._I_1k
-        _I_Np1k = self._I_Np1k
-        _i_1k = self._i_1k
-        _i_nk = self._i_nk
-        _kI = self._kI
-        middle_nodes = self.middle_nodes
-        middle_links = self.middle_links
-        _G = self._G
-        _h = self._h
-        _I_f = self._I_f
-        _I_b = self._I_b
-        _b_f = self._b_f
-        _b_b = self._b_b
-        _rows_f = self._rows_f
-        _rows_b = self._rows_b
-        _rows_r = self._rows_r
-        _cols_l = self._cols_l
-        _cols_r = self._cols_r
-        _lbound = self._lbound
-        _ubound = self._ubound
-        _ix_h = self._ix_h
-        _ix_q = self._ix_q
-        _U_Ik = self._U_Ik
-        _V_Ik = self._V_Ik
-        _W_Ik = self._W_Ik
-        _X_Ik = self._X_Ik
-        _Y_Ik = self._Y_Ik
-        _Z_Ik = self._Z_Ik
-        _Q_uk = self._Q_uk
-        _Q_dk = self._Q_dk
-        _h_uk = self._h_uk
-        _h_dk = self._h_dk
-        _h_Ik = self._h_Ik
-        _Q_ik = self._Q_ik
-        min_depth = self.min_depth
+        _I_1k = self._I_1k                  # Index of junction at upstream end of superlink k
+        _I_Np1k = self._I_Np1k              # Index of junction at downstream end of superlink k
+        _i_1k = self._i_1k                  # Index of link at upstream end of superlink k
+        _i_nk = self._i_nk                  # Index of link at downstream end of superlink k
+        _kI = self._kI                      # Index of superlink containing junction Ik
+        middle_nodes = self.middle_nodes    # Junctions not located at upstream or downstream ends
+        middle_links = self.middle_links    # Links not located at upstream or downstream ends
+        _G = self._G                        # LHS matrix in least squares equation
+        _h = self._h                        # RHS matrix in least squares equation
+        _I_f = self._I_f                    # Forward indexer
+        _I_b = self._I_b                    # Backward indexer
+        _b_f = self._b_f                    # Forward indexer
+        _b_b = self._b_b                    # Backward indexer
+        _rows_f = self._rows_f              # Rows for forward direction
+        _rows_b = self._rows_b              # Rows for backward direction
+        _rows_r = self._rows_r              # Rows for RHS vector
+        _cols_l = self._cols_l              # Columns for forward direction
+        _cols_r = self._cols_r              # Columns for backward direction
+        _lbound = self._lbound              # Lower bounds for solution
+        _ubound = self._ubound              # Upper bounds for solution
+        _ix_h = self._ix_h                  # Depth index
+        _ix_q = self._ix_q                  # Flow index
+        _U_Ik = self._U_Ik                  # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                  # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                  # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                  # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                  # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
+        _Q_uk = self._Q_uk                  # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk                  # Flow rate at downstream end of superlink k
+        _h_uk = self._h_uk                  # Depth at upstream end of superlink k
+        _h_dk = self._h_dk                  # Depth at downstream end of superlink k
+        _h_Ik = self._h_Ik                  # Depth at junction Ik
+        _Q_ik = self._Q_ik                  # Flow rate at link ik
+        min_depth = self.min_depth          # Minimum allowed water depth
         # Update solution matrix
         _G[_rows_f, _cols_l] = _U_Ik[_I_f]
         _G[_rows_b, _cols_l] = _X_Ik[_I_b]
@@ -1652,45 +2448,35 @@ class SuperLink():
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
 
-    def solve_internals(self):
-        self.solve_internals_forwards()
-        self.solve_internals_backwards()
-        _h_Ik_b = self._h_Ik_b
-        _h_Ik_f = self._h_Ik_f
-        _Q_ik_b = self._Q_ik_b
-        _Q_ik_f = self._Q_ik_f
-        # _Q_ik = (_Q_ik_b + _Q_ik_f) / 2
-        # _h_Ik = (_h_Ik_b + _h_Ik_f) / 2
-        _Q_ik = _Q_ik_b
-        _h_Ik = _h_Ik_b
-        self._Q_ik = _Q_ik
-        self._h_Ik = _h_Ik
-
     def solve_internals_simultaneous(self):
-        _I_1k = self._I_1k
-        _I_2k = self._I_2k
-        _I_Nk = self._I_Nk
-        _I_Np1k = self._I_Np1k
-        _i_1k = self._i_1k
-        _i_nk = self._i_nk
-        _I_start = self._I_start
-        _I_end = self._I_end
-        forward_I_I = self.forward_I_I
-        backward_I_I = self.backward_I_I
-        forward_I_i = self.forward_I_i
-        _h_Ik = self._h_Ik
-        _Q_ik = self._Q_ik
-        _U_Ik = self._U_Ik
-        _V_Ik = self._V_Ik
-        _W_Ik = self._W_Ik
-        _X_Ik = self._X_Ik
-        _Y_Ik = self._Y_Ik
-        _Z_Ik = self._Z_Ik
-        _Q_uk = self._Q_uk
-        _Q_dk = self._Q_dk
-        _h_uk = self._h_uk
-        _h_dk = self._h_dk
-        min_depth = self.min_depth
+        """
+        Solve for internal states of each superlink forwards and backwards simultaneously.
+        """
+        # Import instance variables
+        _I_1k = self._I_1k                   # Index of first junction in superlink k
+        _I_2k = self._I_2k                   # Index of second junction in superlink k
+        _I_Nk = self._I_Nk                   # Index of penultimate junction in superlink k
+        _I_Np1k = self._I_Np1k               # Index of last junction in superlink k
+        _i_1k = self._i_1k                   # Index of first link in superlink k
+        _i_nk = self._i_nk                   # Index of last link in superlink k
+        _I_start = self._I_start             # Junction is at upstream end of superlink k
+        _I_end = self._I_end                 # Junction is at downstream end of superlink k
+        forward_I_I = self.forward_I_I       # Index of junction after junction Ik
+        backward_I_I = self.backward_I_I     # Index of junction before junction Ik
+        forward_I_i = self.forward_I_i       # Index of link after junction Ik
+        _h_Ik = self._h_Ik                   # Depth at junction Ik
+        _Q_ik = self._Q_ik                   # Flow rate at link ik
+        _U_Ik = self._U_Ik                   # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                   # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                   # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                   # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                   # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                   # Backward recurrence coefficient
+        _Q_uk = self._Q_uk                   # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk                   # Flow rate at downstream end of superlink k
+        _h_uk = self._h_uk                   # Depth at upstream end of superlink k
+        _h_dk = self._h_dk                   # Depth at downstream end of superlink k
+        min_depth = self.min_depth           # Minimum allowed water depth
         # Set first elements
         _Q_ik[_i_1k] = _Q_uk
         _Q_ik[_i_nk] = _Q_dk
@@ -1717,7 +2503,6 @@ class SuperLink():
             _i_next_b = forward_I_i[_I_next_b]
             _Im1_next_b = backward_I_I[_I_next_b]
             _im1_next_b = forward_I_i[_Im1_next_b]
-            # print('I_f =', _I_next_f, 'I_b =', _I_next_b)
             _h_Ik[_I_next_b] = self._h_Ik_next_b(_Q_ik[_i_next_b], _Y_Ik[_I_next_b],
                                                  _Z_Ik[_I_next_b], _h_Ik[_I_Np1k_next_b],
                                                  _X_Ik[_I_next_b])
@@ -1773,29 +2558,32 @@ class SuperLink():
         self._Q_ik = _Q_ik
 
     def solve_internals_forwards(self, supercritical_only=False):
+        """
+        Solve for internal states of each superlink in the forward direction.
+        """
         # Import instance variables
-        _I_1k = self._I_1k
-        _I_2k = self._I_2k
-        _I_Nk = self._I_Nk
-        _I_Np1k = self._I_Np1k
-        _i_1k = self._i_1k
-        _i_nk = self._i_nk
-        _I_end = self._I_end
-        forward_I_I = self.forward_I_I
-        forward_I_i = self.forward_I_i
-        _h_Ik = self._h_Ik
-        _Q_ik = self._Q_ik
-        _U_Ik = self._U_Ik
-        _V_Ik = self._V_Ik
-        _W_Ik = self._W_Ik
-        _X_Ik = self._X_Ik
-        _Y_Ik = self._Y_Ik
-        _Z_Ik = self._Z_Ik
-        _Q_uk = self._Q_uk
-        _Q_dk = self._Q_dk
-        _h_uk = self._h_uk
-        _h_dk = self._h_dk
-        min_depth = self.min_depth
+        _I_1k = self._I_1k                   # Index of first junction in superlink k
+        _I_2k = self._I_2k                   # Index of second junction in superlink k
+        _I_Nk = self._I_Nk                   # Index of penultimate junction in superlink k
+        _I_Np1k = self._I_Np1k               # Index of last junction in superlink k
+        _i_1k = self._i_1k                   # Index of first link in superlink k
+        _i_nk = self._i_nk                   # Index of last link in superlink k
+        _I_end = self._I_end                 # Junction is at downstream end of superlink (y/n)
+        forward_I_I = self.forward_I_I       # Index of junction after junction Ik
+        forward_I_i = self.forward_I_i       # Index of junction before junction Ik
+        _h_Ik = self._h_Ik                   # Depth at junction Ik
+        _Q_ik = self._Q_ik                   # Flow rate at link ik
+        _U_Ik = self._U_Ik                   # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                   # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                   # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                   # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                   # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                   # Backward recurrence coefficient
+        _Q_uk = self._Q_uk                   # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk                   # Flow rate at downstream end of superlink k
+        _h_uk = self._h_uk                   # Depth at upstream end of superlink k
+        _h_dk = self._h_dk                   # Depth at downstream end of superlink k
+        min_depth = self.min_depth           # Minimum allowed water depth
         # max_depth = 0.3048 * 10
         if supercritical_only:
             _supercritical = self._supercritical
@@ -1820,12 +2608,10 @@ class SuperLink():
             _I_Nk_next = _I_Nk_next[keep]
             _I_Np1k_next = _I_Np1k_next[keep]
         # Loop from 2 -> Nk
-        # print('Solve internals forwards')
         while _I_next.size:
             _i_next = forward_I_i[_I_next]
             _im1_next = forward_I_i[_Im1_next]
             _Ip1_next = forward_I_I[_I_next]
-            # print('I = ', _I_next, 'i = ', _i_next, 'I-1 = ', _Im1_next, 'I+1 = ', _Ip1_next)
             _h_Ik[_I_next] = self._h_Ik_next_f(_Q_ik[_im1_next], _V_Ik[_Im1_next],
                                                  _W_Ik[_Im1_next], _h_Ik[_I_1k_next],
                                                  _U_Ik[_Im1_next])
@@ -1865,29 +2651,32 @@ class SuperLink():
         return t_0 + t_1 + t_2
 
     def solve_internals_backwards(self, subcritical_only=False):
+        """
+        Solve for internal states of each superlink in the backward direction.
+        """
         # Import instance variables
-        _I_1k = self._I_1k
-        _I_2k = self._I_2k
-        _I_Nk = self._I_Nk
-        _I_Np1k = self._I_Np1k
-        _i_1k = self._i_1k
-        _i_nk = self._i_nk
-        _I_end = self._I_end
-        backward_I_I = self.backward_I_I
-        forward_I_i = self.forward_I_i
-        _h_Ik = self._h_Ik
-        _Q_ik = self._Q_ik
-        _U_Ik = self._U_Ik
-        _V_Ik = self._V_Ik
-        _W_Ik = self._W_Ik
-        _X_Ik = self._X_Ik
-        _Y_Ik = self._Y_Ik
-        _Z_Ik = self._Z_Ik
-        _Q_uk = self._Q_uk
-        _Q_dk = self._Q_dk
-        _h_uk = self._h_uk
-        _h_dk = self._h_dk
-        min_depth = self.min_depth
+        _I_1k = self._I_1k                  # Index of first junction in superlink k
+        _I_2k = self._I_2k                  # Index of second junction in superlink k
+        _I_Nk = self._I_Nk                  # Index of penultimate junction in superlink k
+        _I_Np1k = self._I_Np1k              # Index of last junction in superlink k
+        _i_1k = self._i_1k                  # Index of first link in superlink k
+        _i_nk = self._i_nk                  # Index of last link in superlink k
+        _I_end = self._I_end                # Junction is at downstream end (y/n)
+        backward_I_I = self.backward_I_I    # Index of next junction after junction Ik
+        forward_I_i = self.forward_I_i      # Index of next link after junction Ik
+        _h_Ik = self._h_Ik                  # Depth at junction Ik
+        _Q_ik = self._Q_ik                  # Flow rate at link ik
+        _U_Ik = self._U_Ik                  # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                  # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                  # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                  # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                  # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
+        _Q_uk = self._Q_uk                  # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk                  # Flow rate at downstream end of superlink k
+        _h_uk = self._h_uk                  # Depth at upstream end of superlink k
+        _h_dk = self._h_dk                  # Depth at downstream end of superlink k
+        min_depth = self.min_depth          # Minimum allowable water depth
         # max_depth = 0.3048 * 10
         if subcritical_only:
             _subcritical = ~self._supercritical
@@ -1912,12 +2701,10 @@ class SuperLink():
             _I_2k_next = _I_2k_next[keep]
             _I_Np1k_next = _I_Np1k_next[keep]
         # Loop from Nk -> 1
-        # print('Solve internals backwards')
         while _I_next.size:
             _i_next = forward_I_i[_I_next]
             _Im1_next = backward_I_I[_I_next]
             _im1_next = forward_I_i[_Im1_next]
-            # print('I = ', _I_next, 'i = ', _i_next, 'I-1 = ', _Im1_next, 'i-1 = ', _im1_next)
             _h_Ik[_I_next] = self._h_Ik_next_b(_Q_ik[_i_next], _Y_Ik[_I_next],
                                                  _Z_Ik[_I_next], _h_Ik[_I_Np1k_next],
                                                  _X_Ik[_I_next])
@@ -1940,6 +2727,7 @@ class SuperLink():
         # Ensure non-negative depths?
         _h_Ik[_h_Ik < min_depth] = min_depth
         # _h_Ik[_h_Ik > max_depth] = max_depth
+        # Export instance variables
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
 
@@ -1955,28 +2743,102 @@ class SuperLink():
         t_2 = W_Im1k * h_1k
         return t_0 + t_1 + t_2
 
+    def solve_internals_exact(self):
+        NK = self.NK
+        nk = self.nk
+        _kI = self._kI
+        _ki = self._ki
+        _I_1k = self._I_1k
+        _I_Np1k = self._I_Np1k
+        _Q_uk = self._Q_uk
+        _Q_dk = self._Q_dk
+        _h_Ik = self._h_Ik
+        _Q_ik = self._Q_ik
+        _D_Ik = self._D_Ik
+        _E_Ik = self._E_Ik
+        _a_ik = self._a_ik
+        _b_ik = self._b_ik
+        _c_ik = self._c_ik
+        _P_ik = self._P_ik
+        _A_SIk = self._A_SIk
+        _A_ik = self._A_ik
+        _dt = self._dt
+        min_depth = self.min_depth
+        g = 9.81
+        # For each superlink...
+        for k in range(NK):
+            # Set up solution matrix
+            nlinks = nk[k]
+            njunctions = nlinks + 1
+            N = nlinks + njunctions
+            I_k = (_kI == k)
+            i_k = (_ki == k)
+            rows = np.arange(0, N, 2)
+            cols = np.arange(0, njunctions)
+            Q_u = _Q_uk[k]
+            Q_d = _Q_dk[k]
+            Ak = np.zeros((N, N))
+            bk = np.zeros(N)
+            # Fill right-hand side matrix
+            Ak[rows, cols] = _E_Ik[I_k]
+            Ak[rows[:-1], njunctions + cols[:-1]] = 1.
+            Ak[rows[1:], njunctions + cols[:-1]] = -1.
+            Ak[1 + rows[:-1], cols[:-1]] = g * _A_ik[i_k]
+            Ak[1 + rows[:-1], cols[1:]] = -g * _A_ik[i_k]
+            Ak[1 + rows[:-1], njunctions + cols[:-1]] = _b_ik[i_k]
+            Ak[1 + rows[1:-1], njunctions + cols[:-2]] = _a_ik[i_k][1:]
+            Ak[1 + rows[:-2], njunctions + cols[1:-1]] = _c_ik[i_k][:-1]
+            # Fill left-hand side vector
+            bk[rows] = _D_Ik[I_k]
+            bk[1 + rows[:-1]] = _P_ik[i_k]
+            bk[0] += Q_u
+            bk[-1] -= Q_d
+            bk[1] -= _a_ik[i_k][0] * Q_u
+            bk[-2] -= _c_ik[i_k][-1] * Q_d
+            # Solve superlink equations simultaneously
+            x = scipy.linalg.solve(Ak, bk)
+            # Write new depths
+            _h_Ik[I_k] = x[:njunctions]
+            # Write new flows
+            _Q_ik[i_k] = x[njunctions:]
+        # Impose minimum depth
+        _h_Ik = np.maximum(_h_Ik, 0.0)
+        # Ensure consistency with inlet and outlet depths
+        self._h_uk = _h_Ik[_I_1k]
+        self._h_dk = _h_Ik[_I_Np1k]
+        # Export instance variables
+        self._h_Ik = _h_Ik
+        self._Q_ik = _Q_ik
+
     def exit_conditions(self):
+        """
+        Determine which superlinks have exit depths below the pipe crown elevation.
+        """
         # Import instance variables
-        _g1_ik = self._g1_ik
-        _i_nk = self._i_nk
-        _z_inv_dk = self._z_inv_dk
-        _J_dk = self._J_dk
-        H_j = self.H_j
+        _g1_ik = self._g1_ik          # Geometry 1 of link ik (vertical)
+        _i_nk = self._i_nk            # Index of last link in superlink k
+        _z_inv_dk = self._z_inv_dk    # Invert offset of downstream end of superlink k
+        _J_dk = self._J_dk            # Index of junction downstream of superlink k
+        H_j = self.H_j                # Head at superjunction j
         # Determine which superlinks need critical depth
         _crown_elev_dk = _g1_ik[_i_nk]
         _exit_conditions = (H_j[_J_dk] - _z_inv_dk) < _crown_elev_dk
         self._exit_conditions = _exit_conditions
 
     def solve_critical_depth(self):
+        """
+        Solve for critical depth in each superlink that requires computation of exit
+        hydraulics.
+        """
         # Import instance variables
-        _g1_ik = self._g1_ik
-        _i_nk = self._i_nk
-        _z_inv_dk = self._z_inv_dk
-        _h_dk = self._h_dk
-        _Q_dk = self._Q_dk
+        _g1_ik = self._g1_ik          # Geometry 1 of link ik (vertical)
+        _i_nk = self._i_nk            # Index of last link in superlink k
+        _z_inv_dk = self._z_inv_dk    # Invert offset of downstream end of superlink k
+        _h_dk = self._h_dk            # Depth at downstream end of superlink k
+        _Q_dk = self._Q_dk            # Flow rate at downstream end of superlink k
+        _h_c = self._h_c              # Critical depth
+        # Determine which superlinks need critical depth computation
         _exit_conditions = self._exit_conditions
-        _h_c = self._h_c
-        # Determine which superlinks need critical depth
         _h_c[:] = 0.
         _crown_elev_dk = _g1_ik[_i_nk]
         _eps = np.finfo(np.float64).eps
@@ -1987,18 +2849,23 @@ class SuperLink():
                                             _crown_elev_dk[[i]],
                                             args=(_Q_dk[[i]],
                                                   _crown_elev_dk[[i]]))
+        # Export instance variables
         self._h_c = _h_c
 
     def solve_normal_depth(self):
+        """
+        Solve for normal depth in each superlink that requires computation of exit
+        hydraulics.
+        """
         # Import instance variables
-        _g1_ik = self._g1_ik
-        _i_nk = self._i_nk
-        _z_inv_dk = self._z_inv_dk
-        _h_dk = self._h_dk
-        _Q_dk = self._Q_dk
-        _exit_conditions = self._exit_conditions
-        _h_n = self._h_n
+        _g1_ik = self._g1_ik          # Geometry 1 of link ik (vertical)
+        _i_nk = self._i_nk            # Index of last link in superlink k
+        _z_inv_dk = self._z_inv_dk    # Invert offset of downstream end of superlink k
+        _h_dk = self._h_dk            # Depth at downstream end of superlink k
+        _Q_dk = self._Q_dk            # Flow rate at downstream end of superlink k
+        _h_n = self._h_n              # Normal depth
         # Determine which superlinks need critical depth
+        _exit_conditions = self._exit_conditions
         _h_n[:] = 0.
         _crown_elev_dk = _g1_ik[_i_nk]
         _n = self._n_ik[_i_nk[_exit_conditions]]
@@ -2008,17 +2875,22 @@ class SuperLink():
                                                        args=(_Q_dk[_exit_conditions],
                                                              _crown_elev_dk[_exit_conditions],
                                                              _n, _S_o))
+        # Export instance variables
         self._h_n = _h_n
 
     def solve_exit_hydraulics(self):
-        _h_c = self._h_c
-        _h_n = self._h_n
-        _h_dk = self._h_dk
-        _z_inv_dk = self._z_inv_dk
-        _J_dk = self._J_dk
-        _exit_conditions = self._exit_conditions
-        H_j = self.H_j
-        min_depth = self.min_depth
+        """
+        Solve for the exit depth at flow rate in each superlink.
+        """
+        # Import instance variables
+        _h_c = self._h_c                 # Critical depth
+        _h_n = self._h_n                 # Normal depth
+        _h_dk = self._h_dk               # Depth at downstream end of superlink k
+        _z_inv_dk = self._z_inv_dk       # Invert offset of downstream end of superlink k
+        _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
+        H_j = self.H_j                   # Head at superjunction j
+        min_depth = self.min_depth       # Minimum allowed water depth
+        _exit_conditions = self._exit_conditions    # Require exit hydraulics computation (y/n)
         # Determine conditions
         _h_j = H_j[_J_dk] - _z_inv_dk
         _backwater = (_h_j > _h_c) & (_exit_conditions)
@@ -2032,6 +2904,7 @@ class SuperLink():
         # _h_dk[_steep] = _h_n[_steep]
         _h_dk[_steep] = _h_dk[_steep]
         _h_dk[_h_dk < min_depth] = min_depth
+        # Export instance variables
         self._h_dk = _h_dk
 
     def _critical_depth(self, h, Q, d):
@@ -2045,9 +2918,86 @@ class SuperLink():
         return Q - (S_o**(1/2) * superlink.geometry.Circular.A_ik(h, h, d)**(5/3)
                     / superlink.geometry.Circular.Pe_ik(h, h, d)**(2/3) / n)
 
-    def step(self, H_bc=None, Q_in=None, u=None, dt=None, first_time=False, implicit=True):
+    def reposition_junctions(self):
+        """
+        Reposition junctions inside superlinks to enable capture of backwater effects.
+        """
+        # Import instance variables
+        _b0 = self._b0                # Vertical coordinate of upstream end of superlink k
+        _b1 = self._b1                # Vertical coordinate of downstream end of superlink k
+        _m = self._m                  # Slope of superlink k
+        _x0 = self._x0                # Horizontal coordinate of center of superlink k
+        _z0 = self._z0                # Invert elevation of center of superlink k
+        _fixed = self._fixed          # Junction Ik is fixed (y/n)
+        _h_Ik = self._h_Ik            # Depth at junction Ik
+        _Q_ik = self._Q_ik            # Flow rate at link ik
+        _J_dk = self._J_dk            # Index of superjunction downstream of superlink k
+        _x_Ik = self._x_Ik            # Horizontal coordinate of junction Ik
+        _dx_ik = self._dx_ik          # Length of link ik
+        _z_inv_Ik = self._z_inv_Ik    # Invert elevation of junction Ik
+        _S_o_ik = self._S_o_ik        # Channel bottom slope of link ik
+        _I_1k = self._I_1k            # Index of first junction in superlink k
+        _I_Np1k = self._I_Np1k        # Index of last junction in superlink k
+        _i_1k = self._i_1k            # Index of first link in superlink k
+        H_j = self.H_j                # Head at superjunction j
+        # Configure function variables
+        njunctions_fixed = 4
+        njunctions = njunctions_fixed + 1
+        nlinks = njunctions - 1
+        xx = _x_Ik.reshape(-1, njunctions)
+        zz = _z_inv_Ik.reshape(-1, njunctions)
+        dxdx = _dx_ik.reshape(-1, nlinks)
+        hh = _h_Ik.reshape(-1, njunctions)
+        QQ = _Q_ik.reshape(-1, nlinks)
+        _H_dk = H_j[_J_dk]
+        Q_ix = np.tile(np.arange(nlinks), len(QQ)).reshape(-1, nlinks)
+        # TODO: Add case where position of movable coord is exactly equal to fixed coord
+        move_junction = (_H_dk > _z_inv_Ik[_I_Np1k]) & (_H_dk < _z_inv_Ik[_I_1k])
+        z_m = np.where(move_junction, _H_dk, _z0)
+        x_m = np.where(move_junction, (_H_dk - _b0) / _m, _x0)
+        # TODO: Use instance variable
+        r = np.arange(len(xx))
+        c = np.array(list(map(np.searchsorted, xx, x_m)))
+        frac = (x_m - xx[r, c - 1]) / (xx[r, c] - xx[r, c - 1])
+        h_m = (1 - frac) * hh[r, c - 1] + (frac) * hh[r, c]
+        pos_prev = np.where(~_fixed)[1]
+        xx[:, :-1] = xx[_fixed].reshape(-1, njunctions - 1)
+        zz[:, :-1] = zz[_fixed].reshape(-1, njunctions - 1)
+        hh[:, :-1] = hh[_fixed].reshape(-1, njunctions - 1)
+        xx[:, -1] = x_m
+        zz[:, -1] = z_m
+        hh[:, -1] = h_m
+        _fixed[:, :-1] = True
+        _fixed[:, -1] = False
+        # TODO: Check this
+        ix = np.argsort(xx)
+        xx = np.take_along_axis(xx, ix, axis=-1)
+        zz = np.take_along_axis(zz, ix, axis=-1)
+        hh = np.take_along_axis(hh, ix, axis=-1)
+        _fixed = np.take_along_axis(_fixed, ix, axis=-1)
+        dxdx = np.diff(xx)
+        pos_next = np.where(~_fixed)[1]
+        shifted = (pos_prev != pos_next)
+        Q_ix[r[shifted], pos_prev[shifted]] = pos_next[shifted]
+        QQ[r[shifted], pos_prev[shifted] - 1] = (QQ[r[shifted], pos_prev[shifted]]
+                                                + QQ[r[shifted], pos_prev[shifted] - 1]) / 2
+        Q_ix.sort(axis=-1)
+        QQ = np.take_along_axis(QQ, Q_ix, axis=-1)
+        QQ = np.take_along_axis(QQ, Q_ix, axis=-1)
+        # Export instance variables
+        self._h_Ik = hh.ravel()
+        self._Q_ik = QQ.ravel()
+        self._x_Ik = xx.ravel()
+        self._z_inv_Ik = zz.ravel()
+        self._dx_ik = dxdx.ravel()
+        self._fixed = _fixed
+
+    def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
+             first_time=False, implicit=True):
         _method = self._method
         _exit_hydraulics = self._exit_hydraulics
+        if not implicit:
+            raise NotImplementedError('Not implemented')
         self.link_hydraulic_geometry()
         self.upstream_hydraulic_geometry()
         self.downstream_hydraulic_geometry()
@@ -2061,20 +3011,32 @@ class SuperLink():
         self.superlink_upstream_head_coefficients()
         self.superlink_downstream_head_coefficients()
         self.superlink_flow_coefficients()
-        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in, u=u,
+        if self.orifices is not None:
+            self.orifice_flow_coefficients(u=u_o)
+        if self.weirs is not None:
+            self.weir_flow_coefficients(u=u_w)
+        if self.pumps is not None:
+            self.pump_flow_coefficients(u=u_p)
+        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
-        self.solve_sparse_matrix(u=u, implicit=implicit)
+        self.solve_sparse_matrix(implicit=implicit)
         self.solve_superlink_flows()
-        self.solve_orifice_flows(u=u)
+        if self.orifices is not None:
+            self.solve_orifice_flows(u=u_o)
+        if self.weirs is not None:
+            self.solve_weir_flows(u=u_w)
+        if self.pumps is not None:
+            self.solve_pump_flows(u=u_p)
         self.solve_superlink_depths()
-        # self.solve_superlink_depths_alt()
         if _exit_hydraulics:
             self.exit_conditions()
             self.solve_critical_depth()
             # self.solve_normal_depth()
             self.solve_exit_hydraulics()
-        if _method == 'lsq':
+        if _method == 'x':
+            self.solve_internals_exact()
+        elif _method == 'lsq':
             self.solve_internals_lsq()
         elif _method == 'b':
             self.solve_internals_backwards()
@@ -2089,3 +3051,4 @@ class SuperLink():
             else:
                 self.solve_internals_forwards()
         self.iter_count += 1
+        self.t += dt
