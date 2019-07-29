@@ -315,6 +315,14 @@ class SuperLink():
         # Set up hydraulic geometry computations
         self.configure_storages()
         self.configure_hydraulic_geometry()
+        # Get superlink lengths
+        self._dx_k = np.zeros(self.NK, dtype=float)
+        np.add.at(self._dx_k, self._ki, self._dx_ik)
+        self._Q_k = np.zeros(self.NK, dtype=float)
+        self._A_k = np.zeros(self.NK, dtype=float)
+        self._dt_ck = np.ones(self.NK, dtype=float)
+        self._Q_in = np.zeros(self.M, dtype=float)
+        self.states = {}
         # Get indexers for least squares
         # if method == 'lsq':
         #     self.lsq_indexers()
@@ -2387,9 +2395,13 @@ class SuperLink():
         _Q_uk = self._Q_uk              # Flow rate at upstream end of superlink k
         _Q_dk = self._Q_dk              # Flow rate at downstream end of superlink k
         H_j = self.H_j                  # Head at superjunction j
+        min_depth = self.min_depth      # Minimum allowable depth at boundaries
         # Compute flow at next time step
         _h_uk_next = _kappa_uk * _Q_uk + _lambda_uk * H_j[_J_uk] + _mu_uk
         _h_dk_next = _kappa_dk * _Q_dk + _lambda_dk * H_j[_J_dk] + _mu_dk
+        # Set minimum values
+        # _h_uk_next[_h_uk_next < min_depth] = min_depth
+        # _h_dk_next[_h_dk_next < min_depth] = min_depth
         # Export instance variables
         self._h_uk = _h_uk_next
         self._h_dk = _h_dk_next
@@ -3191,7 +3203,7 @@ class SuperLink():
         return Q - (S_o**(1/2) * superlink.geometry.Circular.A_ik(h, h, d)**(5/3)
                     / superlink.geometry.Circular.Pe_ik(h, h, d)**(2/3) / n)
 
-    def reposition_junctions(self):
+    def reposition_junctions(self, reposition=None):
         """
         Reposition junctions inside superlinks to enable capture of backwater effects.
         """
@@ -3213,6 +3225,7 @@ class SuperLink():
         _I_Np1k = self._I_Np1k        # Index of last junction in superlink k
         _i_1k = self._i_1k            # Index of first link in superlink k
         H_j = self.H_j                # Head at superjunction j
+        _k = self._k                  # List of superlinks
         # Configure function variables
         njunctions_fixed = 4
         njunctions = njunctions_fixed + 1
@@ -3258,12 +3271,22 @@ class SuperLink():
         QQ = np.take_along_axis(QQ, Q_ix, axis=-1)
         QQ = np.take_along_axis(QQ, Q_ix, axis=-1)
         # Export instance variables
-        self._h_Ik = hh.ravel()
-        self._Q_ik = QQ.ravel()
-        self._x_Ik = xx.ravel()
-        self._z_inv_Ik = zz.ravel()
-        self._dx_ik = dxdx.ravel()
-        self._fixed = _fixed
+        if reposition is None:
+            self._h_Ik = hh.ravel()
+            self._Q_ik = QQ.ravel()
+            self._x_Ik = xx.ravel()
+            self._z_inv_Ik = zz.ravel()
+            self._dx_ik = dxdx.ravel()
+            self._fixed = _fixed
+        else:
+            Ik = np.flatnonzero(np.repeat(reposition, njunctions))
+            ik = np.flatnonzero(np.repeat(reposition, nlinks))
+            self._h_Ik[Ik] = hh[reposition].ravel()
+            self._Q_ik[ik] = QQ[reposition].ravel()
+            self._x_Ik[Ik] = xx[reposition].ravel()
+            self._z_inv_Ik[Ik] = zz[reposition].ravel()
+            self._dx_ik[ik] = dxdx[reposition].ravel()
+            self._fixed = _fixed
 
     def superlink_error(self):
         NK = self.NK
@@ -3384,7 +3407,7 @@ class SuperLink():
         h_Ik_f = np.maximum(h_Ik_f, min_depth)
         return h_Ik_b, h_Ik_f
 
-    def recurrence_convergence(self, dt=None, max_iter=100, rtol=1e-12):
+    def recurrence_convergence(self, dt=None, max_iter=20, rtol=1e-12):
         # Import instance variables
         _A_SIk = self._A_SIk
         if dt is None:
@@ -3398,14 +3421,101 @@ class SuperLink():
             ferr = ((Q_ik_b - Q_ik_f)**2).sum()
             err_next = herr + ferr
             derr = err_next - err_prev
-            # if abs(derr) < rtol:
-            #     break
+            if abs(derr) < rtol:
+                break
             self._Q_ik = (Q_ik_b + Q_ik_f) / 2
             self._h_Ik = (h_Ik_b + h_Ik_f) / 2
             err_prev = err_next
 
+    def superlink_inverse_courant(self):
+        # Import instance variables
+        _Q_k = self._Q_k
+        _A_k = self._A_k
+        _Q_ik = self._Q_ik
+        _A_ik = self._A_ik
+        _dx_k = self._dx_k
+        _dt_ck = self._dt_ck
+        nk = self.nk
+        # Reset superlink variables
+        _Q_k.fill(0.)
+        _A_k.fill(0.)
+        np.add.at(self._Q_k, self._ki, self._Q_ik)
+        _Q_k /= nk
+        np.add.at(self._A_k, self._ki, self._A_ik)
+        _A_k /= nk
+        _dt_ck = np.abs(_A_k * _dx_k / _Q_k)
+        # Export instance variables
+        self._Q_k = _Q_k
+        self._A_k = _A_k
+        self._dt_ck = _dt_ck
+
+    def superlink_continuity_error(self, dt=None):
+        # Import instance variables
+        NK = self.NK
+        _ki = self._ki
+        _kI = self._kI
+        _h_Ik_next = self._h_Ik
+        _Q_ik_next = self._Q_ik
+        _h_Ik = self.states['_h_Ik']
+        _Q_ik = self.states['_Q_ik']
+        _A_SIk = self._A_SIk
+        _Q_uk = self._Q_uk
+        _Q_dk = self._Q_dk
+        if dt is None:
+            dt = self._dt
+        # Superlink continuity error
+        dSk = np.zeros(NK)
+        dSIk = _A_SIk * (_h_Ik_next - _h_Ik) / dt
+        dQik = _Q_ik_next - _Q_ik
+        np.add.at(dSk, _kI, dSIk)
+        np.add.at(dSk, _ki, dQik)
+        _err_k = _Q_uk - _Q_dk - dSk
+        # Export instance variables
+        self._err_k = _err_k
+
+    def superjunction_continuity_error(self, Q_in=None, dt=None):
+        # Import instance variables
+        M = self.M
+        _J_uk = self._J_uk
+        _J_dk = self._J_dk
+        _A_sj = self._A_sj
+        H_j_next = self.H_j
+        H_j = self.states['H_j']
+        _Q_uk = self._Q_uk
+        _Q_dk = self._Q_dk
+        if Q_in is None:
+            Q_in = self._Q_in
+        if dt is None:
+            dt = self._dt
+        # Superjunction continuity error
+        dQj = np.zeros(M)
+        np.add.at(dQj, _J_uk, -_Q_uk)
+        np.add.at(dQj, _J_dk, _Q_dk)
+        dQj += Q_in
+        dSj = _A_sj * (H_j_next - H_j) / dt
+        _err_j = dQj - dSj
+        # Export instance variables
+        self._err_j = _err_j
+
+    def save_state(self):
+        self.states['t'] = self.t
+        self.states['H_j'] = np.copy(self.H_j)
+        self.states['_h_Ik'] = np.copy(self._h_Ik)
+        self.states['_Q_ik'] = np.copy(self._Q_ik)
+        self.states['_Q_uk'] = np.copy(self._Q_uk)
+        self.states['_Q_dk'] = np.copy(self._Q_dk)
+        self.states['_A_SIk'] = np.copy(self._A_SIk)
+        self.states['_A_sj'] = np.copy(self._A_sj)
+        self.states['_Q_in'] = np.copy(self._Q_in)
+
+    def load_state(self):
+        for key, value in self.states.items():
+            setattr(self, key, value)
+
     def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True):
+        self.save_state()
+        self._Q_in = Q_in
         _method = self._method
         _exit_hydraulics = self._exit_hydraulics
         if not implicit:
