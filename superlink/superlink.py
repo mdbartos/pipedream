@@ -3483,6 +3483,7 @@ class SuperLink():
         H_j = self.states['H_j']
         _Q_uk = self._Q_uk
         _Q_dk = self._Q_dk
+        bc = self.bc
         if Q_in is None:
             Q_in = self._Q_in
         if dt is None:
@@ -3494,6 +3495,7 @@ class SuperLink():
         dQj += Q_in
         dSj = _A_sj * (H_j_next - H_j) / dt
         _err_j = dQj - dSj
+        _err_j[bc] = 0.
         # Export instance variables
         self._err_j = _err_j
 
