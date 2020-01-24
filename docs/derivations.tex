@@ -26,6 +26,7 @@
     $a_{ik}, b_{ik}, c_{ik}, P_{ik}$ & Momentum coefficients \\
     $a_h, q_q$ & Horizontal and vertical axis scaling factors for elliptical pump curve \\
     $A_{o}$ & Maximum area of flow of orifice $o$\\
+    $A_{cik}$ & Cross-sectional area of flow at control structure at link $ik$ \\
     $A_{ik}$ & Cross-sectional area of flow at link $ik$ \\
     $A_{dk}$ & Cross-sectional area of flow at downstream end of superlink $k$ \\
     $A_{s,Ik}$ & Area of water surface at junction $Ik$ \\
@@ -94,6 +95,7 @@
     $z_o$ & Offset elevation of orifice $o$ \\
     $z_p$ & Offset elevation of pump $p$ \\
     $z_w$ & Offset elevation of weir $w$ \\
+    $\omega$ & Input signal to control structure (proportion open) \\
     \hline
   \end{tabular}
 \end{table}
@@ -130,7 +132,7 @@ The following discretization scheme can be applied to link $ik$:
   \begin{split}
     (Q_{ik}^{t + \Delta t} - Q_{ik}^t) \frac{\Delta x_{ik}}{\Delta t} + u_{I+1k}
     Q_{I + 1k}^{t + \Delta t} - u_{Ik} Q_{Ik}^{t + \Delta t} \\
-    + g A (h_{I+1k}^{t + \Delta t} - h_{Ik}^{t + \Delta t}) 
+    + g A_{ik} (h_{I+1k}^{t + \Delta t} - h_{Ik}^{t + \Delta t}) 
     - g A_{ik} S_{o,ik} \Delta x_{ik} + g
     A_{ik} (S_{f,ik} + S_{L,ik}) \Delta x = 0
   \end{split}
@@ -1723,5 +1725,9 @@ And the elements of $b_p$ defined by:
   G_j^p = - \sum_{\ell=1}^{NBDj} \chi_{p_\ell} + \sum_{m=1}^{NBUj} \chi_{p_m}
   }
 \end{equation}
+
+\section{Representing storage basins}
+
+To properly represent storage basins, backwater effects must be accounted for.
 
 \end{document}
