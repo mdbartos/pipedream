@@ -268,6 +268,7 @@ class SuperLink():
         else:
             self.A = np.zeros((self.M, self.M))
         self.b = np.zeros(self.M)
+        self.D = np.zeros(self.M)
         self.bc = self.superjunctions['bc'].values.astype(bool)
         if sparse:
             self.B = scipy.sparse.lil_matrix((self.M, self.n_o))
@@ -2022,6 +2023,8 @@ class SuperLink():
         M = self.M                       # Number of superjunctions in system
         H_j = self.H_j                   # Head at superjunction j
         bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
+        D = self.D                       # Vector for storing chi coefficients
+        b = self.b                       # Right-hand side vector
         # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
@@ -2054,9 +2057,11 @@ class SuperLink():
         # Compute G_j
         _chi_ukl.fill(0)
         _chi_dkm.fill(0)
+        D.fill(0)
         np.add.at(_chi_ukl, _J_uk, _chi_uk)
         np.add.at(_chi_dkm, _J_dk, _chi_dk)
-        b = self.G_j(_A_sj, _dt, H_j, _Q_0j, _chi_ukl, _chi_dkm)
+        D = -_chi_ukl + _chi_dkm
+        # b = self.G_j(_A_sj, _dt, H_j, _Q_0j, _chi_ukl, _chi_dkm)
         # Compute control matrix
         if n_o:
             bc_uo = bc[_J_uo]
@@ -2086,7 +2091,7 @@ class SuperLink():
                 # Set right-hand side
                 np.add.at(_chi_uol, _J_uo, _chi_uo)
                 np.add.at(_chi_dom, _J_do, _chi_do)
-                np.add.at(b, i[~bc], -_chi_uol[~bc] + _chi_dom[~bc])
+                np.add.at(D, i[~bc], -_chi_uol[~bc] + _chi_dom[~bc])
             else:
                 # TODO: Broken
                 # _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
@@ -2121,7 +2126,7 @@ class SuperLink():
                 # Set right-hand side
                 np.add.at(_chi_uwl, _J_uw, _chi_uw)
                 np.add.at(_chi_dwm, _J_dw, _chi_dw)
-                np.add.at(b, i[~bc], -_chi_uwl[~bc] + _chi_dwm[~bc])
+                np.add.at(D, i[~bc], -_chi_uwl[~bc] + _chi_dwm[~bc])
             else:
                 pass
         if n_p:
@@ -2152,12 +2157,15 @@ class SuperLink():
                 # Set right-hand side
                 np.add.at(_chi_upl, _J_up, _chi_up)
                 np.add.at(_chi_dpm, _J_dp, _chi_dp)
-                np.add.at(b, i[~bc], -_chi_upl[~bc] + _chi_dpm[~bc])
+                np.add.at(D, i[~bc], -_chi_upl[~bc] + _chi_dpm[~bc])
             else:
                 pass
+        b.fill(0)
+        b = (_A_sj * H_j / _dt) + _Q_0j + D
         # Ensure boundary condition is specified
         b[bc] = H_bc[bc]
         # Export instance variables
+        self.D = D
         self.b = b
         self._beta_dkl = _beta_dkl
         self._alpha_ukm = _alpha_ukm
@@ -3498,6 +3506,47 @@ class SuperLink():
         _err_j[bc] = 0.
         # Export instance variables
         self._err_j = _err_j
+
+    def augmented_system(self, _Q_0j=None, _dt=None):
+        A = self.A                    # Superlink/superjunction matrix
+        O = self.O                    # Orifice matrix
+        W = self.W                    # Weir matrix
+        P = self.P                    # Pump matrix
+        D = self.D                    # Vector for storing chi coefficients
+        M = self.M                    # Number of superjunctions in system
+        H_j = self.H_j                # Head at superjunction j
+        _A_sj = self._A_sj            # Surface area of superjunction j
+        bc = self.bc                  # Superjunction j has a fixed boundary condition (y/n)
+        n_o = self.n_o                # Number of orifices
+        n_w = self.n_w                # Number of weirs
+        n_p = self.n_p                # Number of pumps
+        # If no time step specified, use instance time step
+        if _dt is None:
+            _dt = self._dt
+        # If no flow input specified, assume zero external inflow
+        if _Q_0j is None:
+            _Q_0j = 0
+        A_1 = np.zeros((M + 1, M + 1))
+        A_2 = np.zeros((M + 1, M + 1))
+        Q = np.zeros(M + 1)
+        has_control = n_o + n_w + n_p
+        # Get right-hand size
+        if has_control:
+            L = A + O + W + P
+        else:
+            L = A
+        # Fill in A_1 matrix
+        A_1[:-1, :-1] = L
+        A_1[-1, -1] = 1
+        # Fill in A_2 matrix
+        ix = np.arange(0, M)
+        A_2[ix, ix] = np.where(~bc, _A_sj / _dt, 0)
+        A_2[:-1, -1] = D
+        A_2[-1, -1] = 1
+        # Fill in Q vector
+        Q[:-1] = _Q_0j
+        Q[-1] = 0.0
+        return A_1, A_2, Q, H_j
 
     def save_state(self):
         self.states['t'] = self.t
