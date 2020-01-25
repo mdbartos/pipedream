@@ -258,10 +258,10 @@ class SuperLink():
         self.H_j = np.maximum(self.H_j, self._z_inv_j + self.min_depth)
         # Coefficients for head at upstream ends of superlink k
         self._J_uk = self.superlinks['sj_0'].values.astype(int)
-        self._z_inv_uk = self._z_inv_Ik[self._I_1k]
+        self._z_inv_uk = np.copy(self._z_inv_Ik[self._I_1k])
         # Coefficients for head at downstream ends of superlink k
         self._J_dk = self.superlinks['sj_1'].values.astype(int)
-        self._z_inv_dk = self._z_inv_Ik[self._I_Np1k]
+        self._z_inv_dk = np.copy(self._z_inv_Ik[self._I_Np1k])
         # Sparse matrix coefficients
         if sparse:
             self.A = scipy.sparse.lil_matrix((self.M, self.M))
@@ -281,6 +281,8 @@ class SuperLink():
             self.W = np.zeros((self.M, self.M))
             self.P = np.zeros((self.M, self.M))
         # TODO: Should these be size NK?
+        self._theta_uk = np.ones(self.NK)
+        self._theta_dk = np.ones(self.NK)
         self._alpha_ukm = np.zeros(self.M, dtype=float)
         self._beta_dkl = np.zeros(self.M, dtype=float)
         self._chi_ukl = np.zeros(self.M, dtype=float)
@@ -885,67 +887,71 @@ class SuperLink():
         return t_0 - t_1
 
     @safe_divide
-    def alpha_uk(self, U_Nk, kappa_dk, X_1k, Z_1k, W_Nk, D_k_star, lambda_uk):
+    def alpha_uk(self, U_Nk, kappa_dk, X_1k, Z_1k, W_Nk, D_k_star, lambda_uk, theta_uk=1):
         """
         Compute superlink boundary condition coefficient 'alpha' for upstream end
         of superlink k.
         """
-        num = (1 - U_Nk * kappa_dk) * X_1k * lambda_uk + (Z_1k * kappa_dk * W_Nk * lambda_uk)
+        num = theta_uk * ((1 - U_Nk * kappa_dk) * X_1k * lambda_uk
+                          + (Z_1k * kappa_dk * W_Nk * lambda_uk))
         den = D_k_star
         return num, den
 
     @safe_divide
-    def beta_uk(self, U_Nk, kappa_dk, Z_1k, W_Nk, D_k_star, lambda_dk):
+    def beta_uk(self, U_Nk, kappa_dk, Z_1k, W_Nk, D_k_star, lambda_dk, theta_dk=1):
         """
         Compute superlink boundary condition coefficient 'beta' for upstream end
         of superlink k.
         """
-        num = (1 - U_Nk * kappa_dk) * Z_1k * lambda_dk + (Z_1k * kappa_dk * U_Nk * lambda_dk)
+        num = theta_dk * ((1 - U_Nk * kappa_dk) * Z_1k * lambda_dk
+               + (Z_1k * kappa_dk * U_Nk * lambda_dk))
         den = D_k_star
         return num, den
 
     @safe_divide
     def chi_uk(self, U_Nk, kappa_dk, Y_1k, X_1k, mu_uk, Z_1k,
-               mu_dk, V_Nk, W_Nk, D_k_star):
+               mu_dk, V_Nk, W_Nk, D_k_star, theta_uk=1, theta_dk=1):
         """
         Compute superlink boundary condition coefficient 'chi' for upstream end
         of superlink k.
         """
-        t_0 = (1 - U_Nk * kappa_dk) * (Y_1k + X_1k * mu_uk + Z_1k * mu_dk)
-        t_1 = (Z_1k * kappa_dk) * (V_Nk + W_Nk * mu_uk + U_Nk * mu_dk)
+        t_0 = (1 - U_Nk * kappa_dk) * (Y_1k + theta_uk * X_1k * mu_uk + theta_dk * Z_1k * mu_dk)
+        t_1 = (Z_1k * kappa_dk) * (V_Nk + theta_uk * W_Nk * mu_uk + theta_dk * U_Nk * mu_dk)
         num = t_0 + t_1
         den = D_k_star
         return num, den
 
     @safe_divide
-    def alpha_dk(self, X_1k, kappa_uk, W_Nk, D_k_star, lambda_uk):
+    def alpha_dk(self, X_1k, kappa_uk, W_Nk, D_k_star, lambda_uk, theta_uk=1):
         """
         Compute superlink boundary condition coefficient 'alpha' for downstream end
         of superlink k.
         """
-        num = (1 - X_1k * kappa_uk) * W_Nk * lambda_uk + (W_Nk * kappa_uk * X_1k * lambda_uk)
+        num = theta_uk * ((1 - X_1k * kappa_uk) * W_Nk * lambda_uk
+               + (W_Nk * kappa_uk * X_1k * lambda_uk))
         den = D_k_star
         return num, den
 
     @safe_divide
-    def beta_dk(self, X_1k, kappa_uk, U_Nk, W_Nk, Z_1k, D_k_star, lambda_dk):
+    def beta_dk(self, X_1k, kappa_uk, U_Nk, W_Nk, Z_1k, D_k_star, lambda_dk, theta_dk=1):
         """
         Compute superlink boundary condition coefficient 'beta' for downstream end
         of superlink k.
         """
-        num = (1 - X_1k * kappa_uk) * U_Nk * lambda_dk + (W_Nk * kappa_uk * Z_1k * lambda_dk)
+        num = theta_dk * ((1 - X_1k * kappa_uk) * U_Nk * lambda_dk
+               + (W_Nk * kappa_uk * Z_1k * lambda_dk))
         den = D_k_star
         return num, den
 
     @safe_divide
     def chi_dk(self, X_1k, kappa_uk, V_Nk, W_Nk, mu_uk, U_Nk,
-               mu_dk, Y_1k, Z_1k, D_k_star):
+               mu_dk, Y_1k, Z_1k, D_k_star, theta_uk=1, theta_dk=1):
         """
         Compute superlink boundary condition coefficient 'chi' for downstream end
         of superlink k.
         """
-        t_0 = (1 - X_1k * kappa_uk) * (V_Nk + W_Nk * mu_uk + U_Nk * mu_dk)
-        t_1 = (W_Nk * kappa_uk) * (Y_1k + X_1k * mu_uk + Z_1k * mu_dk)
+        t_0 = (1 - X_1k * kappa_uk) * (V_Nk + theta_uk * W_Nk * mu_uk + theta_dk * U_Nk * mu_dk)
+        t_1 = (W_Nk * kappa_uk) * (Y_1k + theta_uk * X_1k * mu_uk + theta_dk * Z_1k * mu_dk)
         num = t_0 + t_1
         den = D_k_star
         return num, den
@@ -1728,7 +1734,15 @@ class SuperLink():
         _lambda_dk = self._lambda_dk    # Downstream superlink head coefficient lambda_dk
         _mu_uk = self._mu_uk            # Upstream superlink head coefficient mu_uk
         _mu_dk = self._mu_dk            # Downstream superlink head coefficient mu_dk
+        _J_uk = self._J_uk              # Superjunction upstream of superlink k
+        _J_dk = self._J_dk              # Superjunction downstream of superlink k
+        H_j = self.H_j                  # Head at superjunction j
+        _z_inv_uk = self._z_inv_uk      # Invert offset of upstream end of superlink k
+        _z_inv_dk = self._z_inv_dk      # Invert offset of downstream end of superlink k
+        _z_inv_j = self._z_inv_j        # Invert elevation at superjunction j
         _end_method = self._end_method    # Method for computing flow at pipe ends
+        _theta_uk = self._theta_uk      # Upstream indicator variable
+        _theta_dk = self._theta_dk      # Downstream indicator variable
         if _end_method == 'o':
             _X_1k = _X_Ik[_I_1k]
             _Y_1k = _Y_Ik[_I_1k]
@@ -1743,29 +1757,36 @@ class SuperLink():
             _U_Nk = _U_Ik[_I_Nk] - _E_Ik[_I_Np1k]
             _V_Nk = _V_Ik[_I_Nk] + _D_Ik[_I_Np1k]
             _W_Nk = _W_Ik[_I_Nk]
+        # Compute theta indicator variables
+        _H_juk = H_j[_J_uk]
+        _H_jdk = H_j[_J_dk]
+        _theta_uk = np.where(_H_juk >= _z_inv_uk, 1.0, 0.0)
+        _theta_dk = np.where(_H_jdk >= _z_inv_dk, 1.0, 0.0)
+        # _theta_uk = 1.
+        # _theta_dk = 1.
         # Compute D_k_star
         _D_k_star = self.D_k_star(_X_1k, _kappa_uk, _U_Nk,
                                   _kappa_dk, _Z_1k, _W_Nk)
         # Compute upstream superlink flow coefficients
         _alpha_uk = self.alpha_uk(_U_Nk, _kappa_dk, _X_1k,
                                   _Z_1k, _W_Nk, _D_k_star,
-                                  _lambda_uk)
+                                  _lambda_uk, _theta_uk)
         _beta_uk = self.beta_uk(_U_Nk, _kappa_dk, _Z_1k,
-                                _W_Nk, _D_k_star, _lambda_dk)
+                                _W_Nk, _D_k_star, _lambda_dk, _theta_dk)
         _chi_uk = self.chi_uk(_U_Nk, _kappa_dk, _Y_1k,
                               _X_1k, _mu_uk, _Z_1k,
                               _mu_dk, _V_Nk, _W_Nk,
-                              _D_k_star)
+                              _D_k_star, _theta_uk, _theta_dk)
         # Compute downstream superlink flow coefficients
         _alpha_dk = self.alpha_dk(_X_1k, _kappa_uk, _W_Nk,
-                                  _D_k_star, _lambda_uk)
+                                  _D_k_star, _lambda_uk, _theta_uk)
         _beta_dk = self.beta_dk(_X_1k, _kappa_uk, _U_Nk,
                                 _W_Nk, _Z_1k, _D_k_star,
-                                _lambda_dk)
+                                _lambda_dk, _theta_dk)
         _chi_dk = self.chi_dk(_X_1k, _kappa_uk, _V_Nk,
                               _W_Nk, _mu_uk, _U_Nk,
                               _mu_dk, _Y_1k, _Z_1k,
-                              _D_k_star)
+                              _D_k_star, _theta_uk, _theta_dk)
         # Export instance variables
         self._D_k_star = _D_k_star
         self._alpha_uk = _alpha_uk
@@ -1774,6 +1795,8 @@ class SuperLink():
         self._alpha_dk = _alpha_dk
         self._beta_dk = _beta_dk
         self._chi_dk = _chi_dk
+        self._theta_uk = _theta_uk
+        self._theta_dk = _theta_dk
 
     def orifice_flow_coefficients(self, u=None):
         """
@@ -2404,9 +2427,11 @@ class SuperLink():
         _Q_dk = self._Q_dk              # Flow rate at downstream end of superlink k
         H_j = self.H_j                  # Head at superjunction j
         min_depth = self.min_depth      # Minimum allowable depth at boundaries
+        _theta_uk = self._theta_uk      # Upstream indicator variable
+        _theta_dk = self._theta_dk      # Downstream indicator variable
         # Compute flow at next time step
-        _h_uk_next = _kappa_uk * _Q_uk + _lambda_uk * H_j[_J_uk] + _mu_uk
-        _h_dk_next = _kappa_dk * _Q_dk + _lambda_dk * H_j[_J_dk] + _mu_dk
+        _h_uk_next = _kappa_uk * _Q_uk + _theta_uk * (_lambda_uk * H_j[_J_uk] + _mu_uk)
+        _h_dk_next = _kappa_dk * _Q_dk + _theta_dk * (_lambda_dk * H_j[_J_dk] + _mu_dk)
         # Set minimum values
         # _h_uk_next[_h_uk_next < min_depth] = min_depth
         # _h_dk_next[_h_dk_next < min_depth] = min_depth
