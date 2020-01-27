@@ -238,6 +238,7 @@ class SuperLink():
         self._I_1k = self.start_nodes
         self._I_2k = self.forward_I_I[self._I_1k]
         self._i_1k = self.forward_I_i[self._I_1k]
+        self._k_1k = np.cumsum(self.nk - 1) - (self.nk[0] - 1)
         self._T_ik = np.zeros(self._ik.size)
         self._U_Ik = np.zeros(self._I.size)
         self._V_Ik = np.zeros(self._I.size)
@@ -366,6 +367,7 @@ class SuperLink():
         self.bandwidth = bandwidth
 
     def to_banded(self):
+        M = self.M
         _J_uk = self._J_uk
         _J_dk = self._J_dk
         _J_uw = self._J_uw
@@ -2565,69 +2567,6 @@ class SuperLink():
         self._h_uk = _h_uk_next
         self._h_dk = _h_dk_next
 
-    def solve_internals_lsq(self):
-        """
-        Solve for internal states of each superlink using least squares approximation.
-        """
-        # Import instance variables
-        _I_1k = self._I_1k                  # Index of junction at upstream end of superlink k
-        _I_Np1k = self._I_Np1k              # Index of junction at downstream end of superlink k
-        _i_1k = self._i_1k                  # Index of link at upstream end of superlink k
-        _i_nk = self._i_nk                  # Index of link at downstream end of superlink k
-        _kI = self._kI                      # Index of superlink containing junction Ik
-        middle_nodes = self.middle_nodes    # Junctions not located at upstream or downstream ends
-        middle_links = self.middle_links    # Links not located at upstream or downstream ends
-        _G = self._G                        # LHS matrix in least squares equation
-        _h = self._h                        # RHS matrix in least squares equation
-        _I_f = self._I_f                    # Forward indexer
-        _I_b = self._I_b                    # Backward indexer
-        _b_f = self._b_f                    # Forward indexer
-        _b_b = self._b_b                    # Backward indexer
-        _rows_f = self._rows_f              # Rows for forward direction
-        _rows_b = self._rows_b              # Rows for backward direction
-        _rows_r = self._rows_r              # Rows for RHS vector
-        _cols_l = self._cols_l              # Columns for forward direction
-        _cols_r = self._cols_r              # Columns for backward direction
-        _lbound = self._lbound              # Lower bounds for solution
-        _ubound = self._ubound              # Upper bounds for solution
-        _ix_h = self._ix_h                  # Depth index
-        _ix_q = self._ix_q                  # Flow index
-        _U_Ik = self._U_Ik                  # Forward recurrence coefficient
-        _V_Ik = self._V_Ik                  # Forward recurrence coefficient
-        _W_Ik = self._W_Ik                  # Forward recurrence coefficient
-        _X_Ik = self._X_Ik                  # Backward recurrence coefficient
-        _Y_Ik = self._Y_Ik                  # Backward recurrence coefficient
-        _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
-        _Q_uk = self._Q_uk                  # Flow rate at upstream end of superlink k
-        _Q_dk = self._Q_dk                  # Flow rate at downstream end of superlink k
-        _h_uk = self._h_uk                  # Depth at upstream end of superlink k
-        _h_dk = self._h_dk                  # Depth at downstream end of superlink k
-        _h_Ik = self._h_Ik                  # Depth at junction Ik
-        _Q_ik = self._Q_ik                  # Flow rate at link ik
-        min_depth = self.min_depth          # Minimum allowed water depth
-        # Update solution matrix
-        _G[_rows_f, _cols_l] = _U_Ik[_I_f]
-        _G[_rows_b, _cols_l] = _X_Ik[_I_b]
-        _G[_rows_r, _cols_r] = -1
-        _h[::2] = -_V_Ik[_I_f] - _W_Ik[_I_f] * _h_uk[_kI[_I_f]]
-        _h[1::2] = -_Y_Ik[_I_b] - _Z_Ik[_I_b] * _h_dk[_kI[_I_b]]
-        _h[_b_f] += _Q_uk
-        _h[_b_b] += _Q_dk
-        # Solve constrained least squares
-        result = scipy.optimize.lsq_linear(_G, _h, bounds=(_lbound, _ubound))
-        x = result.x
-        _h_Ik[middle_nodes] = x[_ix_h]
-        _Q_ik[middle_links] = x[_ix_q]
-        _h_Ik[_I_1k] = _h_uk
-        _h_Ik[_I_Np1k] = _h_dk
-        _Q_ik[_i_1k] = _Q_uk
-        _Q_ik[_i_nk] = _Q_uk
-        _h_Ik[_h_Ik < min_depth] = min_depth
-        # Set instance variables
-        self.result = result
-        self._h_Ik = _h_Ik
-        self._Q_ik = _Q_ik
-
     def solve_internals_simultaneous(self):
         """
         Solve for internal states of each superlink forwards and backwards simultaneously.
@@ -3115,6 +3054,70 @@ class SuperLink():
         # Set depths at upstream and downstream ends
         _h_Ik[_is_start] = _h_uk
         _h_Ik[_is_end] = _h_dk
+        # Solve for flows using new depths
+        Q_ik_b, Q_ik_f = self.superlink_flow_error()
+        _Q_ik = (Q_ik_b + Q_ik_f) / 2
+        # Export instance variables
+        self._Q_ik = _Q_ik
+        self._h_Ik = _h_Ik
+
+    def solve_internals_ls_alt(self):
+        NK = self.NK
+        nk = self.nk
+        _h_uk = self._h_uk
+        _h_dk = self._h_dk
+        _h_Ik = self._h_Ik
+        _Q_ik = self._Q_ik
+        _kI = self._kI
+        _ki = self._ki
+        _I_1k = self._I_1k
+        _I_Nk = self._I_Nk
+        _U_Ik = self._U_Ik
+        _V_Ik = self._V_Ik
+        _W_Ik = self._W_Ik
+        _X_Ik = self._X_Ik
+        _Y_Ik = self._Y_Ik
+        _Z_Ik = self._Z_Ik
+        _is_start = self._is_start
+        _is_end = self._is_end
+        _is_penult = self._is_penult
+        _link_start = self._link_start
+        _link_end = self._link_end
+        _kk = _ki[~_link_end]
+        min_depth = self.min_depth
+        # Solve non-negative least squares
+        _X = _X_Ik[~_is_start & ~_is_end]
+        _U = _U_Ik[~_is_penult & ~_is_end]
+        t0 = _W_Ik[~_is_end] * _h_uk[_ki]
+        t1 = _Z_Ik[~_is_end] * _h_dk[_ki]
+        t2 = _Y_Ik[~_is_end]
+        t3 = _V_Ik[~_is_end]
+        _b = -t0 + t1 + t2 - t3
+        _b[_link_start] += _X_Ik[_is_start] * _h_uk
+        _b[_link_end] -= _U_Ik[_is_penult] * _h_dk
+        for k in range(NK):
+            # Set up solution matrix
+            nlinks = nk[k]
+            njunctions = nlinks + 1
+            I_k = (_kI == k)
+            i_k = (_ki == k)
+            k_k = (_kk == k)
+            Ak = np.zeros((nlinks, nlinks - 1))
+            # Fill right-hand side matrix
+            Ak.flat[::nlinks] = _U[k_k]
+            Ak.flat[nlinks-1::nlinks] = -_X[k_k]
+            bk = _b[i_k]
+            AA = Ak.T @ Ak
+            Ab = Ak.T @ bk
+            # Prevent singular matrix
+            AA[AA.flat[::nlinks] == 0.0] = 1.0
+            _h_inner = np.linalg.solve(AA, Ab)
+            _h_Ik[I_k & ~_is_start & ~_is_end] = _h_inner
+        # Set depths at upstream and downstream ends
+        _h_Ik[_is_start] = _h_uk
+        _h_Ik[_is_end] = _h_dk
+        # Set min depth
+        _h_Ik[_h_Ik < min_depth] = min_depth
         # Solve for flows using new depths
         Q_ik_b, Q_ik_f = self.superlink_flow_error()
         _Q_ik = (Q_ik_b + Q_ik_f) / 2
@@ -3794,7 +3797,8 @@ class SuperLink():
             # self.solve_internals_nnls()
             self.solve_internals_nnls_alt()
         elif _method == 'lsq':
-            self.solve_internals_ls()
+            # self.solve_internals_ls()
+            self.solve_internals_ls_alt()
         elif _method == 'b':
             self.solve_internals_backwards()
         elif _method == 'f':
