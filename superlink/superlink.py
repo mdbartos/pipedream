@@ -58,6 +58,7 @@ class SuperLink():
         self._is_start[self.start_nodes] = True
         self._is_end[self.end_nodes] = True
         self.middle_nodes = self._I[(~self._is_start) & (~self._is_end)]
+        self._is_penult = np.roll(self._is_end, -1)
         # Dimensions
         self.M = len(superjunctions)
         self.NK = len(superlinks)
@@ -2913,6 +2914,63 @@ class SuperLink():
         self._Q_ik = _Q_ik
         self._h_Ik = _h_Ik
 
+    def solve_internals_nnls_alt(self):
+        NK = self.NK
+        nk = self.nk
+        _h_uk = self._h_uk
+        _h_dk = self._h_dk
+        _h_Ik = self._h_Ik
+        _Q_ik = self._Q_ik
+        _kI = self._kI
+        _ki = self._ki
+        _I_1k = self._I_1k
+        _I_Nk = self._I_Nk
+        _U_Ik = self._U_Ik
+        _V_Ik = self._V_Ik
+        _W_Ik = self._W_Ik
+        _X_Ik = self._X_Ik
+        _Y_Ik = self._Y_Ik
+        _Z_Ik = self._Z_Ik
+        _is_start = self._is_start
+        _is_end = self._is_end
+        _is_penult = self._is_penult
+        _link_start = self._link_start
+        _link_end = self._link_end
+        _kk = _ki[~_link_end]
+        # Solve non-negative least squares
+        _X = _X_Ik[~_is_start & ~_is_end]
+        _U = _U_Ik[~_is_penult & ~_is_end]
+        t0 = _W_Ik[~_is_end] * _h_uk[_ki]
+        t1 = _Z_Ik[~_is_end] * _h_dk[_ki]
+        t2 = _Y_Ik[~_is_end]
+        t3 = _V_Ik[~_is_end]
+        _b = -t0 + t1 + t2 - t3
+        _b[_link_start] += _X_Ik[_is_start] * _h_uk
+        _b[_link_end] -= _U_Ik[_is_penult] * _h_dk
+        for k in range(NK):
+            # Set up solution matrix
+            nlinks = nk[k]
+            njunctions = nlinks + 1
+            I_k = (_kI == k)
+            i_k = (_ki == k)
+            k_k = (_kk == k)
+            Ak = np.zeros((nlinks, nlinks - 1))
+            # Fill right-hand side matrix
+            Ak.flat[::nlinks] = _U[k_k]
+            Ak.flat[nlinks-1::nlinks] = -_X[k_k]
+            bk = _b[i_k]
+            _h_inner, _res = scipy.optimize.nnls(Ak, bk)
+            _h_Ik[I_k & ~_is_start & ~_is_end] = _h_inner
+        # Set depths at upstream and downstream ends
+        _h_Ik[_is_start] = _h_uk
+        _h_Ik[_is_end] = _h_dk
+        # Solve for flows using new depths
+        Q_ik_b, Q_ik_f = self.superlink_flow_error()
+        _Q_ik = (Q_ik_b + Q_ik_f) / 2
+        # Export instance variables
+        self._Q_ik = _Q_ik
+        self._h_Ik = _h_Ik
+
     def solve_internals_ls(self):
         NK = self.NK
         nk = self.nk
@@ -3636,7 +3694,8 @@ class SuperLink():
             self.solve_internals_exact()
             # self.solve_internals_exact_2()
         elif _method == 'nnls':
-            self.solve_internals_nnls()
+            # self.solve_internals_nnls()
+            self.solve_internals_nnls_alt()
         elif _method == 'lsq':
             self.solve_internals_ls()
         elif _method == 'b':
