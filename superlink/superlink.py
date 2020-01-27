@@ -333,8 +333,59 @@ class SuperLink():
         # Iteration counter
         self.iter_count = 0
         self.t = 0
+        # Compute bandwidth
+        self.compute_bandwidth()
         # Initialize to stable state
         self.step(dt=1e-6, first_time=True)
+
+    def compute_bandwidth(self):
+        M = self.M
+        _J_uk = self._J_uk
+        _J_dk = self._J_dk
+        _J_uw = self._J_uw
+        _J_dw = self._J_dw
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        _J_up = self._J_up
+        _J_dp = self._J_dp
+        At = np.zeros((M, M))
+        At[_J_uk, _J_dk] = 1
+        At[_J_dk, _J_uk] = 1
+        At[_J_uw, _J_dw] = 1
+        At[_J_dw, _J_uw] = 1
+        At[_J_uo, _J_do] = 1
+        At[_J_do, _J_uo] = 1
+        At[_J_up, _J_dp] = 1
+        At[_J_dp, _J_up] = 1
+        bandwidth = 0
+        for k in range(1, len(At)):
+            if np.diag(At, k=k).any():
+                bandwidth = k
+            else:
+                break
+        self.bandwidth = bandwidth
+
+    def to_banded(self):
+        _J_uk = self._J_uk
+        _J_dk = self._J_dk
+        _J_uw = self._J_uw
+        _J_dw = self._J_dw
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        _J_up = self._J_up
+        _J_dp = self._J_dp
+        At = np.zeros((M, M))
+        At[_J_uk, _J_dk] = 1
+        At[_J_dk, _J_uk] = 1
+        At[_J_uw, _J_dw] = 1
+        At[_J_dw, _J_uw] = 1
+        At[_J_uo, _J_do] = 1
+        At[_J_do, _J_uo] = 1
+        At[_J_up, _J_dp] = 1
+        At[_J_dp, _J_up] = 1
+        At = scipy.sparse.csgraph.csgraph_from_dense(At)
+        perm = scipy.sparse.csgraph.reverse_cuthill_mckee(At)
+        return perm
 
     def lsq_indexers(self):
         """
@@ -2227,7 +2278,7 @@ class SuperLink():
                 # TODO: Broken
                 # l = A
                 # r = b + np.squeeze(B @ u)
-                pass
+                raise NotImplementedError
         else:
             l = A
             r = b
@@ -2235,6 +2286,48 @@ class SuperLink():
             H_j_next = scipy.sparse.linalg.spsolve(l, r)
         else:
             H_j_next = scipy.linalg.solve(l, r)
+        # Constrain heads based on allowed maximum/minimum depths
+        H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
+        H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        # Export instance variables
+        self.H_j = H_j_next
+
+    def solve_banded_matrix(self, u=None, implicit=True):
+        # Import instance variables
+        A = self.A                    # Superlink/superjunction matrix
+        b = self.b                    # Right-hand side vector
+        B = self.B                    # External control matrix
+        O = self.O                    # Orifice matrix
+        W = self.W                    # Weir matrix
+        P = self.P                    # Pump matrix
+        n_o = self.n_o                # Number of orifices
+        n_w = self.n_w                # Number of weirs
+        n_p = self.n_p                # Number of pumps
+        _z_inv_j = self._z_inv_j      # Invert elevation of superjunction j
+        _sparse = self._sparse        # Use sparse data structures (y/n)
+        min_depth = self.min_depth    # Minimum depth at superjunctions
+        max_depth = self.max_depth    # Maximum depth at superjunctions
+        bandwidth = self.bandwidth
+        M = self.M
+        # Does the system have control assets?
+        has_control = n_o + n_w + n_p
+        # Get right-hand size
+        if has_control:
+            if implicit:
+                l = A + O + W + P
+                r = b
+            else:
+                raise NotImplementedError
+        else:
+            l = A
+            r = b
+        AB = np.zeros((2*bandwidth + 1, M))
+        AB[bandwidth] = np.diag(l)
+        for n in range(bandwidth):
+            AB[n, (bandwidth - n):] = np.diag(l, k=bandwidth - n)
+            AB[-n-1, :(-bandwidth + n)] = np.diag(l, k=-bandwidth + n)
+        H_j_next = scipy.linalg.solve_banded((bandwidth, bandwidth), AB, r,
+                                             check_finite=False, overwrite_ab=True)
         # Constrain heads based on allowed maximum/minimum depths
         H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
         H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
@@ -3647,7 +3740,7 @@ class SuperLink():
             setattr(self, key, value)
 
     def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
-             first_time=False, implicit=True):
+             first_time=False, implicit=True, banded=False):
         self.save_state()
         self._Q_in = Q_in
         _method = self._method
@@ -3659,7 +3752,8 @@ class SuperLink():
         self.downstream_hydraulic_geometry()
         self.compute_storage_areas()
         self.node_velocities()
-        self.compute_flow_regime()
+        if self.inertial_damping:
+            self.compute_flow_regime()
         self.link_coeffs(_dt=dt)
         self.node_coeffs(_dt=dt)
         self.forward_recurrence()
@@ -3676,7 +3770,10 @@ class SuperLink():
         self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
-        self.solve_sparse_matrix(implicit=implicit)
+        if banded:
+            self.solve_banded_matrix(implicit=implicit)
+        else:
+            self.solve_sparse_matrix(implicit=implicit)
         self.solve_superlink_flows()
         if self.orifices is not None:
             self.solve_orifice_flows(u=u_o)
