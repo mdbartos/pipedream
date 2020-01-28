@@ -84,6 +84,65 @@ class NumbaLink(SuperLink):
         self._V_Ik = _V_Ik
         self._W_Ik = _W_Ik
 
+    def backward_recurrence(self):
+        """
+        Compute backward recurrence coefficients: O_ik, X_Ik, Y_Ik, and Z_Ik.
+        """
+        # Import instance variables
+        backward_I_I = self.backward_I_I  # Index of junction before junction Ik
+        forward_I_I = self.forward_I_I    # Index of junction after junction Ik
+        forward_I_i = self.forward_I_i    # Index of link after junction Ik
+        _I_start = self._I_start          # Junction at upstream end of superlink (y/n)
+        _I_Np1k = self._I_Np1k            # Index of last junction in each superlink
+        _I_Nk = self._I_Nk                # Index of penultimate junction in each superlink
+        _i_nk = self._i_nk                # Index of last link in each superlink
+        _A_ik = self._A_ik                # Flow area in link ik
+        _E_Ik = self._E_Ik                # Continuity coefficient E_Ik
+        _D_Ik = self._D_Ik                # Continuity coefficient D_Ik
+        _a_ik = self._a_ik                # Momentum coefficient a_ik
+        _b_ik = self._b_ik                # Momentum coefficient b_ik
+        _c_ik = self._c_ik                # Momentum coefficient c_ik
+        _P_ik = self._P_ik                # Momentum coefficient P_ik
+        _O_ik = self._O_ik                # Recurrence coefficient O_ik
+        _X_Ik = self._X_Ik                # Recurrence coefficient X_Ik
+        _Y_Ik = self._Y_Ik                # Recurrence coefficient Y_Ik
+        _end_method = self._end_method    # Method for computing flow at pipe ends
+        _Z_Ik = self._Z_Ik                # Recurrence coefficient Z_Ik
+        NK = self.NK
+        nk = self.nk
+        # Compute coefficients for starting nodes
+        _E_Nk = _E_Ik[_I_Nk]
+        _D_Nk = _D_Ik[_I_Nk]
+        if _end_method == 'o':
+            _O_nk = self.O_nk(_a_ik[_i_nk], _b_ik[_i_nk], _c_ik[_i_nk])
+            _X_Nk = self.X_Nk(_A_ik[_i_nk], _E_Nk, _a_ik[_i_nk], _O_nk)
+            _Y_Nk = self.Y_Nk(_P_ik[_i_nk], _D_Nk, _a_ik[_i_nk], _O_nk)
+            _Z_Nk = self.Z_Nk(_A_ik[_i_nk], _O_nk)
+        else:
+            _O_nk = self.O_nk(_a_ik[_i_nk], _b_ik[_i_nk], _c_ik[_i_nk])
+            _X_Nk = self.X_Nk(_A_ik[_i_nk], _E_Nk, _a_ik[_i_nk], _O_nk)
+            _Y_Nk = self.Y_Nk(_P_ik[_i_nk], _D_Nk, _a_ik[_i_nk], _O_nk,
+                              _c_ik[_i_nk], _D_Ik[_I_Np1k])
+            _Z_Nk = self.Z_Nk(_A_ik[_i_nk], _O_nk, _c_ik[_i_nk], _E_Ik[_I_Np1k])
+        # I = Nk, i = nk
+        _O_ik[_i_nk] = _O_nk
+        _X_Ik[_I_Nk] = _X_Nk
+        _Y_Ik[_I_Nk] = _Y_Nk
+        _Z_Ik[_I_Nk] = _Z_Nk
+        # I = Nk-1, i = nk-1
+        numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
+                                    _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_Nk, _i_nk)
+        # Try resetting
+        _O_ik[_i_nk] = _O_nk
+        _X_Ik[_I_Nk] = _X_Nk
+        _Y_Ik[_I_Nk] = _Y_Nk
+        _Z_Ik[_I_Nk] = _Z_Nk
+        # Export instance variables
+        self._O_ik = _O_ik
+        self._X_Ik = _X_Ik
+        self._Y_Ik = _Y_Ik
+        self._Z_Ik = _Z_Ik
+
     def solve_internals_ls_alt(self):
         NK = self.NK
         nk = self.nk
@@ -121,7 +180,8 @@ class NumbaLink(SuperLink):
         _b[_link_start] += _X_Ik[_is_start] * _h_uk
         _b[_link_end] -= _U_Ik[_is_penult] * _h_dk
         # Call numba function
-        _h_Ik = ls_solve(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b)
+        _h_Ik = numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k,
+                                         _U, _X, _b)
         # Set depths at upstream and downstream ends
         _h_Ik[_is_start] = _h_uk
         _h_Ik[_is_end] = _h_dk
@@ -134,8 +194,8 @@ class NumbaLink(SuperLink):
         self._Q_ik = _Q_ik
         self._h_Ik = _h_Ik
 
-@njit()
-def ls_solve(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
+@njit
+def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
     for k in range(NK):
         nlinks = nk[k]
         lstart = _k_1k[k]
@@ -213,6 +273,55 @@ def T_ik(a_ik, b_ik, c_ik, A_ik, E_Ik, U_Im1k, g=9.81):
     return result
 
 @njit
+def X_Ik(A_ik, E_Ik, a_ik, O_ik, g=9.81):
+    """
+    Compute backward recurrence coefficient 'X' for node I, superlink k.
+    """
+    num = g * A_ik - E_Ik * a_ik
+    den = O_ik
+    result = safe_divide(num, den)
+    return result
+
+@njit
+def Y_Ik(P_ik, a_ik, D_Ik, D_Ip1k, c_ik, A_ik, E_Ip1k, Y_Ip1k, X_Ip1k, O_ik, g=9.81):
+    """
+    Compute backward recurrence coefficient 'Y' for node I, superlink k.
+    """
+    t_0 = P_ik
+    t_1 = a_ik * D_Ik
+    t_2 = D_Ip1k * c_ik
+    t_3 = (g * A_ik - E_Ip1k * c_ik)
+    t_4 = D_Ip1k - Y_Ip1k
+    t_5 = X_Ip1k + E_Ip1k
+    t_6 = O_ik
+    # TODO: There is still a divide by zero here
+    num = (t_0 + t_1 - t_2 - (t_3 * t_4 / t_5))
+    den = t_6
+    result = safe_divide(num, den)
+    return result
+
+@njit
+def Z_Ik(A_ik, E_Ip1k, c_ik, Z_Ip1k, X_Ip1k, O_ik, g=9.81):
+    """
+    Compute backward recurrence coefficient 'Z' for node I, superlink k.
+    """
+    num = (g * A_ik - E_Ip1k * c_ik) * Z_Ip1k
+    den = (X_Ip1k + E_Ip1k) * O_ik
+    result = safe_divide(num, den)
+    return result
+
+@njit
+def O_ik(a_ik, b_ik, c_ik, A_ik, E_Ip1k, X_Ip1k, g=9.81):
+    """
+    Compute backward recurrence coefficient 'O' for link i, superlink k.
+    """
+    t_0 = a_ik + b_ik + c_ik
+    t_1 = g * A_ik - E_Ip1k * c_ik
+    t_2 = X_Ip1k + E_Ip1k
+    result = t_0 + safe_divide(t_1, t_2)
+    return result
+
+@njit
 def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
                              _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_2k, _i_1k):
     for k in range(NK):
@@ -236,3 +345,25 @@ def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
             _W_Ik[_I_next] = W_Ik(_A_ik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
                                   _W_Ik[_Im1_next], _U_Ik[_Im1_next], _T_ik[_i_next])
     return 1
+
+@njit
+def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
+                              _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_Nk, _i_nk):
+    for k in range(NK):
+        start_I = _I_Nk[k] - 1
+        start_i = _i_nk[k] - 1
+        nlinks = nk[k]
+        for i in range(nlinks - 1):
+            _i_next = start_i - i
+            _I_next = start_I - i
+            _Ip1_next = _I_next + 1
+            _O_ik[_i_next] = O_ik(_a_ik[_i_next], _b_ik[_i_next], _c_ik[_i_next],
+                                  _A_ik[_i_next], _E_Ik[_Ip1_next], _X_Ik[_Ip1_next])
+            _X_Ik[_I_next] = X_Ik(_A_ik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
+                                  _O_ik[_i_next])
+            _Y_Ik[_I_next] = Y_Ik(_P_ik[_i_next], _a_ik[_i_next], _D_Ik[_I_next],
+                                  _D_Ik[_Ip1_next], _c_ik[_i_next], _A_ik[_i_next],
+                                  _E_Ik[_Ip1_next], _Y_Ik[_Ip1_next], _X_Ik[_Ip1_next],
+                                  _O_ik[_i_next])
+            _Z_Ik[_I_next] = Z_Ik(_A_ik[_i_next], _E_Ik[_Ip1_next], _c_ik[_i_next],
+                                  _Z_Ik[_Ip1_next], _X_Ik[_Ip1_next], _O_ik[_i_next])
