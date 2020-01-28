@@ -80,6 +80,157 @@ class NumbaLink(SuperLink):
         self._Y_Ik = _Y_Ik
         self._Z_Ik = _Z_Ik
 
+    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
+                                first_time=False):
+        """
+        Construct sparse matrices A, O, W, P and b.
+        """
+        # Import instance variables
+        _k = self._k                     # Superlink indices
+        _J_uk = self._J_uk               # Index of superjunction upstream of superlink k
+        _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
+        _alpha_uk = self._alpha_uk       # Superlink flow coefficient
+        _alpha_dk = self._alpha_dk       # Superlink flow coefficient
+        _beta_uk = self._beta_uk         # Superlink flow coefficient
+        _beta_dk = self._beta_dk         # Superlink flow coefficient
+        _chi_uk = self._chi_uk           # Superlink flow coefficient
+        _chi_dk = self._chi_dk           # Superlink flow coefficient
+        _alpha_ukm = self._alpha_ukm     # Summation of superlink flow coefficients
+        _beta_dkl = self._beta_dkl       # Summation of superlink flow coefficients
+        _chi_ukl = self._chi_ukl         # Summation of superlink flow coefficients
+        _chi_dkm = self._chi_dkm         # Summation of superlink flow coefficients
+        _F_jj = self._F_jj
+        _A_sj = self._A_sj               # Surface area of superjunction j
+        NK = self.NK
+        n_o = self.n_o                   # Number of orifices in system
+        n_w = self.n_w                   # Number of weirs in system
+        n_p = self.n_p                   # Number of pumps in system
+        A = self.A
+        if n_o:
+            O = self.O
+            _J_uo = self._J_uo               # Index of superjunction upstream of orifice o
+            _J_do = self._J_do               # Index of superjunction upstream of orifice o
+            _alpha_o = self._alpha_o         # Orifice flow coefficient
+            _beta_o = self._beta_o           # Orifice flow coefficient
+            _chi_o = self._chi_o             # Orifice flow coefficient
+            _alpha_uom = self._alpha_uom     # Summation of orifice flow coefficients
+            _beta_dol = self._beta_dol       # Summation of orifice flow coefficients
+            _chi_uol = self._chi_uol         # Summation of orifice flow coefficients
+            _chi_dom = self._chi_dom         # Summation of orifice flow coefficients
+            _O_diag = self._O_diag           # Diagonal elements of matrix O
+        if n_w:
+            W = self.W
+            _J_uw = self._J_uw               # Index of superjunction upstream of weir w
+            _J_dw = self._J_dw               # Index of superjunction downstream of weir w
+            _alpha_w = self._alpha_w         # Weir flow coefficient
+            _beta_w = self._beta_w           # Weir flow coefficient
+            _chi_w = self._chi_w             # Weir flow coefficient
+            _alpha_uwm = self._alpha_uwm     # Summation of weir flow coefficients
+            _beta_dwl = self._beta_dwl       # Summation of weir flow coefficients
+            _chi_uwl = self._chi_uwl         # Summation of weir flow coefficients
+            _chi_dwm = self._chi_dwm         # Summation of weir flow coefficients
+            _W_diag = self._W_diag           # Diagonal elements of matrix W
+        if n_p:
+            P = self.P
+            _J_up = self._J_up               # Index of superjunction upstream of pump p
+            _J_dp = self._J_dp               # Index of superjunction downstream of pump p
+            _alpha_p = self._alpha_p         # Pump flow coefficient
+            _beta_p = self._beta_p           # Pump flow coefficient
+            _chi_p = self._chi_p             # Pump flow coefficient
+            _alpha_upm = self._alpha_upm     # Summation of pump flow coefficients
+            _beta_dpl = self._beta_dpl       # Summation of pump flow coefficients
+            _chi_upl = self._chi_upl         # Summation of pump flow coefficients
+            _chi_dpm = self._chi_dpm         # Summation of pump flow coefficients
+            _P_diag = self._P_diag           # Diagonal elements of matrix P
+        _sparse = self._sparse           # Use sparse matrix data structures (y/n)
+        M = self.M                       # Number of superjunctions in system
+        H_j = self.H_j                   # Head at superjunction j
+        bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
+        D = self.D                       # Vector for storing chi coefficients
+        b = self.b                       # Right-hand side vector
+        # If no time step specified, use instance time step
+        if _dt is None:
+            _dt = self._dt
+        # If no boundary head specified, use current superjunction head
+        if H_bc is None:
+            H_bc = self.H_j
+        # If no flow input specified, assume zero external inflow
+        if _Q_0j is None:
+            _Q_0j = 0
+        # If no control input signal specified assume zero input
+        if u is None:
+            u = 0
+        # Clear old data
+        _F_jj.fill(0)
+        D.fill(0)
+        numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
+        # Create A matrix
+        numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
+                              _alpha_dk, _beta_uk, _beta_dk, _A_sj, _dt,
+                              M, NK)
+        # Create D vector
+        numba_add_at(D, _J_uk, -_chi_uk)
+        numba_add_at(D, _J_dk, _chi_dk)
+        # Compute control matrix
+        if n_o:
+            _alpha_uo = _alpha_o
+            _alpha_do = _alpha_o
+            _beta_uo = _beta_o
+            _beta_do = _beta_o
+            _chi_uo = _chi_o
+            _chi_do = _chi_o
+            _O_diag.fill(0)
+            numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
+            # Set diagonal
+            numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _alpha_uo,
+                                    _alpha_do, _beta_uo, _beta_do, M, n_o)
+            # Set right-hand side
+            numba_add_at(D, _J_uk, -_chi_uo)
+            numba_add_at(D, _J_dk, _chi_do)
+        if n_w:
+            _alpha_uw = _alpha_w
+            _alpha_dw = _alpha_w
+            _beta_uw = _beta_w
+            _beta_dw = _beta_w
+            _chi_uw = _chi_w
+            _chi_dw = _chi_w
+            _W_diag.fill(0)
+            numba_clear_off_diagonals(W, bc, _J_uw, _J_dw, n_w)
+            # Set diagonal
+            numba_create_OWP_matrix(W, _W_diag, bc, _J_uw, _J_dw, _alpha_uw,
+                                    _alpha_dw, _beta_uw, _beta_dw, M, n_w)
+            # Set right-hand side
+            numba_add_at(D, _J_uw, -_chi_uw)
+            numba_add_at(D, _J_dw, _chi_dw)
+        if n_p:
+            _alpha_up = _alpha_p
+            _alpha_dp = _alpha_p
+            _beta_up = _beta_p
+            _beta_dp = _beta_p
+            _chi_up = _chi_p
+            _chi_dp = _chi_p
+            _P_diag.fill(0)
+            numba_clear_off_diagonals(P, bc, _J_up, _J_dp, n_p)
+            # Set diagonal
+            numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _alpha_up,
+                                    _alpha_dp, _beta_up, _beta_dp, M, n_p)
+            # Set right-hand side
+            numba_add_at(D, _J_up, -_chi_up)
+            numba_add_at(D, _J_dp, _chi_dp)
+        b.fill(0)
+        b = (_A_sj * H_j / _dt) + _Q_0j + D
+        # Ensure boundary condition is specified
+        b[bc] = H_bc[bc]
+        # Export instance variables
+        self.D = D
+        self.b = b
+        # self._beta_dkl = _beta_dkl
+        # self._alpha_ukm = _alpha_ukm
+        # self._chi_ukl = _chi_ukl
+        # self._chi_dkm = _chi_dkm
+        if first_time and _sparse:
+            self.A = self.A.tocsr()
+
     def solve_banded_matrix(self, u=None, implicit=True):
         # Import instance variables
         A = self.A                    # Superlink/superjunction matrix
@@ -444,3 +595,76 @@ def numba_create_banded(l, bandwidth, M):
             AB[bandwidth - n - 1, -j - 1] = l[-j - 2 - n, -j - 1]
             AB[bandwidth + n + 1, j] = l[j + n + 1, j]
     return AB
+
+@njit(fastmath=True)
+def numba_add_at(a, indices, b):
+    n = len(indices)
+    for k in range(n):
+        i = indices[k]
+        a[i] += b[k]
+
+@njit(fastmath=True)
+def numba_add_at_2d(a, indices_0, indices_1, b):
+    n = len(indices_0)
+    for k in range(n):
+        i = indices_0[k]
+        j = indices_1[k]
+        a[i,j] += b[k]
+
+@njit
+def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
+    for k in range(NK):
+        _J_u = _J_uk[k]
+        _J_d = _J_dk[k]
+        _bc_u = bc[_J_u]
+        _bc_d = bc[_J_d]
+        if not _bc_u:
+            A[_J_u, _J_d] = 0.0
+        if not _bc_d:
+            A[_J_d, _J_u] = 0.0
+
+@njit(fastmath=True)
+def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
+                          _alpha_dk, _beta_uk, _beta_dk, _A_sj, _dt,
+                          M, NK):
+    numba_add_at(_F_jj, _J_uk, _alpha_uk)
+    numba_add_at(_F_jj, _J_dk, -_beta_dk)
+    _F_jj += (_A_sj / _dt)
+    # Set diagonal of A matrix
+    for i in range(M):
+        if bc[i]:
+            A[i,i] = 1.0
+        else:
+            A[i,i] = _F_jj[i]
+    for k in range(NK):
+        _J_u = _J_uk[k]
+        _J_d = _J_dk[k]
+        _bc_u = bc[_J_u]
+        _bc_d = bc[_J_d]
+        if not _bc_u:
+            A[_J_u, _J_d] += _beta_uk[k]
+        if not _bc_d:
+            A[_J_d, _J_u] -= _alpha_dk[k]
+
+@njit(fastmath=True)
+def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _alpha_uc,
+                            _alpha_dc, _beta_uc, _beta_dc, M, NC):
+    # Set diagonal
+    numba_add_at(diag, _J_uc, _alpha_uc)
+    numba_add_at(diag, _J_dc, -_beta_dc)
+    for i in range(M):
+        if bc[i]:
+            X[i,i] = 0.0
+        else:
+            X[i,i] = diag[i]
+    # Set off-diagonal
+    for c in range(NC):
+        _J_u = _J_uc[c]
+        _J_d = _J_dc[c]
+        _bc_u = bc[_J_u]
+        _bc_d = bc[_J_d]
+        if not _bc_u:
+            X[_J_u, _J_d] += _beta_uc[c]
+        if not _bc_d:
+            X[_J_d, _J_u] -= _alpha_dc[c]
+

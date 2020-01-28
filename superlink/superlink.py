@@ -291,6 +291,7 @@ class SuperLink():
         self._chi_dkm = np.zeros(self.M, dtype=float)
         self._k = superlinks.index.values
         self._A_sj = np.zeros(self.M, dtype=float)
+        self._F_jj = np.zeros(self.M, dtype=float)
         # TODO: Allow initial input to be specified
         self._Q_0j = 0
         # Set upstream and downstream superlink variables
