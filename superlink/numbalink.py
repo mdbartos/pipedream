@@ -80,6 +80,44 @@ class NumbaLink(SuperLink):
         self._Y_Ik = _Y_Ik
         self._Z_Ik = _Z_Ik
 
+    def solve_banded_matrix(self, u=None, implicit=True):
+        # Import instance variables
+        A = self.A                    # Superlink/superjunction matrix
+        b = self.b                    # Right-hand side vector
+        B = self.B                    # External control matrix
+        O = self.O                    # Orifice matrix
+        W = self.W                    # Weir matrix
+        P = self.P                    # Pump matrix
+        n_o = self.n_o                # Number of orifices
+        n_w = self.n_w                # Number of weirs
+        n_p = self.n_p                # Number of pumps
+        _z_inv_j = self._z_inv_j      # Invert elevation of superjunction j
+        _sparse = self._sparse        # Use sparse data structures (y/n)
+        min_depth = self.min_depth    # Minimum depth at superjunctions
+        max_depth = self.max_depth    # Maximum depth at superjunctions
+        bandwidth = self.bandwidth
+        M = self.M
+        # Does the system have control assets?
+        has_control = n_o + n_w + n_p
+        # Get right-hand size
+        if has_control:
+            if implicit:
+                l = A + O + W + P
+                r = b
+            else:
+                raise NotImplementedError
+        else:
+            l = A
+            r = b
+        AB = numba_create_banded(l, bandwidth, M)
+        H_j_next = scipy.linalg.solve_banded((bandwidth, bandwidth), AB, r,
+                                             check_finite=False, overwrite_ab=True)
+        # Constrain heads based on allowed maximum/minimum depths
+        H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
+        H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        # Export instance variables
+        self.H_j = H_j_next
+
     def solve_internals_ls_alt(self):
         NK = self.NK
         nk = self.nk
@@ -395,3 +433,14 @@ def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
             _Z_Ik[_I_next] = Z_Ik(_A_ik[_i_next], _E_Ik[_Ip1_next], _c_ik[_i_next],
                                   _Z_Ik[_Ip1_next], _X_Ik[_Ip1_next], _O_ik[_i_next])
     return 1
+
+@njit
+def numba_create_banded(l, bandwidth, M):
+    AB = np.zeros((2*bandwidth + 1, M))
+    for i in range(M):
+        AB[bandwidth, i] = l[i, i]
+    for n in range(bandwidth):
+        for j in range(M - n - 1):
+            AB[bandwidth - n - 1, -j - 1] = l[-j - 2 - n, -j - 1]
+            AB[bandwidth + n + 1, j] = l[j + n + 1, j]
+    return AB
