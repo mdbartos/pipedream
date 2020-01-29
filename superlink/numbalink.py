@@ -683,6 +683,33 @@ class NumbaLink(SuperLink):
                                      _h_uk, _Ik, _ki, n)
         return Q_ik_b, Q_ik_f
 
+    def solve_weir_flows(self, u=None):
+        """
+        Solve for weir discharges given superjunction heads at time t + dt.
+        """
+        # Import instance variables
+        H_j = self.H_j              # Head at superjunction j
+        _z_inv_j = self._z_inv_j    # Invert elevation of superjunction j
+        _J_uw = self._J_uw          # Index of superjunction upstream of weir w
+        _J_dw = self._J_dw          # Index of superjunction downstream of weir w
+        _z_w = self._z_w            # Offset of weir w above invert of upstream superjunction
+        _y_max_w = self._y_max_w    # Maximum height of weir w
+        _Qw = self._Qw              # Current flow rate through weir w
+        _Cwr = self._Cwr            # Discharge coefficient of rectangular portion of weir w
+        _Cwt = self._Cwt            # Discharge coefficient of triangular portion of weir w
+        _s_w = self._s_w            # Inverse side slope of triangular portion of weir w
+        _L_w = self._L_w            # Transverse length of rectangular portion of weir w
+        _Hw = self._Hw              # Current effective head on weir w
+        # If no input signal, assume weir is closed
+        if u is None:
+            u = np.zeros(self.n_w, dtype=float)
+        # Solve for weir flows
+        _Qw_next = numba_solve_weir_flows(_Hw, _Qw, H_j, _z_inv_j, _z_w,
+                                          _y_max_w, u, _L_w, _s_w, _Cwr,
+                                          _Cwt, _J_uw, _J_dw)
+        # Export instance variables
+        self._Qw = _Qw_next
+
 @njit
 def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                              _g1_ik, _g2_ik, _g3_ik, _geom_codes, _Ik, _ik):
@@ -1240,6 +1267,36 @@ def numba_weir_flow_coefficients(_Hw, _Qw, _alpha_w, _beta_w, _chi_w, H_j, _z_in
     _beta_w[c] = 0.0
     _chi_w[c] = 0.0
     return 1
+
+@njit
+def numba_solve_weir_flows(_Hw, _Qw, H_j, _z_inv_j, _z_w, _y_max_w, u, _L_w,
+                           _s_w, _Cwr, _Cwt, _J_uw, _J_dw):
+    _H_uw = H_j[_J_uw]
+    _H_dw = H_j[_J_dw]
+    _z_inv_uw = _z_inv_j[_J_uw]
+    # Create indicator functions
+    _omega_w = np.zeros(_H_uw.size)
+    _omega_w[_H_uw >= _H_dw] = 1.0
+    # Create conditionals
+    cond_0 = (_omega_w * _H_uw + (1 - _omega_w) * _H_dw >
+                _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+    cond_1 = ((1 - _omega_w) * _H_uw + _omega_w * _H_dw >
+                _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+    # TODO: Is this being recalculated for a reason?
+    # Effective heads
+    a = (cond_0 & cond_1)
+    b = (cond_0 & ~cond_1)
+    c = (~cond_0)
+    _Hw[a] = _H_uw[a] - _H_dw[a]
+    _Hw[b] = (_omega_w[b] * _H_uw[b] + (1 - _omega_w[b]) * _H_dw[b]
+                    + (-_z_inv_uw[b] - _z_w[b] - (1 - u[b]) * _y_max_w[b]))
+    _Hw[c] = 0.0
+    _Hw = np.abs(_Hw)
+    # Compute universal coefficient
+    _gamma_ww = (_Cwr * _L_w * _Hw + _Cwt * _s_w * _Hw**2)**2
+    # Compute flow
+    _Qw_next = (-1)**(1 - _omega_w) * np.sqrt(_gamma_ww * _Hw)
+    return _Qw_next
 
 @njit
 def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
