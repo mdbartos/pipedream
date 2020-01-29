@@ -6,6 +6,7 @@ import scipy.sparse
 import scipy.sparse.linalg
 from numba import njit, prange
 import superlink.geometry
+import superlink.ngeometry
 import superlink.storage
 from superlink.superlink import SuperLink
 
@@ -24,6 +25,48 @@ class NumbaLink(SuperLink):
                          min_depth, method, inertial_damping,
                          bc_method, exit_hydraulics, end_length,
                          end_method)
+
+    def link_hydraulic_geometry(self):
+        """
+        Compute hydraulic geometry for each link.
+        """
+        # Import instance variables
+        _ik = self._ik                 # Link index
+        _Ik = self._Ik                 # Junction index
+        _Ip1k = self._Ip1k             # Index of next junction
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _A_ik = self._A_ik             # Flow area at link ik
+        _Pe_ik = self._Pe_ik           # Hydraulic perimeter at link ik
+        _R_ik = self._R_ik             # Hydraulic radius at link ik
+        _B_ik = self._B_ik             # Top width at link ik
+        _dx_ik = self._dx_ik           # Length of link ik
+        _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
+        _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
+        _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
+        _geom_codes = self._geom_codes
+        _transect_factory = self._transect_factory
+        _transect_indices = self._transect_indices
+        _has_irregular = self._has_irregular
+        # Compute hydraulic geometry for regular geometries
+        numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
+                                 _g1_ik, _g2_ik, _g3_ik, _geom_codes, _Ik, _ik)
+        # Compute hydraulic geometry for irregular geometries
+        if _has_irregular:
+            for transect_name, generator in _transect_factory.items():
+                _ik_g = _transect_indices.loc[[transect_name]].values
+                _Ik_g = _Ik[_ik_g]
+                _Ip1k_g = _Ip1k[_ik_g]
+                _h_Ik_g = _h_Ik[_Ik_g]
+                _h_Ip1k_g = _h_Ik[_Ip1k_g]
+                _A_ik[_ik_g] = generator.A_ik(_h_Ik_g, _h_Ip1k_g)
+                _Pe_ik[_ik_g] = generator.Pe_ik(_h_Ik_g, _h_Ip1k_g)
+                _R_ik[_ik_g] = generator.R_ik(_h_Ik_g, _h_Ip1k_g)
+                _B_ik[_ik_g] = generator.B_ik(_h_Ik_g, _h_Ip1k_g)
+        # Export to instance variables
+        self._A_ik = _A_ik
+        self._Pe_ik = _Pe_ik
+        self._R_ik = _R_ik
+        self._B_ik = _B_ik
 
     def forward_recurrence(self):
         """
@@ -319,6 +362,47 @@ class NumbaLink(SuperLink):
         # Export instance variables
         self._Q_ik = _Q_ik
         self._h_Ik = _h_Ik
+
+@njit
+def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
+                             _g1_ik, _g2_ik, _g3_ik, _geom_codes, _Ik, _ik):
+    n = len(_ik)
+    for i in range(n):
+        I = _Ik[i]
+        Ip1 = I + 1
+        geom_code = _geom_codes[i]
+        h_I = _h_Ik[I]
+        h_Ip1 = _h_Ik[Ip1]
+        g1_i = _g1_ik[i]
+        g2_i = _g2_ik[i]
+        g3_i = _g3_ik[i]
+        if geom_code:
+            if geom_code == 1:
+                _A_ik[i] = superlink.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
+                _Pe_ik[i] = superlink.ngeometry.Circular_Pe_ik(h_I, h_Ip1, g1_i)
+                _R_ik[i] = superlink.ngeometry.Circular_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = superlink.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
+            elif geom_code == 2:
+                _A_ik[i] = superlink.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = superlink.ngeometry.Rect_Closed_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = superlink.ngeometry.Rect_Closed_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = superlink.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 3:
+                _A_ik[i] = superlink.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = superlink.ngeometry.Rect_Open_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = superlink.ngeometry.Rect_Open_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = superlink.ngeometry.Rect_Open_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 4:
+                _A_ik[i] = superlink.ngeometry.Triangular_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = superlink.ngeometry.Triangular_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = superlink.ngeometry.Triangular_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = superlink.ngeometry.Triangular_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 5:
+                _A_ik[i] = superlink.ngeometry.Trapezoidal_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _Pe_ik[i] = superlink.ngeometry.Trapezoidal_Pe_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _R_ik[i] = superlink.ngeometry.Trapezoidal_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = superlink.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+    return 1
 
 @njit
 def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):

@@ -1077,6 +1077,8 @@ class SuperLink():
         _transect_ik = self._transect_ik    # Transect associated with link ik
         _link_start = self._link_start      # Link is first link in superlink k
         _link_end = self._link_end          # Link is last link in superlink k
+        _geom_numbers = superlink.geometry.geom_code
+        nk = self.nk
         # Set attributes
         _geom_factory = {}
         _transect_factory = {}
@@ -1111,6 +1113,11 @@ class SuperLink():
             _dk_transect_indices = _transect_indices[_link_end[_transect_indices]]
             for transect_name, transect in transects.items():
                 _transect_factory[transect_name] = superlink.geometry.Irregular(**transect)
+        # Create array of geom codes
+        # TODO: Should have a variable that gives total number of links instead of summing
+        _geom_codes = np.zeros(nk.sum(), dtype=int)
+        for geom, indices in _geom_factory.items():
+            _geom_codes[indices] = _geom_numbers[geom]
         self._has_irregular = _has_irregular
         self._geom_factory = _geom_factory
         self._transect_factory = _transect_factory
@@ -1121,6 +1128,7 @@ class SuperLink():
         self._dk_geom_factory = _dk_geom_factory
         self._uk_transect_indices = _uk_transect_indices
         self._dk_transect_indices = _dk_transect_indices
+        self._geom_codes = _geom_codes
 
     def configure_storages(self):
         """

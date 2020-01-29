@@ -1,6 +1,14 @@
 import numpy as np
 import scipy.interpolate
 
+geom_code = {
+    'circular' : 1,
+    'rect_closed' : 2,
+    'rect_open' : 3,
+    'triangular' : 4,
+    'trapezoidal' : 5
+}
+
 class Circular():
     def __init__(self):
         pass
