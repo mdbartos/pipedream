@@ -388,6 +388,38 @@ class NumbaLink(SuperLink):
         self._theta_uk = _theta_uk
         self._theta_dk = _theta_dk
 
+    def weir_flow_coefficients(self, u=None):
+        """
+        Compute weir flow coefficients: alpha_uw, beta_uw, chi_uw,
+        alpha_dw, beta_dw, chi_dw.
+        """
+        # Import instance variables
+        H_j = self.H_j             # Head at superjunction j
+        _z_inv_j = self._z_inv_j   # Invert elevation of superjunction j
+        _J_uw = self._J_uw         # Index of superjunction upstream of weir w
+        _J_dw = self._J_dw         # Index of superjunction downstream of weir w
+        _z_w = self._z_w           # Elevation offset of bottom of weir w
+        _y_max_w = self._y_max_w   # Maximum height of weir w
+        _Qw = self._Qw             # Current flow rate through weir w
+        _Cwr = self._Cwr           # Discharge coefficient for rectangular section
+        _Cwt = self._Cwt           # Discharge coefficient for triangular section
+        _s_w = self._s_w           # Side slope of triangular section
+        _L_w = self._L_w           # Transverse length of rectangular section
+        _alpha_w = self._alpha_w   # Weir flow coefficient alpha_w
+        _beta_w = self._beta_w     # Weir flow coefficient beta_w
+        _chi_w = self._chi_w       # Weir flow coefficient chi_w
+        _Hw = self._Hw             # Current effective head above weir w
+        # If no input signal, assume weir is closed
+        if u is None:
+            u = np.zeros(self.n_w, dtype=float)
+        # Compute weir flow coefficients
+        numba_weir_flow_coefficients(_Hw, _Qw, _alpha_w, _beta_w, _chi_w, H_j, _z_inv_j, _z_w,
+                                     _y_max_w, u, _L_w, _s_w, _Cwr, _Cwt, _J_uw, _J_dw)
+        # Export instance variables
+        self._alpha_w = _alpha_w
+        self._beta_w = _beta_w
+        self._chi_w = _chi_w
+
     def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
         """
@@ -627,6 +659,29 @@ class NumbaLink(SuperLink):
         # Export instance variables
         self._Q_ik = _Q_ik
         self._h_Ik = _h_Ik
+
+    def superlink_flow_error(self):
+        # Import instance variables
+        _h_Ik = self._h_Ik
+        _U_Ik = self._U_Ik
+        _V_Ik = self._V_Ik
+        _W_Ik = self._W_Ik
+        _X_Ik = self._X_Ik
+        _Y_Ik = self._Y_Ik
+        _Z_Ik = self._Z_Ik
+        _h_uk = self._h_uk
+        _h_dk = self._h_dk
+        _Ik = self._Ik
+        _ki = self._ki
+        # TODO: Need to store nlinks instead of this
+        _ik = self._ik
+        n = _ik.size
+        # Compute internal flow estimates in both directions
+        Q_ik_b = numba_Q_i_next_b(_X_Ik, _h_Ik, _Y_Ik, _Z_Ik,
+                                  _h_dk, _Ik, _ki, n)
+        Q_ik_f = numba_Q_im1k_next_f(_U_Ik, _h_Ik, _V_Ik, _W_Ik,
+                                     _h_uk, _Ik, _ki, n)
+        return Q_ik_b, Q_ik_f
 
 @njit
 def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
@@ -1132,6 +1187,61 @@ def numba_chi_dk(X_1k, kappa_uk, V_Nk, W_Nk, mu_uk, U_Nk,
     return result
 
 @njit
+def gamma_w(self, Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
+    """
+    Compute flow coefficient 'gamma' for weir w.
+    """
+    num = (Cwr * L_w * H_w_t + Cwt * s_w * H_w_t**2)**2
+    den = np.abs(Q_w_t)
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
+def numba_weir_flow_coefficients(_Hw, _Qw, _alpha_w, _beta_w, _chi_w, H_j, _z_inv_j, _z_w,
+                                 _y_max_w, u, _L_w, _s_w, _Cwr, _Cwt, _J_uw, _J_dw):
+    # Specify weir heads at previous timestep
+    _H_uw = H_j[_J_uw]
+    _H_dw = H_j[_J_dw]
+    _z_inv_uw = _z_inv_j[_J_uw]
+    # Create indicator functions
+    _omega_w = np.zeros(_H_uw.size)
+    _omega_w[_H_uw >= _H_dw] = 1.0
+    # Create conditionals
+    cond_0 = (_omega_w * _H_uw + (1 - _omega_w) * _H_dw >
+                _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+    cond_1 = ((1 - _omega_w) * _H_uw + _omega_w * _H_dw >
+                _z_w + _z_inv_uw + (1 - u) * _y_max_w)
+    # Effective heads
+    a = (cond_0 & cond_1)
+    b = (cond_0 & ~cond_1)
+    c = (~cond_0)
+    _Hw[a] = _H_uw[a] - _H_dw[a]
+    _Hw[b] = (_omega_w[b] * _H_uw[b] + (1 - _omega_w[b]) * _H_dw[b]
+                    + (-_z_inv_uw[b] - _z_w[b] - (1 - u[b]) * _y_max_w[b]))
+    _Hw[c] = 0.0
+    _Hw = np.abs(_Hw)
+    # Compute universal coefficients
+    _gamma_w = gamma_w(_Qw, _Hw, _L_w, _s_w, _Cwr, _Cwt)
+    # Fill coefficient arrays
+    # Submerged on both sides
+    a = (cond_0 & cond_1)
+    _alpha_w[a] = _gamma_w[a]
+    _beta_w[a] = -_gamma_w[a]
+    _chi_w[a] = 0.0
+    # Submerged on one side
+    b = (cond_0 & ~cond_1)
+    _alpha_w[b] = _gamma_w[b] * _omega_w[b] * (-1)**(1 - _omega_w[b])
+    _beta_w[b] = _gamma_w[b] * (1 - _omega_w[b]) * (-1)**(1 - _omega_w[b])
+    _chi_w[b] = (_gamma_w[b] * (-1)**(1 - _omega_w[b]) *
+                                (- _z_inv_uw[b] - _z_w[b] - (1 - u[b]) * _y_max_w[b]))
+    # No flow
+    c = (~cond_0)
+    _alpha_w[c] = 0.0
+    _beta_w[c] = 0.0
+    _chi_w[c] = 0.0
+    return 1
+
+@njit
 def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
                              _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_1k, _i_1k):
     for k in range(NK):
@@ -1277,4 +1387,29 @@ def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _alpha_uc,
             X[_J_u, _J_d] += _beta_uc[c]
         if not _bc_d:
             X[_J_d, _J_u] -= _alpha_dc[c]
+
+@njit
+def numba_Q_i_next_b(X_Ik, h_Ik, Y_Ik, Z_Ik, h_Np1k, _Ik, _ki, n):
+    _Q_i = np.zeros(n)
+    for i in range(n):
+        I = _Ik[i]
+        k = _ki[i]
+        t_0 = X_Ik[I] * h_Ik[I]
+        t_1 = Y_Ik[I]
+        t_2 = Z_Ik[I] * h_Np1k[k]
+        _Q_i[i] = t_0 + t_1 + t_2
+    return _Q_i
+
+@njit
+def numba_Q_im1k_next_f(U_Ik, h_Ik, V_Ik, W_Ik, h_1k, _Ik, _ki, n):
+    _Q_i = np.zeros(n)
+    for i in range(n):
+        I = _Ik[i]
+        Ip1 = I + 1
+        k = _ki[i]
+        t_0 = U_Ik[I] * h_Ik[Ip1]
+        t_1 = V_Ik[I]
+        t_2 = W_Ik[I] * h_1k[k]
+        _Q_i[i] = t_0 + t_1 + t_2
+    return _Q_i
 
