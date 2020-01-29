@@ -227,6 +227,7 @@ class SuperLink():
         self._R_ik = np.zeros(self._ik.size)
         self._B_ik = np.zeros(self._ik.size)
         # Node velocities
+        self._u_ik = np.zeros(self._ik.size, dtype=float)
         self._u_Ik = np.zeros(self._Ik.size, dtype=float)
         self._u_Ip1k = np.zeros(self._Ip1k.size, dtype=float)
         # Node coefficients
