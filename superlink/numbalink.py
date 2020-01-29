@@ -178,6 +178,74 @@ class NumbaLink(SuperLink):
         self._u_Ik = _u_Ik
         self._u_Ip1k = _u_Ip1k
 
+    def link_coeffs(self, _dt=None):
+        """
+        Compute link momentum coefficients: a_ik, b_ik, c_ik and P_ik.
+        """
+        # Import instance variables
+        _u_Ik = self._u_Ik         # Flow velocity at junction Ik
+        _u_Ip1k = self._u_Ip1k     # Flow velocity at junction I + 1k
+        _dx_ik = self._dx_ik       # Length of link ik
+        _n_ik = self._n_ik         # Manning's roughness of link ik
+        _Q_ik = self._Q_ik         # Flow rate at link ik
+        _A_ik = self._A_ik         # Flow area at link ik
+        _R_ik = self._R_ik         # Hydraulic radius at link ik
+        _S_o_ik = self._S_o_ik     # Channel bottom slope at link ik
+        _A_c_ik = self._A_c_ik     # Area of control structure at link ik
+        _C_ik = self._C_ik         # Discharge coefficient of control structure at link ik
+        _ctrl = self._ctrl         # Control structure exists at link ik (y/n)
+        inertial_damping = self.inertial_damping    # Use inertial damping (y/n)
+        g = 9.91
+        # If using inertial damping, import coefficient
+        if inertial_damping:
+            _sigma_ik = self._sigma_ik
+        # Otherwise, set coefficient to unity
+        else:
+            _sigma_ik = 1
+        # If time step not specified, use instance time
+        if _dt is None:
+            _dt = self._dt
+        # Compute link coefficients
+        _a_ik = numba_a_ik(_u_Ik, _sigma_ik)
+        _c_ik = numba_c_ik(_u_Ip1k, _sigma_ik)
+        _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik, _A_ik, _R_ik,
+                           _A_c_ik, _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik)
+        _P_ik = numba_P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
+                          _sigma_ik)
+        # Export to instance variables
+        self._a_ik = _a_ik
+        self._b_ik = _b_ik
+        self._c_ik = _c_ik
+        self._P_ik = _P_ik
+
+    def node_coeffs(self, _Q_0Ik=None, _dt=None):
+        """
+        Compute nodal continuity coefficients: D_Ik and E_Ik.
+        """
+        # Import instance variables
+        forward_I_i = self.forward_I_i       # Index of link after junction Ik
+        backward_I_i = self.backward_I_i     # Index of link before junction Ik
+        _is_start = self._is_start
+        _is_end = self._is_end
+        _B_ik = self._B_ik                   # Top width of link ik
+        _dx_ik = self._dx_ik                 # Length of link ik
+        _A_SIk = self._A_SIk                 # Surface area of junction Ik
+        _h_Ik = self._h_Ik                   # Depth at junction Ik
+        _E_Ik = self._E_Ik                   # Continuity coefficient E_Ik
+        _D_Ik = self._D_Ik                   # Continuity coefficient D_Ik
+        # If no time step specified, use instance time step
+        if _dt is None:
+            _dt = self._dt
+        # If no nodal input specified, use zero input
+        if _Q_0Ik is None:
+            _Q_0Ik = np.zeros(_h_Ik.size)
+        # Compute E_Ik and D_Ik
+        numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk,
+                          _dt, forward_I_i, backward_I_i, _is_start, _is_end)
+        # Export instance variables
+        self._E_Ik = _E_Ik
+        self._D_Ik = _D_Ik
+
     def forward_recurrence(self):
         """
         Compute forward recurrence coefficients: T_ik, U_Ik, V_Ik, and W_Ik.
@@ -633,6 +701,96 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
             elif geom_code == 5:
                 _A_bk[k] = superlink.ngeometry.Trapezoidal_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
                 _B_bk[k] = superlink.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+    return 1
+
+@njit
+def numba_a_ik(u_Ik, sigma_ik):
+    """
+    Compute link coefficient 'a' for link i, superlink k.
+    """
+    return -np.maximum(u_Ik, 0) * sigma_ik
+
+@njit
+def numba_c_ik(u_Ip1k, sigma_ik):
+    """
+    Compute link coefficient 'c' for link i, superlink k.
+    """
+    return -np.maximum(-u_Ip1k, 0) * sigma_ik
+
+@njit
+def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
+               A_c_ik, C_ik, a_ik, c_ik, ctrl, sigma_ik, g=9.81):
+    """
+    Compute link coefficient 'b' for link i, superlink k.
+    """
+    # TODO: Clean up
+    cond = A_ik > 0
+    t_0 = (dx_ik / dt) * sigma_ik
+    t_1 = np.zeros(Q_ik_t.size)
+    t_1[cond] = (g * n_ik[cond]**2 * np.abs(Q_ik_t[cond]) * dx_ik[cond]
+                / A_ik[cond] / R_ik[cond]**(4/3))
+    t_2 = np.zeros(ctrl.size)
+    cond = ctrl
+    t_2[cond] = A_ik[cond] * np.abs(Q_ik_t[cond]) / A_c_ik[cond]**2 / C_ik[cond]**2
+    t_3 = a_ik
+    t_4 = c_ik
+    return t_0 + t_1 + t_2 - t_3 - t_4
+
+@njit
+def numba_P_ik(Q_ik_t, dx_ik, dt, A_ik, S_o_ik, sigma_ik, g=9.81):
+    """
+    Compute link coefficient 'P' for link i, superlink k.
+    """
+    t_0 = (Q_ik_t * dx_ik / dt) * sigma_ik
+    t_1 = g * A_ik * S_o_ik * dx_ik
+    return t_0 + t_1
+
+@njit
+def E_Ik(B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, dt):
+    """
+    Compute node coefficient 'E' for node I, superlink k.
+    """
+    t_0 = B_ik * dx_ik / 2
+    t_1 = B_im1k * dx_im1k / 2
+    t_2 = A_SIk
+    t_3 = dt
+    return (t_0 + t_1 + t_2) / t_3
+
+@njit
+def D_Ik(Q_0IK, B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, h_Ik_t, dt):
+    """
+    Compute node coefficient 'D' for node I, superlink k.
+    """
+    t_0 = Q_0IK
+    t_1 = B_ik * dx_ik / 2
+    t_2 = B_im1k * dx_im1k / 2
+    t_3 = A_SIk
+    t_4 = h_Ik_t / dt
+    return t_0 + ((t_1 + t_2 + t_3) * t_4)
+
+@njit
+def numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk, _dt,
+                      _forward_I_i, _backward_I_i, _is_start, _is_end):
+    N = _h_Ik.size
+    for I in range(N):
+        if _is_start[I]:
+            i = _forward_I_i[I]
+            _E_Ik[I] = E_Ik(_B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I], _dt)
+            _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I],
+                            _h_Ik[I], _dt)
+        elif _is_end[I]:
+            im1 = _backward_I_i[I]
+            _E_Ik[I] = E_Ik(0.0, 0.0, _B_ik[im1], _dx_ik[im1],
+                            _A_SIk[I], _dt)
+            _D_Ik[I] = D_Ik(_Q_0Ik[I], 0.0, 0.0, _B_ik[im1],
+                            _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
+        else:
+            i = _forward_I_i[I]
+            im1 = i - 1
+            _E_Ik[I] = E_Ik(_B_ik[i], _dx_ik[i], _B_ik[im1], _dx_ik[im1],
+                            _A_SIk[I], _dt)
+            _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], _B_ik[im1],
+                            _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
     return 1
 
 @njit
