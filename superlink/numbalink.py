@@ -68,6 +68,90 @@ class NumbaLink(SuperLink):
         self._R_ik = _R_ik
         self._B_ik = _B_ik
 
+    def upstream_hydraulic_geometry(self, area='avg'):
+        """
+        Compute hydraulic geometry of upstream ends of superlinks.
+        """
+        # Import instance variables
+        _ik = self._ik                 # Link index
+        _Ik = self._Ik                 # Junction index
+        _ki = self._ki                 # Superlink index containing link ik
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _A_uk = self._A_uk             # Flow area at upstream end of superlink k
+        _B_uk = self._B_uk             # Top width at upstream end of superlink k
+        _dx_ik = self._dx_ik           # Length of link ik
+        _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
+        _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
+        _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
+        _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
+        _J_uk = self._J_uk             # Index of junction upstream of superlink k
+        H_j = self.H_j                 # Head at superjunction j
+        _transect_factory = self._transect_factory
+        _uk_transect_indices = self._uk_transect_indices
+        _uk_has_irregular = self._uk_has_irregular
+        _i_1k = self._i_1k
+        _I_1k = self._I_1k
+        _geom_codes = self._geom_codes
+        # Compute hydraulic geometry for regular geometries
+        numba_boundary_geometry(_A_uk, _B_uk, _h_Ik, H_j, _z_inv_uk,
+                                _g1_ik, _g2_ik, _g2_ik, _geom_codes,
+                                _i_1k, _I_1k, _J_uk)
+        # Compute hydraulic geometry for irregular geometries
+        if _uk_has_irregular:
+            for transect_name, generator in _transect_factory.items():
+                _ik_g = _uk_transect_indices.loc[[transect_name]].values
+                _ki_g = _ki[_ik_g]
+                _Ik_g = _Ik[_ik_g]
+                _h_Ik_g = _h_Ik[_Ik_g]
+                _H_j_g = H_j[_J_uk[_ki_g]] - _z_inv_uk[_ki_g]
+                # TODO: Allow for max here like above
+                _A_uk[_ki_g] = generator.A_ik(_h_Ik_g, _H_j_g)
+                _B_uk[_ki_g] = generator.B_ik(_h_Ik_g, _H_j_g)
+        # Export to instance variables
+        self._A_uk = _A_uk
+
+    def downstream_hydraulic_geometry(self, area='avg'):
+        """
+        Compute hydraulic geometry of downstream ends of superlinks.
+        """
+        # Import instance variables
+        _ik = self._ik                 # Link index
+        _Ip1k = self._Ip1k             # Next junction index
+        _ki = self._ki                 # Superlink index containing link ik
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _A_dk = self._A_dk             # Flow area at downstream end of superlink k
+        _B_dk = self._B_dk             # Top width at downstream end of superlink k
+        _dx_ik = self._dx_ik           # Length of link ik
+        _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
+        _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
+        _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
+        _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
+        _J_dk = self._J_dk             # Index of junction downstream of superlink k
+        H_j = self.H_j                 # Head at superjunction j
+        _transect_factory = self._transect_factory
+        _dk_transect_indices = self._dk_transect_indices
+        _dk_has_irregular = self._dk_has_irregular
+        _i_nk = self._i_nk
+        _I_Np1k = self._I_Np1k
+        _geom_codes = self._geom_codes
+        # Compute hydraulic geometry for regular geometries
+        numba_boundary_geometry(_A_dk, _B_dk, _h_Ik, H_j, _z_inv_dk,
+                                _g1_ik, _g2_ik, _g2_ik, _geom_codes,
+                                _i_nk, _I_Np1k, _J_dk)
+        # Compute hydraulic geometry for irregular geometries
+        if _dk_has_irregular:
+            for transect_name, generator in _transect_factory.items():
+                _ik_g = _dk_transect_indices.loc[[transect_name]].values
+                _ki_g = _ki[_ik_g]
+                _Ip1k_g = _Ip1k[_ik_g]
+                _h_Ip1k_g = _h_Ik[_Ip1k_g]
+                _H_j_g = H_j[_J_dk[_ki_g]] - _z_inv_dk[_ki_g]
+                # TODO: Allow max here like above
+                _A_dk[_ki_g] = generator.A_ik(_h_Ip1k_g, _H_j_g)
+                _B_dk[_ki_g] = generator.B_ik(_h_Ip1k_g, _H_j_g)
+        # Export to instance variables
+        self._A_dk = _A_dk
+
     def forward_recurrence(self):
         """
         Compute forward recurrence coefficients: T_ik, U_Ik, V_Ik, and W_Ik.
@@ -402,6 +486,40 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _Pe_ik[i] = superlink.ngeometry.Trapezoidal_Pe_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
                 _R_ik[i] = superlink.ngeometry.Trapezoidal_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = superlink.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+    return 1
+
+@njit
+def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
+                            _g1_ik, _g2_ik, _g3_ik, _geom_codes,
+                            _i_bk, _I_bk, _J_bk):
+    n = len(_i_bk)
+    for k in range(n):
+        i = _i_bk[k]
+        I = _I_bk[k]
+        j = _J_bk[k]
+        # TODO: does not handle "max" mode
+        h_I = _h_Ik[I]
+        h_Ip1 = _H_j[j] - _z_inv_bk[k]
+        geom_code = _geom_codes[i]
+        g1_i = _g1_ik[i]
+        g2_i = _g2_ik[i]
+        g3_i = _g3_ik[i]
+        if geom_code:
+            if geom_code == 1:
+                _A_bk[k] = superlink.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
+                _B_bk[k] = superlink.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
+            elif geom_code == 2:
+                _A_bk[k] = superlink.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = superlink.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 3:
+                _A_bk[k] = superlink.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = superlink.ngeometry.Rect_Open_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 4:
+                _A_bk[k] = superlink.ngeometry.Triangular_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = superlink.ngeometry.Triangular_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 5:
+                _A_bk[k] = superlink.ngeometry.Trapezoidal_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _B_bk[k] = superlink.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
     return 1
 
 @njit
