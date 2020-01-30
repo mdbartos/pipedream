@@ -736,10 +736,13 @@ class NumbaLink(SuperLink):
         NK = self.NK
         # Get downstream head
         _H_dk = H_j[_J_dk]
+        # Handle which superlinks to reposition
+        if reposition is None:
+            reposition = np.ones(NK, dtype=bool)
         # Reposition junctions
         numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
                                     _b0, _z0, _x0, _m, _elem_pos, _i_1k, _I_1k,
-                                    _I_Np1k, nk, NK)
+                                    _I_Np1k, nk, NK, reposition)
 
 @njit
 def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
@@ -1504,65 +1507,66 @@ def numba_Q_im1k_next_f(U_Ik, h_Ik, V_Ik, W_Ik, h_1k, _Ik, _ki, n):
 @njit
 def numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
                                _b0, _z0, _x0, _m, _elem_pos, _i_1k, _I_1k,
-                               _I_Np1k, nk, NK):
+                               _I_Np1k, nk, NK, reposition):
     for k in range(NK):
-        _i_1 = _i_1k[k]
-        _I_1 = _I_1k[k]
-        _I_Np1 = _I_Np1k[k]
-        nlinks = nk[k]
-        njunctions = nlinks + 1
-        _i_end = _i_1 + nlinks
-        _I_end = _I_1 + njunctions
-        _H_d = _H_dk[k]
-        _z_inv_1 = _z_inv_Ik[_I_1]
-        _z_inv_Np1 = _z_inv_Ik[_I_Np1]
-        pos_prev = _elem_pos[k]
-        # Junction arrays for superlink k
-        _x_I = _x_Ik[_I_1:_I_end]
-        _z_inv_I = _z_inv_Ik[_I_1:_I_end]
-        _h_I = _h_Ik[_I_1:_I_end]
-        _dx_i = _dx_ik[_i_1:_i_end]
-        # Move junction if downstream head is within range
-        move_junction = (_H_d > _z_inv_Np1) & (_H_d < _z_inv_1)
-        if move_junction:
-            z_m = _H_d
-            x_m = (_H_d - _b0[k]) / _m[k]
-        else:
-            z_m = _z0[k]
-            x_m = _x0[k]
-        # Determine new x-position of junction
-        c = np.searchsorted(_x_I, x_m)
-        cm1 = c - 1
-        # Compute fractional x-position along superlink k
-        frac = (x_m - _x_I[cm1]) / (_x_I[c] - _x_I[cm1])
-        # Interpolate depth at new position
-        h_m = (1 - frac) * _h_I[cm1] + (frac) * _h_I[c]
-        # Link length ratio
-        r = _dx_i[pos_prev - 1] / (_dx_i[pos_prev - 1]
-                                   + _dx_i[pos_prev])
-        # Set new values
-        _x_I[pos_prev] = x_m
-        _z_inv_I[pos_prev] = z_m
-        _h_I[pos_prev] = h_m
-        Ix = np.argsort(_x_I)
-        _dx_i = np.diff(_x_I[Ix])
-        _x_Ik[_I_1:_I_end] = _x_I[Ix]
-        _z_inv_Ik[_I_1:_I_end] = _z_inv_I[Ix]
-        _h_Ik[_I_1:_I_end] = _h_I[Ix]
-        _dx_ik[_i_1:_i_end] = _dx_i
-        # Set position to new position
-        pos_change = np.argsort(Ix)
-        pos_next = pos_change[pos_prev]
-        _elem_pos[k] = pos_next
-        shifted = (pos_prev != pos_next)
-        # If position has shifted interpolate flow
-        # TODO: For testing only, remove this later
-        r = 0.5
-        if shifted:
-            ix = np.arange(nlinks)
-            ix[pos_prev] = pos_next
-            ix.sort()
-            _Q_i = _Q_ik[_i_1:_i_end]
-            _Q_i[pos_prev - 1] = r * _Q_i[pos_prev - 1] + (1 - r) * _Q_i[pos_prev]
-            _Q_ik[_i_1:_i_end] = _Q_i[ix]
+        if reposition[k]:
+            _i_1 = _i_1k[k]
+            _I_1 = _I_1k[k]
+            _I_Np1 = _I_Np1k[k]
+            nlinks = nk[k]
+            njunctions = nlinks + 1
+            _i_end = _i_1 + nlinks
+            _I_end = _I_1 + njunctions
+            _H_d = _H_dk[k]
+            _z_inv_1 = _z_inv_Ik[_I_1]
+            _z_inv_Np1 = _z_inv_Ik[_I_Np1]
+            pos_prev = _elem_pos[k]
+            # Junction arrays for superlink k
+            _x_I = _x_Ik[_I_1:_I_end]
+            _z_inv_I = _z_inv_Ik[_I_1:_I_end]
+            _h_I = _h_Ik[_I_1:_I_end]
+            _dx_i = _dx_ik[_i_1:_i_end]
+            # Move junction if downstream head is within range
+            move_junction = (_H_d > _z_inv_Np1) & (_H_d < _z_inv_1)
+            if move_junction:
+                z_m = _H_d
+                x_m = (_H_d - _b0[k]) / _m[k]
+            else:
+                z_m = _z0[k]
+                x_m = _x0[k]
+            # Determine new x-position of junction
+            c = np.searchsorted(_x_I, x_m)
+            cm1 = c - 1
+            # Compute fractional x-position along superlink k
+            frac = (x_m - _x_I[cm1]) / (_x_I[c] - _x_I[cm1])
+            # Interpolate depth at new position
+            h_m = (1 - frac) * _h_I[cm1] + (frac) * _h_I[c]
+            # Link length ratio
+            r = _dx_i[pos_prev - 1] / (_dx_i[pos_prev - 1]
+                                    + _dx_i[pos_prev])
+            # Set new values
+            _x_I[pos_prev] = x_m
+            _z_inv_I[pos_prev] = z_m
+            _h_I[pos_prev] = h_m
+            Ix = np.argsort(_x_I)
+            _dx_i = np.diff(_x_I[Ix])
+            _x_Ik[_I_1:_I_end] = _x_I[Ix]
+            _z_inv_Ik[_I_1:_I_end] = _z_inv_I[Ix]
+            _h_Ik[_I_1:_I_end] = _h_I[Ix]
+            _dx_ik[_i_1:_i_end] = _dx_i
+            # Set position to new position
+            pos_change = np.argsort(Ix)
+            pos_next = pos_change[pos_prev]
+            _elem_pos[k] = pos_next
+            shifted = (pos_prev != pos_next)
+            # If position has shifted interpolate flow
+            # TODO: For testing only, remove this later
+            r = 0.5
+            if shifted:
+                ix = np.arange(nlinks)
+                ix[pos_prev] = pos_next
+                ix.sort()
+                _Q_i = _Q_ik[_i_1:_i_end]
+                _Q_i[pos_prev - 1] = r * _Q_i[pos_prev - 1] + (1 - r) * _Q_i[pos_prev]
+                _Q_ik[_i_1:_i_end] = _Q_i[ix]
 
