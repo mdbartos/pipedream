@@ -585,6 +585,7 @@ class SuperLink():
         self.links = links
         self.superlinks = superlinks
         self._fixed = _fixed
+        self._elem_pos = c
         self._b0 = _b0
         self._b1 = _b1
         self._m = _m
