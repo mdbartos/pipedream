@@ -1248,7 +1248,7 @@ def numba_chi_dk(X_1k, kappa_uk, V_Nk, W_Nk, mu_uk, U_Nk,
     return result
 
 @njit
-def gamma_w(self, Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
+def gamma_w(Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
     """
     Compute flow coefficient 'gamma' for weir w.
     """
