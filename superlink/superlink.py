@@ -119,6 +119,7 @@ class SuperLink():
             self._z_o = self.orifices['z_o'].values.astype(float)
             self._y_max_o = self.orifices['y_max'].values.astype(float)
             self._orient_o = self.orifices['orientation'].values
+            self._tau_o = (self._orient_o == 'side').astype(float)
             self.n_o = self.orifices.shape[0]
             self._Qo = np.zeros(self.n_o, dtype=float)
             self._alpha_o = np.zeros(self.n_o, dtype=float)

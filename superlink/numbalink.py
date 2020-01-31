@@ -388,6 +388,36 @@ class NumbaLink(SuperLink):
         self._theta_uk = _theta_uk
         self._theta_dk = _theta_dk
 
+    def orifice_flow_coefficients(self, u=None):
+        """
+        Compute orifice flow coefficients: alpha_uo, beta_uo, chi_uo,
+        alpha_do, beta_do, chi_do.
+        """
+        # Import instance variables
+        H_j = self.H_j               # Head at superjunction j
+        _z_inv_j = self._z_inv_j     # Invert elevation at superjunction j
+        _J_uo = self._J_uo           # Index of superjunction upstream of orifice o
+        _J_do = self._J_do           # Index of superjunction downstream of orifice o
+        _z_o = self._z_o             # Elevation offset of bottom of orifice o
+        _tau_o = self._tau_o         # Orientation of orifice o (side/bottom)
+        _y_max_o = self._y_max_o     # Maximum height of orifice o
+        _Qo = self._Qo               # Current flow rate of orifice o
+        _Co = self._Co               # Discharge coefficient of orifice o
+        _Ao = self._Ao               # Maximum flow area of orifice o
+        _alpha_o = self._alpha_o     # Orifice flow coefficient alpha_o
+        _beta_o = self._beta_o       # Orifice flow coefficient beta_o
+        _chi_o = self._chi_o         # Orifice flow coefficient chi_o
+        # If no input signal, assume orifice is closed
+        if u is None:
+            u = np.zeros(self.n_o, dtype=float)
+        # Specify orifice heads at previous timestep
+        numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_inv_j,
+                                        _z_o, _tau_o, _Co, _Ao, _y_max_o, _J_uo, _J_do)
+        # Export instance variables
+        self._alpha_o = _alpha_o
+        self._beta_o = _beta_o
+        self._chi_o = _chi_o
+
     def weir_flow_coefficients(self, u=None):
         """
         Compute weir flow coefficients: alpha_uw, beta_uw, chi_uw,
@@ -714,6 +744,29 @@ class NumbaLink(SuperLink):
         Q_ik_f = numba_Q_im1k_next_f(_U_Ik, _h_Ik, _V_Ik, _W_Ik,
                                      _h_uk, _Ik, _ki, n)
         return Q_ik_b, Q_ik_f
+
+    def solve_orifice_flows(self, u=None):
+        """
+        Solve for orifice discharges given superjunction heads at time t + dt.
+        """
+        # Import instance variables
+        H_j = self.H_j                # Head at superjunction j
+        _z_inv_j = self._z_inv_j      # Invert elevation at superjunction j
+        _J_uo = self._J_uo            # Index of superjunction upstream of orifice o
+        _J_do = self._J_do            # Index of superjunction downstream of orifice o
+        _z_o = self._z_o              # Offset of orifice above upstream invert elevation
+        _tau_o = self._tau_o          # Orientation of orifice o (bottom/side)
+        _y_max_o = self._y_max_o      # Maximum height of orifice o
+        _Co = self._Co                # Discharge coefficient of orifice o
+        _Ao = self._Ao                # Maximum flow area of orifice o
+        # If no input signal, assume orifice is closed
+        if u is None:
+            u = np.zeros(self.n_o, dtype=float)
+        # Compute orifice flows
+        _Qo_next = numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o, _tau_o, _y_max_o, _Co, _Ao,
+                                             _J_uo, _J_do)
+        # Export instance variables
+        self._Qo = _Qo_next
 
     def solve_weir_flows(self, u=None):
         """
@@ -1303,6 +1356,16 @@ def numba_chi_dk(X_1k, kappa_uk, V_Nk, W_Nk, mu_uk, U_Nk,
     return result
 
 @njit
+def gamma_o(Q_o_t, Ao, Co=0.67, g=9.81):
+    """
+    Compute flow coefficient 'gamma' for orifice o.
+    """
+    num = 2 * g * Co**2 * Ao**2
+    den = np.abs(Q_o_t)
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
 def gamma_w(Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
     """
     Compute flow coefficient 'gamma' for weir w.
@@ -1321,6 +1384,103 @@ def gamma_p(Q_p_t, dH_p_t, a_q=1.0, a_h=1.0):
     den = a_h**2 * np.abs(Q_p_t)
     result = safe_divide_vec(num, den)
     return result
+
+@njit
+def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_inv_j,
+                                    _z_o, _tau_o, _Co, _Ao, _y_max_o, _J_uo, _J_do):
+    _H_uo = H_j[_J_uo]
+    _H_do = H_j[_J_do]
+    _z_inv_uo = _z_inv_j[_J_uo]
+    # Create indicator functions
+    _omega_o = np.zeros_like(_H_uo)
+    _omega_o[_H_uo >= _H_do] = 1.0
+    # Compute universal coefficients
+    _gamma_o = gamma_o(_Qo, _Ao, _Co)
+    # Create conditionals
+    cond_0 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                _z_o + _z_inv_uo + (_tau_o * _y_max_o * u))
+    cond_1 = ((1 - _omega_o) * _H_uo + _omega_o * _H_do >
+                _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
+    cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                _z_o + _z_inv_uo)
+    # Fill coefficient arrays
+    # Submerged on both sides
+    a = (cond_0 & cond_1)
+    _alpha_o[a] = _gamma_o[a] * u[a]**2
+    _beta_o[a] = -_gamma_o[a] * u[a]**2
+    _chi_o[a] = 0.0
+    # Submerged on one side
+    b = (cond_0 & ~cond_1)
+    _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+    _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
+    _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+                                    * (- _z_inv_uo[b] - _z_o[b] -
+                                        _tau_o[b] * _y_max_o[b] * u[b] / 2))
+    # Weir flow
+    c = (~cond_0 & cond_2)
+    _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+    _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+    _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
+                                    * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
+    # No flow
+    d = (~cond_0 & ~cond_2)
+    _alpha_o[d] = 0.0
+    _beta_o[d] = 0.0
+    _chi_o[d] = 0.0
+    return 1
+
+@njit
+def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
+                              _tau_o, _y_max_o, _Co, _Ao, _J_uo, _J_do, g=9.81):
+    # Specify orifice heads at previous timestep
+    _H_uo = H_j[_J_uo]
+    _H_do = H_j[_J_do]
+    _z_inv_uo = _z_inv_j[_J_uo]
+    # Create indicator functions
+    _omega_o = np.zeros_like(_H_uo)
+    _omega_o[_H_uo >= _H_do] = 1.0
+    # Create arrays to store flow coefficients for current time step
+    _alpha_o = np.zeros_like(_H_uo)
+    _beta_o = np.zeros_like(_H_uo)
+    _chi_o = np.zeros_like(_H_uo)
+    # Compute universal coefficients
+    _gamma_o = 2 * g * _Co**2 * _Ao**2
+    # Create conditionals
+    cond_0 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                _z_o + _z_inv_uo + (_tau_o * _y_max_o * u))
+    cond_1 = ((1 - _omega_o) * _H_uo + _omega_o * _H_do >
+                _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
+    cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
+                _z_o + _z_inv_uo)
+    # Fill coefficient arrays
+    # Submerged on both sides
+    a = (cond_0 & cond_1)
+    _alpha_o[a] = _gamma_o[a] * u[a]**2
+    _beta_o[a] = -_gamma_o[a] * u[a]**2
+    _chi_o[a] = 0.0
+    # Submerged on one side
+    b = (cond_0 & ~cond_1)
+    _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+    _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
+    _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+                                    * (- _z_inv_uo[b] - _z_o[b]
+                                        - _tau_o[b] * _y_max_o[b] * u[b] / 2))
+    # Weir flow on one side
+    c = (~cond_0 & cond_2)
+    _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+    _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+    _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
+                                    * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
+    # No flow
+    d = (~cond_0 & ~cond_2)
+    _alpha_o[d] = 0.0
+    _beta_o[d] = 0.0
+    _chi_o[d] = 0.0
+    # Compute flow
+    _Qo_next = (-1)**(1 - _omega_o) * np.sqrt(np.abs(
+               _alpha_o * _H_uo + _beta_o * _H_do + _chi_o))
+    # Export instance variables
+    return _Qo_next
 
 @njit
 def numba_weir_flow_coefficients(_Hw, _Qw, _alpha_w, _beta_w, _chi_w, H_j, _z_inv_j, _z_w,
