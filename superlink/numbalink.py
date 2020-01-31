@@ -420,6 +420,38 @@ class NumbaLink(SuperLink):
         self._beta_w = _beta_w
         self._chi_w = _chi_w
 
+    def pump_flow_coefficients(self, u=None):
+        """
+        Compute pump flow coefficients: alpha_up, beta_up, chi_up,
+        alpha_dp, beta_dp, chi_dp.
+        """
+        # Import instance variables
+        H_j = self.H_j              # Head at superjunction j
+        _z_inv_j = self._z_inv_j    # Invert elevation at superjunction j
+        _J_up = self._J_up          # Index of superjunction upstream of pump p
+        _J_dp = self._J_dp          # Index of superjunction downstream of pump p
+        _z_p = self._z_p            # Offset of pump inlet above upstream invert elevation
+        _dHp_max = self._dHp_max    # Maximum pump head difference
+        _dHp_min = self._dHp_min    # Minimum pump head difference
+        _ap_h = self._ap_h          # Horizontal axis length of elliptical pump curve
+        _ap_q = self._ap_q          # Vertical axis length of elliptical pump curve
+        _Qp = self._Qp              # Current flow rate through pump p
+        _alpha_p = self._alpha_p    # Pump flow coefficient alpha_p
+        _beta_p = self._beta_p      # Pump flow coefficient beta_p
+        _chi_p = self._chi_p        # Pump flow coefficient chi_p
+        # If no input signal, assume pump is closed
+        if u is None:
+            u = np.zeros(self.n_p, dtype=float)
+        # Check max/min head differences
+        assert (_dHp_min <= _dHp_max).all()
+        # Compute pump flow coefficients
+        numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, u,
+                                     _z_p, _dHp_max, _dHp_min, _ap_q, _ap_h, _J_up, _J_dp)
+        # Export instance variables
+        self._alpha_p = _alpha_p
+        self._beta_p = _beta_p
+        self._chi_p = _chi_p
+
     def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
         """
@@ -525,8 +557,8 @@ class NumbaLink(SuperLink):
             numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _alpha_uo,
                                     _alpha_do, _beta_uo, _beta_do, M, n_o)
             # Set right-hand side
-            numba_add_at(D, _J_uk, -_chi_uo)
-            numba_add_at(D, _J_dk, _chi_do)
+            numba_add_at(D, _J_uo, -_chi_uo)
+            numba_add_at(D, _J_do, _chi_do)
         if n_w:
             _alpha_uw = _alpha_w
             _alpha_dw = _alpha_w
@@ -709,6 +741,29 @@ class NumbaLink(SuperLink):
                                           _Cwt, _J_uw, _J_dw)
         # Export instance variables
         self._Qw = _Qw_next
+
+    def solve_pump_flows(self, u=None):
+        """
+        Solve for pump discharges given superjunction heads at time t + dt.
+        """
+        # Import instance variables
+        H_j = self.H_j              # Head at superjunction j
+        _z_inv_j = self._z_inv_j    # Invert elevation of superjunction j
+        _J_up = self._J_up          # Index of superjunction upstream of pump p
+        _J_dp = self._J_dp          # Index of superjunction downstream of pump p
+        _z_p = self._z_p            # Offset of pump inlet above upstream invert
+        _dHp_max = self._dHp_max    # Maximum pump head difference
+        _dHp_min = self._dHp_min    # Minimum pump head difference
+        _ap_h = self._ap_h          # Horizontal axis length of elliptical pump curve
+        _ap_q = self._ap_q          # Vertical axis length of elliptical pump curve
+        _Qp = self._Qp              # Current flow rate through pump p
+        # If no input signal, assume pump is closed
+        if u is None:
+            u = np.zeros(self.n_p, dtype=float)
+        # Compute pump flows
+        _Qp_next = numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max,
+                                          _dHp_min, _ap_q, _ap_h, _J_up, _J_dp)
+        self._Qp = _Qp_next
 
     def reposition_junctions(self, reposition=None):
         """
@@ -1258,6 +1313,16 @@ def gamma_w(Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
     return result
 
 @njit
+def gamma_p(Q_p_t, dH_p_t, a_q=1.0, a_h=1.0):
+    """
+    Compute flow coefficient 'gamma' for pump p.
+    """
+    num = a_q**2 * np.abs(dH_p_t)
+    den = a_h**2 * np.abs(Q_p_t)
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
 def numba_weir_flow_coefficients(_Hw, _Qw, _alpha_w, _beta_w, _chi_w, H_j, _z_inv_j, _z_w,
                                  _y_max_w, u, _L_w, _s_w, _Cwr, _Cwt, _J_uw, _J_dw):
     # Specify weir heads at previous timestep
@@ -1331,6 +1396,55 @@ def numba_solve_weir_flows(_Hw, _Qw, H_j, _z_inv_j, _z_w, _y_max_w, u, _L_w,
     # Compute flow
     _Qw_next = (-1)**(1 - _omega_w) * np.sqrt(_gamma_ww * _Hw)
     return _Qw_next
+
+@njit
+def numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, u,
+                                 _z_p, _dHp_max, _dHp_min, _ap_q, _ap_h, _J_up, _J_dp):
+    # Get upstream and downstream heads and invert elevation
+    _H_up = H_j[_J_up]
+    _H_dp = H_j[_J_dp]
+    _z_inv_up = _z_inv_j[_J_up]
+    # Compute effective head
+    _dHp = _H_dp - _H_up
+    cond_0 = _H_up > _z_inv_up + _z_p
+    cond_1 = (_dHp > _dHp_min) & (_dHp < _dHp_max)
+    _dHp[_dHp > _dHp_max] = _dHp_max
+    _dHp[_dHp < _dHp_min] = _dHp_min
+    # Compute universal coefficients
+    _gamma_p = gamma_p(_Qp, _dHp, _ap_q, _ap_h)
+    # Fill coefficient arrays
+    # Head in pump curve range
+    a = (cond_0 & cond_1)
+    _alpha_p[a] = _gamma_p[a] * u[a]**2
+    _beta_p[a] = -_gamma_p[a] * u[a]**2
+    _chi_p[a] = (_gamma_p[a] * _ap_h[a]**2 / np.abs(_dHp[a])) * u[a]**2
+    # Head outside of pump curve range
+    b = (cond_0 & ~cond_1)
+    _alpha_p[b] = 0.0
+    _beta_p[b] = 0.0
+    _chi_p[b] = np.sqrt(np.maximum(_ap_q[b]**2 * (1 - _dHp[b]**2 / _ap_h[b]**2), 0.0)) * u[b]
+    # Depth below inlet
+    c = (~cond_0)
+    _alpha_p[c] = 0.0
+    _beta_p[c] = 0.0
+    _chi_p[c] = 0.0
+    return 1
+
+@njit
+def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _ap_q, _ap_h,
+                           _J_up, _J_dp):
+    _H_up = H_j[_J_up]
+    _H_dp = H_j[_J_dp]
+    _z_inv_up = _z_inv_j[_J_up]
+    # Create conditionals
+    _dHp = _H_dp - _H_up
+    _dHp[_dHp > _dHp_max] = _dHp_max
+    _dHp[_dHp < _dHp_min] = _dHp_min
+    cond_0 = _H_up > _z_inv_up + _z_p
+    # Compute universal coefficients
+    _Qp_next = u * np.sqrt(np.maximum(_ap_q**2 * (1 - (_dHp)**2 / _ap_h**2), 0.0))
+    _Qp_next[~cond_0] = 0.0
+    return _Qp_next
 
 @njit
 def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
