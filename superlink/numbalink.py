@@ -152,6 +152,33 @@ class NumbaLink(SuperLink):
         # Export to instance variables
         self._A_dk = _A_dk
 
+    def compute_storage_areas(self):
+        """
+        Compute surface area of superjunctions at current time step.
+        """
+        # Import instance variables
+        _functional = self._functional              # Superlinks with functional area curves
+        _tabular = self._tabular                    # Superlinks with tabular area curves
+        _storage_factory = self._storage_factory    # Dictionary of storage curves
+        _storage_indices = self._storage_indices    # Indices of storage curves
+        _storage_a = self._storage_a                # Coefficient of functional storage curve
+        _storage_b = self._storage_b                # Exponent of functional storage curve
+        _storage_c = self._storage_c                # Constant of functional storage curve
+        H_j = self.H_j                              # Head at superjunction j
+        _z_inv_j = self._z_inv_j                    # Invert elevation at superjunction j
+        min_depth = self.min_depth                  # Minimum depth allowed at superjunctions/nodes
+        _A_sj = self._A_sj                          # Surface area at superjunction j
+        # Compute storage areas
+        _h_j = np.maximum(H_j - _z_inv_j, min_depth)
+        numba_compute_functional_storage_areas(_h_j, _A_sj, _storage_a, _storage_b,
+                                                _storage_c, _functional)
+        if _tabular.any():
+            for storage_name, generator in _storage_factory.items():
+                _j_g = _storage_indices.loc[[storage_name]].values
+                _A_sj[_j_g] = generator.A_sj(_h_j[_j_g])
+        # Export instance variables
+        self._A_sj = _A_sj
+
     def node_velocities(self):
         """
         Compute velocity of flow at each link and junction.
@@ -300,6 +327,95 @@ class NumbaLink(SuperLink):
         self._X_Ik = _X_Ik
         self._Y_Ik = _Y_Ik
         self._Z_Ik = _Z_Ik
+
+    def superlink_upstream_head_coefficients(self):
+        """
+        Compute upstream head coefficients for superlinks: kappa_uk, lambda_uk, and mu_uk.
+        """
+        # Import instance variables
+        _I_1k = self._I_1k             # Index of first junction in superlink k
+        _i_1k = self._i_1k             # Index of first link in superlink k
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _J_uk = self._J_uk             # Superjunction upstream of superlink k
+        _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
+        _A_ik = self._A_ik             # Flow area of link ik
+        _B_ik = self._B_ik             # Top width of link ik
+        _Q_ik = self._Q_ik             # Flow rate of link ik
+        _bc_method = self._bc_method   # Method for computing superlink boundary condition (j/z)
+        H_j = self.H_j                 # Head at superjunction j
+        _A_uk = self._A_uk             # Flow area at upstream end of superlink k
+        _B_uk = self._B_uk             # Top width at upstream end of superlink k
+        # Placeholder discharge coefficient
+        _C_uk = 0.67
+        # Current upstream flows
+        _Q_uk_t = self._Q_uk
+        if _bc_method == 'z':
+            # Compute superlink upstream coefficients (Zahner)
+            _gamma_uk = gamma_uk(_Q_uk_t, _C_uk, _A_uk)
+            self._kappa_uk = _gamma_uk
+            self._lambda_uk = 1
+            self._mu_uk = - _z_inv_uk
+        elif _bc_method == 'j':
+            # Current upstream depth
+            _h_uk = _h_Ik[_I_1k]
+            # Junction head
+            _H_juk = H_j[_J_uk]
+            # Head difference
+            _dH_uk = _H_juk - _h_uk - _z_inv_uk
+            # Compute superlink upstream coefficients (Ji)
+            _kappa_uk = self.kappa_uk(_A_uk, _dH_uk, _Q_uk_t, _B_uk)
+            _lambda_uk = self.lambda_uk(_A_uk, _dH_uk, _B_uk)
+            _mu_uk = self.mu_uk(_A_uk, _dH_uk, _B_uk, _z_inv_uk)
+            self._kappa_uk = _kappa_uk
+            self._lambda_uk = _lambda_uk
+            self._mu_uk = _mu_uk
+        else:
+            raise ValueError('Invalid BC method {}.'.format(_bc_method))
+
+    def superlink_downstream_head_coefficients(self):
+        """
+        Compute downstream head coefficients for superlinks: kappa_dk, lambda_dk, and mu_dk.
+        """
+        # Import instance variables
+        _I_Np1k = self._I_Np1k         # Index of last junction in superlink k
+        _i_nk = self._i_nk             # Index of last link in superlink k
+        _h_Ik = self._h_Ik             # Depth at junction Ik
+        _J_dk = self._J_dk             # Superjunction downstream of superlink k
+        _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
+        _A_ik = self._A_ik             # Flow area of link ik
+        _B_ik = self._B_ik             # Top width of link ik
+        _Q_ik = self._Q_ik             # Flow rate of link ik
+        _bc_method = self._bc_method   # Method for computing superlink boundary condition (j/z)
+        H_j = self.H_j                 # Head at superjunction j
+        _A_dk = self._A_dk             # Flow area at downstream end of superlink k
+        _B_dk = self._B_dk             # Top width at downstream end of superlink k
+        # Placeholder discharge coefficient
+        _C_dk = 0.67
+        # Current downstream flows
+        _Q_dk_t = self._Q_dk
+        if _bc_method == 'z':
+            # Compute superlink downstream coefficients (Zahner)
+            _gamma_dk = gamma_dk(_Q_dk_t, _C_dk, _A_dk)
+            self._kappa_dk = _gamma_dk
+            self._lambda_dk = 1
+            self._mu_dk = - _z_inv_dk
+        elif _bc_method == 'j':
+            # Downstream top width
+            # Current downstream depth
+            _h_dk = _h_Ik[_I_Np1k]
+            # Junction head
+            _H_jdk = H_j[_J_dk]
+            # Head difference
+            _dH_dk = _h_dk + _z_inv_dk - _H_jdk
+            # Compute superlink upstream coefficients (Ji)
+            _kappa_dk = self.kappa_dk(_A_dk, _dH_dk, _Q_dk_t, _B_dk)
+            _lambda_dk = self.lambda_dk(_A_dk, _dH_dk, _B_dk)
+            _mu_dk = self.mu_dk(_A_dk, _dH_dk, _B_dk, _z_inv_dk)
+            self._kappa_dk = _kappa_dk
+            self._lambda_dk = _lambda_dk
+            self._mu_dk = _mu_dk
+        else:
+            raise ValueError('Invalid BC method {}.'.format(_bc_method))
 
     def superlink_flow_coefficients(self):
         """
@@ -928,6 +1044,17 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
     return 1
 
 @njit
+def numba_compute_functional_storage_areas(h, A, a, b, c, _functional):
+    M = h.size
+    for j in range(M):
+        if _functional[j]:
+            if h[j] < 0:
+                A[j] = 0
+            else:
+                A[j] = a[j] * (h[j]**b[j]) + c[j]
+    return A
+
+@njit
 def numba_a_ik(u_Ik, sigma_ik):
     """
     Compute link coefficient 'a' for link i, superlink k.
@@ -1382,6 +1509,26 @@ def gamma_p(Q_p_t, dH_p_t, a_q=1.0, a_h=1.0):
     """
     num = a_q**2 * np.abs(dH_p_t)
     den = a_h**2 * np.abs(Q_p_t)
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
+def gamma_uk(Q_uk_t, C_uk, A_uk, g=9.81):
+    """
+    Compute flow coefficient 'gamma' for upstream end of superlink k
+    """
+    num = -np.abs(Q_uk_t)
+    den = 2 * (C_uk**2) * (A_uk**2) * g
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
+def gamma_dk(Q_dk_t, C_dk, A_dk, g=9.81):
+    """
+    Compute flow coefficient 'gamma' for downstream end of superlink k
+    """
+    num = np.abs(Q_dk_t)
+    den = 2 * (C_dk**2) * (A_dk**2) * g
     result = safe_divide_vec(num, den)
     return result
 
