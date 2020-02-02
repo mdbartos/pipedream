@@ -751,6 +751,51 @@ class NumbaLink(SuperLink):
         if first_time and _sparse:
             self.A = self.A.tocsr()
 
+    def solve_sparse_matrix(self, u=None, implicit=True):
+        """
+        Solve sparse system Ax = b for superjunction heads at time t + dt.
+        """
+        # Import instance variables
+        A = self.A                    # Superlink/superjunction matrix
+        b = self.b                    # Right-hand side vector
+        B = self.B                    # External control matrix
+        O = self.O                    # Orifice matrix
+        W = self.W                    # Weir matrix
+        P = self.P                    # Pump matrix
+        n_o = self.n_o                # Number of orifices
+        n_w = self.n_w                # Number of weirs
+        n_p = self.n_p                # Number of pumps
+        _z_inv_j = self._z_inv_j      # Invert elevation of superjunction j
+        _sparse = self._sparse        # Use sparse data structures (y/n)
+        min_depth = self.min_depth    # Minimum depth at superjunctions
+        max_depth = self.max_depth    # Maximum depth at superjunctions
+        # Does the system have control assets?
+        has_control = n_o + n_w + n_p
+        # Get right-hand size
+        if has_control:
+            if implicit:
+                l = A + O + W + P
+                r = b
+            else:
+                # TODO: Broken
+                # l = A
+                # r = b + np.squeeze(B @ u)
+                raise NotImplementedError
+        else:
+            l = A
+            r = b
+        if _sparse:
+            H_j_next = scipy.sparse.linalg.spsolve(l, r)
+        else:
+            H_j_next = scipy.linalg.solve(l, r)
+        # Constrain heads based on allowed maximum/minimum depths
+        # TODO: Not sure what's happening here
+        # H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
+        H_j_next = np.maximum(H_j_next, _z_inv_j)
+        H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        # Export instance variables
+        self.H_j = H_j_next
+
     def solve_banded_matrix(self, u=None, implicit=True):
         # Import instance variables
         A = self.A                    # Superlink/superjunction matrix
@@ -1009,6 +1054,34 @@ class NumbaLink(SuperLink):
                                           _dHp_min, _ap_q, _ap_h, _J_up, _J_dp)
         self._Qp = _Qp_next
 
+    def compute_storage_volumes(self):
+        """
+        Compute storage volume of superjunctions at current time step.
+        """
+        # Import instance variables
+        _functional = self._functional              # Superlinks with functional area curves
+        _tabular = self._tabular                    # Superlinks with tabular area curves
+        _storage_factory = self._storage_factory    # Dictionary of storage curves
+        _storage_indices = self._storage_indices    # Indices of storage curves
+        _storage_a = self._storage_a                # Coefficient of functional storage curve
+        _storage_b = self._storage_b                # Exponent of functional storage curve
+        _storage_c = self._storage_c                # Constant of functional storage curve
+        H_j = self.H_j                              # Head at superjunction j
+        _z_inv_j = self._z_inv_j                    # Invert elevation at superjunction j
+        min_depth = self.min_depth                  # Minimum depth allowed at superjunctions/nodes
+        _A_sj = self._A_sj                          # Surface area at superjunction j
+        # Compute storage areas
+        _h_j = np.maximum(H_j - _z_inv_j, min_depth)
+        vol = numba_compute_functional_storage_volumes(_h_j, _storage_a, _storage_b,
+                                                       _storage_c, _functional)
+        if _tabular.any():
+            raise NotImplementedError
+            # for storage_name, generator in _storage_factory.items():
+            #     _j_g = _storage_indices.loc[[storage_name]].values
+            #     _A_sj[_j_g] = generator.A_sj(_h_j[_j_g])
+        # Export instance variables
+        return vol
+
     def reposition_junctions(self, reposition=None):
         """
         Reposition junctions inside superlinks to enable capture of backwater effects.
@@ -1128,6 +1201,19 @@ def numba_compute_functional_storage_areas(h, A, a, b, c, _functional):
             else:
                 A[j] = a[j] * (h[j]**b[j]) + c[j]
     return A
+
+@njit
+def numba_compute_functional_storage_volumes(h, a, b, c, _functional):
+    M = h.size
+    V = np.zeros(M)
+    for j in range(M):
+        if _functional[j]:
+            if h[j] < 0:
+                V[j] = 0
+            else:
+                V[j] = (a[j] / (b[j] + 1)) * h[j] ** (b[j] + 1) + c[j] * h[j]
+    return V
+
 
 @njit
 def numba_a_ik(u_Ik, sigma_ik):
@@ -2113,6 +2199,6 @@ def numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
                 ix[pos_prev] = pos_next
                 ix.sort()
                 _Q_i = _Q_ik[_i_1:_i_end]
-                _Q_i[pos_prev - 1] = r * _Q_i[pos_prev - 1] + (1 - r) * _Q_i[pos_prev]
+                _Q_i[pos_prev - 1] = (1 - r) * _Q_i[pos_prev - 1] + r * _Q_i[pos_prev]
                 _Q_ik[_i_1:_i_end] = _Q_i[ix]
 
