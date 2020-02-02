@@ -205,7 +205,7 @@ class NumbaLink(SuperLink):
         self._u_Ik = _u_Ik
         self._u_Ip1k = _u_Ip1k
 
-    def link_coeffs(self, _dt=None):
+    def link_coeffs(self, _dt=None, first_iter=True):
         """
         Compute link momentum coefficients: a_ik, b_ik, c_ik and P_ik.
         """
@@ -237,15 +237,16 @@ class NumbaLink(SuperLink):
         _c_ik = numba_c_ik(_u_Ip1k, _sigma_ik)
         _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik, _A_ik, _R_ik,
                            _A_c_ik, _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik)
-        _P_ik = numba_P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
-                          _sigma_ik)
+        if first_iter:
+            _P_ik = numba_P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
+                            _sigma_ik)
         # Export to instance variables
         self._a_ik = _a_ik
         self._b_ik = _b_ik
         self._c_ik = _c_ik
         self._P_ik = _P_ik
 
-    def node_coeffs(self, _Q_0Ik=None, _dt=None):
+    def node_coeffs(self, _Q_0Ik=None, _dt=None, first_iter=True):
         """
         Compute nodal continuity coefficients: D_Ik and E_Ik.
         """
@@ -268,7 +269,8 @@ class NumbaLink(SuperLink):
             _Q_0Ik = np.zeros(_h_Ik.size)
         # Compute E_Ik and D_Ik
         numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk,
-                          _dt, forward_I_i, backward_I_i, _is_start, _is_end)
+                          _dt, forward_I_i, backward_I_i, _is_start, _is_end,
+                          first_iter)
         # Export instance variables
         self._E_Ik = _E_Ik
         self._D_Ik = _D_Ik
@@ -782,10 +784,83 @@ class NumbaLink(SuperLink):
         H_j_next = scipy.linalg.solve_banded((bandwidth, bandwidth), AB, r,
                                              check_finite=False, overwrite_ab=True)
         # Constrain heads based on allowed maximum/minimum depths
-        H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
+        # TODO: Not sure what's happening here
+        # H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
+        # H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        H_j_next = np.maximum(H_j_next, _z_inv_j)
         H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
         # Export instance variables
         self.H_j = H_j_next
+
+    def solve_internals_backwards(self, subcritical_only=False):
+        """
+        Solve for internal states of each superlink in the backward direction.
+        """
+        # Import instance variables
+        _I_1k = self._I_1k                  # Index of first junction in superlink k
+        _i_1k = self._i_1k                  # Index of first link in superlink k
+        nk = self.nk
+        NK = self.NK
+        _h_Ik = self._h_Ik                  # Depth at junction Ik
+        _Q_ik = self._Q_ik                  # Flow rate at link ik
+        _D_Ik = self._D_Ik                  # Continuity coefficient
+        _E_Ik = self._E_Ik                  # Continuity coefficient
+        _U_Ik = self._U_Ik                  # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                  # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                  # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                  # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                  # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
+        _Q_uk = self._Q_uk                  # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk                  # Flow rate at downstream end of superlink k
+        _h_uk = self._h_uk                  # Depth at upstream end of superlink k
+        _h_dk = self._h_dk                  # Depth at downstream end of superlink k
+        min_depth = self.min_depth          # Minimum allowable water depth
+        # Solve internals
+        numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
+                              _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
+                              min_depth, first_link_backwards=True)
+        # Ensure non-negative depths?
+        _h_Ik[_h_Ik < min_depth] = min_depth
+        # _h_Ik[_h_Ik > max_depth] = max_depth
+        # Export instance variables
+        self._h_Ik = _h_Ik
+        self._Q_ik = _Q_ik
+
+    def solve_internals_forwards(self, subcritical_only=False):
+        """
+        Solve for internal states of each superlink in the backward direction.
+        """
+        # Import instance variables
+        _I_1k = self._I_1k                  # Index of first junction in superlink k
+        _i_1k = self._i_1k                  # Index of first link in superlink k
+        nk = self.nk
+        NK = self.NK
+        _h_Ik = self._h_Ik                  # Depth at junction Ik
+        _Q_ik = self._Q_ik                  # Flow rate at link ik
+        _D_Ik = self._D_Ik                  # Continuity coefficient
+        _E_Ik = self._E_Ik                  # Continuity coefficient
+        _U_Ik = self._U_Ik                  # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                  # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                  # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                  # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                  # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
+        _Q_uk = self._Q_uk                  # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk                  # Flow rate at downstream end of superlink k
+        _h_uk = self._h_uk                  # Depth at upstream end of superlink k
+        _h_dk = self._h_dk                  # Depth at downstream end of superlink k
+        min_depth = self.min_depth          # Minimum allowable water depth
+        # Solve internals
+        numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
+                              _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
+                              min_depth, first_link_backwards=False)
+        # Ensure non-negative depths?
+        _h_Ik[_h_Ik < min_depth] = min_depth
+        # _h_Ik[_h_Ik > max_depth] = max_depth
+        # Export instance variables
+        self._h_Ik = _h_Ik
+        self._Q_ik = _Q_ik
 
     def solve_internals_ls_alt(self):
         NK = self.NK
@@ -1121,28 +1196,86 @@ def D_Ik(Q_0IK, B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, h_Ik_t, dt):
 
 @njit
 def numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk, _dt,
-                      _forward_I_i, _backward_I_i, _is_start, _is_end):
+                      _forward_I_i, _backward_I_i, _is_start, _is_end, first_iter):
     N = _h_Ik.size
     for I in range(N):
         if _is_start[I]:
             i = _forward_I_i[I]
             _E_Ik[I] = E_Ik(_B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I], _dt)
-            _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I],
-                            _h_Ik[I], _dt)
+            if first_iter:
+                _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I],
+                                _h_Ik[I], _dt)
         elif _is_end[I]:
             im1 = _backward_I_i[I]
             _E_Ik[I] = E_Ik(0.0, 0.0, _B_ik[im1], _dx_ik[im1],
                             _A_SIk[I], _dt)
-            _D_Ik[I] = D_Ik(_Q_0Ik[I], 0.0, 0.0, _B_ik[im1],
-                            _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
+            if first_iter:
+                _D_Ik[I] = D_Ik(_Q_0Ik[I], 0.0, 0.0, _B_ik[im1],
+                                _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
         else:
             i = _forward_I_i[I]
             im1 = i - 1
             _E_Ik[I] = E_Ik(_B_ik[i], _dx_ik[i], _B_ik[im1], _dx_ik[im1],
                             _A_SIk[I], _dt)
-            _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], _B_ik[im1],
-                            _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
+            if first_iter:
+                _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], _B_ik[im1],
+                                _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
     return 1
+
+@njit
+def numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
+                          _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
+                          min_depth, first_link_backwards=True):
+    for k in range(NK):
+        n = nk[k]
+        i_1 = _i_1k[k]
+        I_1 = _I_1k[k]
+        i_n = i_1 + n - 1
+        I_Np1 = I_1 + n
+        I_N = I_Np1 - 1
+        # Set boundary depths
+        _h_1k = _h_uk[k]
+        _h_Np1k = _h_dk[k]
+        _h_Ik[I_1] = _h_1k
+        _h_Ik[I_Np1] = _h_Np1k
+        # Compute internal depths and flows (except first link flow)
+        for j in range(n - 1):
+            I = I_N - j
+            Ip1 = I + 1
+            i = i_n - j
+            _Q_ik[i] = Q_i_f(_h_Ik[Ip1], _h_1k, _U_Ik[I], _V_Ik[I], _W_Ik[I])
+            _h_Ik[I] = h_i_b(_Q_ik[i], _h_Np1k, _X_Ik[I], _Y_Ik[I], _Z_Ik[I])
+            if _h_Ik[I] < min_depth:
+                _h_Ik[I] = min_depth
+        if first_link_backwards:
+            _Q_ik[i_1] = Q_i_b(_h_Ik[I_1], _h_Np1k, _X_Ik[I_1], _Y_Ik[I_1],
+                            _Z_Ik[I_1])
+        else:
+            # Not theoretically correct, but seems to be more stable sometimes
+            _Q_ik[i_1] = Q_i_f(_h_Ik[I_1 + 1], _h_1k, _U_Ik[I_1], _V_Ik[I_1],
+                            _W_Ik[I_1])
+    return 1
+
+@njit
+def Q_i_f(h_Ip1k, h_1k, U_Ik, V_Ik, W_Ik):
+    t_0 = U_Ik * h_Ip1k
+    t_1 = V_Ik
+    t_2 = W_Ik * h_1k
+    return t_0 + t_1 + t_2
+
+@njit
+def Q_i_b(h_Ik, h_Np1k, X_Ik, Y_Ik, Z_Ik):
+    t_0 = X_Ik * h_Ik
+    t_1 = Y_Ik
+    t_2 = Z_Ik * h_Np1k
+    return t_0 + t_1 + t_2
+
+@njit
+def h_i_b(Q_ik, h_Np1k, X_Ik, Y_Ik, Z_Ik):
+    num = Q_ik - Y_Ik - Z_Ik * h_Np1k
+    den = X_Ik
+    result = safe_divide(num, den)
+    return result
 
 @njit
 def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
@@ -1834,14 +1967,6 @@ def numba_add_at(a, indices, b):
     for k in range(n):
         i = indices[k]
         a[i] += b[k]
-
-@njit(fastmath=True)
-def numba_add_at_2d(a, indices_0, indices_1, b):
-    n = len(indices_0)
-    for k in range(n):
-        i = indices_0[k]
-        j = indices_1[k]
-        a[i,j] += b[k]
 
 @njit
 def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):

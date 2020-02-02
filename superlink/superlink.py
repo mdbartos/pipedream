@@ -1440,7 +1440,7 @@ class SuperLink():
         self._supercritical = _supercritical
         self._sigma_ik = _sigma_ik
 
-    def link_coeffs(self, _dt=None):
+    def link_coeffs(self, _dt=None, first_iter=True):
         """
         Compute link momentum coefficients: a_ik, b_ik, c_ik and P_ik.
         """
@@ -1471,15 +1471,16 @@ class SuperLink():
         _c_ik = self.c_ik(_u_Ip1k, _sigma_ik)
         _b_ik = self.b_ik(_dx_ik, _dt, _n_ik, _Q_ik, _A_ik, _R_ik,
                           _A_c_ik, _C_ik, _a_ik, _c_ik, _ctrl)
-        _P_ik = self.P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
-                          _sigma_ik)
+        if first_iter:
+            _P_ik = self.P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
+                            _sigma_ik)
         # Export to instance variables
         self._a_ik = _a_ik
         self._b_ik = _b_ik
         self._c_ik = _c_ik
         self._P_ik = _P_ik
 
-    def node_coeffs(self, _Q_0Ik=None, _dt=None):
+    def node_coeffs(self, _Q_0Ik=None, _dt=None, first_iter=True):
         """
         Compute nodal continuity coefficients: D_Ik and E_Ik.
         """
@@ -1529,18 +1530,19 @@ class SuperLink():
         #                                 _dx_ik[end_links], _B_ik[end_links],
         #                                 _dx_ik[end_links], _A_SIk[end_nodes],
         #                                 _h_Ik[end_nodes], _dt)
-        _D_Ik[start_nodes] = self.D_Ik(_Q_0Ik[start_nodes], _B_ik[start_links],
-                                        _dx_ik[start_links], 0.0,
-                                        0.0, _A_SIk[start_nodes],
-                                        _h_Ik[start_nodes], _dt)
-        _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], 0.0,
-                                        0.0, _B_ik[end_links],
-                                        _dx_ik[end_links], _A_SIk[end_nodes],
-                                        _h_Ik[end_nodes], _dt)
-        _D_Ik[middle_nodes] = self.D_Ik(_Q_0Ik[middle_nodes], _B_ik[forward],
-                                        _dx_ik[forward], _B_ik[backward],
-                                        _dx_ik[backward], _A_SIk[middle_nodes],
-                                        _h_Ik[middle_nodes], _dt)
+        if first_iter:
+            _D_Ik[start_nodes] = self.D_Ik(_Q_0Ik[start_nodes], _B_ik[start_links],
+                                            _dx_ik[start_links], 0.0,
+                                            0.0, _A_SIk[start_nodes],
+                                            _h_Ik[start_nodes], _dt)
+            _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], 0.0,
+                                            0.0, _B_ik[end_links],
+                                            _dx_ik[end_links], _A_SIk[end_nodes],
+                                            _h_Ik[end_nodes], _dt)
+            _D_Ik[middle_nodes] = self.D_Ik(_Q_0Ik[middle_nodes], _B_ik[forward],
+                                            _dx_ik[forward], _B_ik[backward],
+                                            _dx_ik[backward], _A_SIk[middle_nodes],
+                                            _h_Ik[middle_nodes], _dt)
         # Export instance variables
         self._E_Ik = _E_Ik
         self._D_Ik = _D_Ik
@@ -3755,7 +3757,7 @@ class SuperLink():
             setattr(self, key, value)
 
     def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
-             first_time=False, implicit=True, banded=False):
+             first_time=False, implicit=True, banded=False, first_iter=True):
         self.save_state()
         self._Q_in = Q_in
         _method = self._method
@@ -3769,8 +3771,8 @@ class SuperLink():
         self.node_velocities()
         if self.inertial_damping:
             self.compute_flow_regime()
-        self.link_coeffs(_dt=dt)
-        self.node_coeffs(_dt=dt)
+        self.link_coeffs(_dt=dt, first_iter=first_iter)
+        self.node_coeffs(_dt=dt, first_iter=first_iter)
         self.forward_recurrence()
         self.backward_recurrence()
         self.superlink_upstream_head_coefficients()
@@ -3815,13 +3817,13 @@ class SuperLink():
             self.solve_internals_backwards()
         elif _method == 'f':
             self.solve_internals_forwards()
-        elif _method == 's':
-            self.solve_internals_backwards(subcritical_only=True)
-            self.solve_internals_forwards(supercritical_only=True)
-        elif _method == 'a':
-            if (self.iter_count % 2):
-                self.solve_internals_backwards()
-            else:
-                self.solve_internals_forwards()
+        # elif _method == 's':
+        #     self.solve_internals_backwards(subcritical_only=True)
+        #     self.solve_internals_forwards(supercritical_only=True)
+        # elif _method == 'a':
+        #     if (self.iter_count % 2):
+        #         self.solve_internals_backwards()
+        #     else:
+        #         self.solve_internals_forwards()
         self.iter_count += 1
         self.t += dt
