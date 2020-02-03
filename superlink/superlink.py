@@ -3752,13 +3752,17 @@ class SuperLink():
         self.states['_A_sj'] = np.copy(self._A_sj)
         self.states['_Q_in'] = np.copy(self._Q_in)
 
-    def load_state(self):
-        for key, value in self.states.items():
+    def load_state(self, states={}):
+        if not states:
+            states = self.states
+        for key, value in states.items():
             setattr(self, key, value)
 
     def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         self.save_state()
+        if dt is None:
+            dt = self._dt
         self._Q_in = Q_in
         _method = self._method
         _exit_hydraulics = self._exit_hydraulics

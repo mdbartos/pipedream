@@ -1,7 +1,5 @@
 import numpy as np
-from numba import njit
 
-@njit
 def interpolate_sample(x, xp, fp):
     n = xp.shape[0]
     m = fp.shape[1]
