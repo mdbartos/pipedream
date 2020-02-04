@@ -907,7 +907,7 @@ class NumbaLink(SuperLink):
         self._h_Ik = _h_Ik
         self._Q_ik = _Q_ik
 
-    def solve_internals_ls_alt(self):
+    def solve_internals_lsq(self):
         NK = self.NK
         nk = self.nk
         _h_uk = self._h_uk
@@ -952,13 +952,13 @@ class NumbaLink(SuperLink):
         # Set min depth
         _h_Ik[_h_Ik < min_depth] = min_depth
         # Solve for flows using new depths
-        Q_ik_b, Q_ik_f = self.superlink_flow_error()
+        Q_ik_b, Q_ik_f = self.superlink_flow_from_recurrence()
         _Q_ik = (Q_ik_b + Q_ik_f) / 2
         # Export instance variables
         self._Q_ik = _Q_ik
         self._h_Ik = _h_Ik
 
-    def superlink_flow_error(self):
+    def superlink_flow_from_recurrence(self):
         # Import instance variables
         _h_Ik = self._h_Ik
         _U_Ik = self._U_Ik
