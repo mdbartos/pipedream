@@ -85,6 +85,14 @@ class Simulation():
         sys.stdout.write('\r[{0}] {1}{2}'.format(bar, pct_finished, '%'))
         sys.stdout.flush()
 
+    def compute_step_size(self, dt, err, min_dt=1, max_dt=200, tol=0.01,
+                          min_rel_change=0.5, max_rel_change=1.5,
+                          safety_factor=0.9):
+        dt = safety_factor * dt * min(max(np.sqrt(tol / 2 / np.abs(err)),
+                                          min_rel_change), max_rel_change)
+        dt = min(max(dt, min_dt), max_dt)
+        return dt
+
     def step(self, dt, **kwargs):
         Q_in = self.Q_in
         H_bc = self.H_bc
