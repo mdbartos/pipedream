@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import pandas as pd
 import scipy.linalg
@@ -14,10 +15,32 @@ class SuperLink():
                  orifices=None, weirs=None, pumps=None,
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
-                 exit_hydraulics=False, end_length=None,
-                 end_method='o'):
-        self.superlinks = superlinks
+                 exit_hydraulics=False, auto_permute=False,
+                 end_length=None, end_method='b'):
+        # TODO: Need to copy these to prevent modification
+        superjunctions = copy.deepcopy(superjunctions)
+        superlinks = copy.deepcopy(superlinks)
+        orifices = copy.deepcopy(orifices)
+        weirs = copy.deepcopy(weirs)
+        pumps = copy.deepcopy(pumps)
         self.superjunctions = superjunctions
+        self.superlinks = superlinks
+        self.orifices = orifices
+        self.weirs = weirs
+        self.pumps = pumps
+        # Dimensions of supersystem
+        self.M = len(superjunctions)
+        if superlinks is not None:
+            self.NK = len(superlinks)
+        else:
+            self.NK = 0
+        # Permute superjunctions if specified
+        if auto_permute:
+            self._initialize_with_permuted_columns()
+            self.banded = True
+        else:
+            self.permutations = np.arange(len(superjunctions))
+            self.banded = False
         if links is None:
             assert junctions is None
             generate_elems = True
@@ -34,9 +57,6 @@ class SuperLink():
             self.junctions = junctions
         self.transects = transects
         self.storages = storages
-        self.orifices = orifices
-        self.weirs = weirs
-        self.pumps = pumps
         self._dt = dt
         self._sparse = sparse
         self._method = method
@@ -60,8 +80,6 @@ class SuperLink():
         self.middle_nodes = self._I[(~self._is_start) & (~self._is_end)]
         self._is_penult = np.roll(self._is_end, -1)
         # Dimensions
-        self.M = len(superjunctions)
-        self.NK = len(superlinks)
         self.nk = np.bincount(self._ki)
         # Create forward and backward indexers
         self.forward_I_I = np.copy(self._I)
@@ -335,29 +353,34 @@ class SuperLink():
         self.iter_count = 0
         self.t = 0
         # Compute bandwidth
-        self.compute_bandwidth()
+        self._compute_bandwidth()
         # Initialize to stable state
         self.step(dt=1e-6, first_time=True)
 
-    def compute_bandwidth(self):
+    @property
+    def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
         M = self.M
-        _J_uk = self._J_uk
-        _J_dk = self._J_dk
-        _J_uw = self._J_uw
-        _J_dw = self._J_dw
-        _J_uo = self._J_uo
-        _J_do = self._J_do
-        _J_up = self._J_up
-        _J_dp = self._J_dp
+        # TODO: Maybe a cleaner way of doing this
+        if (J_u is None) or (J_d is None):
+            superlinks = self.superlinks
+            orifices = self.orifices
+            weirs = self.weirs
+            pumps = self.pumps
+            # Create array of upstream and downstream indices
+            J_u = np.concatenate([elem['sj_0'].values for elem in
+                                (superlinks, orifices, weirs, pumps)
+                                if elem is not None])
+            J_d = np.concatenate([elem['sj_1'].values for elem in
+                                (superlinks, orifices, weirs, pumps)
+                                if elem is not None])
         At = np.zeros((M, M))
-        At[_J_uk, _J_dk] = 1
-        At[_J_dk, _J_uk] = 1
-        At[_J_uw, _J_dw] = 1
-        At[_J_dw, _J_uw] = 1
-        At[_J_uo, _J_do] = 1
-        At[_J_do, _J_uo] = 1
-        At[_J_up, _J_dp] = 1
-        At[_J_dp, _J_up] = 1
+        At[J_u, J_d] = 1
+        if symmetric:
+            At[J_d, J_u] = 1
+        return At
+
+    def _compute_bandwidth(self):
+        At = self.adjacency_matrix
         bandwidth = 0
         for k in range(1, len(At)):
             if np.diag(At, k=k).any():
@@ -366,28 +389,47 @@ class SuperLink():
                 break
         self.bandwidth = bandwidth
 
-    def to_banded(self):
-        M = self.M
-        _J_uk = self._J_uk
-        _J_dk = self._J_dk
-        _J_uw = self._J_uw
-        _J_dw = self._J_dw
-        _J_uo = self._J_uo
-        _J_do = self._J_do
-        _J_up = self._J_up
-        _J_dp = self._J_dp
-        At = np.zeros((M, M))
-        At[_J_uk, _J_dk] = 1
-        At[_J_dk, _J_uk] = 1
-        At[_J_uw, _J_dw] = 1
-        At[_J_dw, _J_uw] = 1
-        At[_J_uo, _J_do] = 1
-        At[_J_do, _J_uo] = 1
-        At[_J_up, _J_dp] = 1
-        At[_J_dp, _J_up] = 1
+    def _to_banded(self):
+        At = self.adjacency_matrix
         At = scipy.sparse.csgraph.csgraph_from_dense(At)
-        perm = scipy.sparse.csgraph.reverse_cuthill_mckee(At)
-        return perm
+        permutations = scipy.sparse.csgraph.reverse_cuthill_mckee(At)
+        return permutations
+
+    def _initialize_with_permuted_columns(self):
+        # NOTE: This must be called during initialization only
+        # Import instance variables
+        superjunctions = self.superjunctions
+        superlinks = self.superlinks
+        orifices = self.orifices
+        weirs = self.weirs
+        pumps = self.pumps
+        # Find permutation array
+        permutations = self._to_banded()
+        perm_inv = np.argsort(permutations)
+        # Permute superjunctions
+        superjunctions['id'] = perm_inv[superjunctions['id'].values]
+        superjunctions.index = superjunctions['id'].values
+        superjunctions = superjunctions.sort_index()
+        if superlinks is not None:
+            superlinks['sj_0'] = perm_inv[superlinks['sj_0'].values]
+            superlinks['sj_1'] = perm_inv[superlinks['sj_1'].values]
+        if orifices is not None:
+            orifices['sj_0'] = perm_inv[orifices['sj_0'].values]
+            orifices['sj_1'] = perm_inv[orifices['sj_1'].values]
+        if weirs is not None:
+            weirs['sj_0'] = perm_inv[weirs['sj_0'].values]
+            weirs['sj_1'] = perm_inv[weirs['sj_1'].values]
+        if pumps is not None:
+            pumps['sj_0'] = perm_inv[pumps['sj_0'].values]
+            pumps['sj_1'] = perm_inv[pumps['sj_1'].values]
+        # TODO: Remember to permute weirs/orifices/pumps too
+        # Export instance variables
+        self.superjunctions = superjunctions
+        self.superlinks = superlinks
+        self.orifices = orifices
+        self.weirs = weirs
+        self.pumps = pumps
+        self.permutations = permutations
 
     def configure_internals(self, end_length=None):
         """

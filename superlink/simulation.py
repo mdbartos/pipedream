@@ -1,3 +1,4 @@
+import copy
 import sys
 from itertools import count
 import numpy as np
@@ -16,9 +17,21 @@ class Simulation():
     def __init__(self, model, Q_in=None, H_bc=None, Q_Ik=None, t_start=None,
                  t_end=None, dt=None, max_iter=None):
         self.model = model
-        self.Q_in = Q_in
-        self.H_bc = H_bc
-        self.Q_Ik = Q_Ik
+        if Q_in is not None:
+            self.Q_in = Q_in.copy(deep=True)
+            self.Q_in = self.Q_in.iloc[:, model.permutations]
+        else:
+            self.Q_in = Q_in
+        if H_bc is not None:
+            self.H_bc = H_bc.copy(deep=True)
+            self.H_bc = self.H_bc.iloc[:, model.permutations]
+        else:
+            self.H_bc = H_bc
+        if Q_Ik is not None:
+            self.Q_Ik = Q_Ik.copy(deep=True)
+            self.Q_Ik = self.Q_Ik.iloc[:, model.permutations]
+        else:
+            self.Q_Ik = Q_Ik
         self.inputs = (self.Q_in, self.H_bc, self.Q_Ik)
         any_inputs = any(inp is not None for inp in self.inputs)
         if dt is None:
@@ -26,7 +39,7 @@ class Simulation():
         self.dt = dt
         self.max_iter = max_iter
         # TODO: This needs to be generalized
-        self.state_variables = ('H_j', '_h_Ik', '_Q_ik')
+        self.state_variables = ('H_j', '_h_Ik', '_Q_ik', '_Q_uk', '_Q_dk')
         if t_start is None:
             if any_inputs:
                 self.t_start = min(i.index.min() for i in self.inputs if i is not None)
