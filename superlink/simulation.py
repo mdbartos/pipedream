@@ -65,6 +65,13 @@ class Simulation():
                 self.t_end = max(i.index.max() for i in self.inputs if i is not None)
             else:
                 self.t_end = np.inf
+        # Progress bar checkpoints
+        if np.isfinite(self.t_end):
+            self._checkpoints = np.linspace(self.t_start, self.t_end)
+        else:
+            self._checkpoints = np.array([np.inf])
+        self._checkpoint_num = 0
+        # Create a sequence iterator
         if max_iter is None:
             self.steps = count()
         else:
@@ -104,9 +111,23 @@ class Simulation():
                                                 np.copy(getattr(model, state))})
         # TODO: Add ability to record error and retry attempts
 
-    def print_progress(self):
+    def print_progress(self, use_checkpoints=True):
+        # Import current and ending time
         t = self.t
         t_end = self.t_end
+        # Use checkpoints to avoid slowing down program with printing
+        if use_checkpoints:
+            checkpoints = self._checkpoints
+            previous_checkpoint = self._checkpoint_num
+            current_checkpoint = np.searchsorted(checkpoints, t)
+            # If we haven't reached a new checkpoint, exit function
+            if (current_checkpoint == previous_checkpoint):
+                return None
+            else:
+                self._checkpoint_num = current_checkpoint
+        # Prevent from going over 100%
+        if t > t_end:
+            t = t_end
         bar_len = 50
         progress_ratio = float(t) / float(t_end)
         progress_len = int(round(bar_len * progress_ratio))
