@@ -17,12 +17,13 @@ class SuperLink():
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False, auto_permute=False,
                  end_length=None, end_method='b'):
-        # TODO: Need to copy these to prevent modification
+        # Copy input tables to prevent modification
         superjunctions = copy.deepcopy(superjunctions)
         superlinks = copy.deepcopy(superlinks)
         orifices = copy.deepcopy(orifices)
         weirs = copy.deepcopy(weirs)
         pumps = copy.deepcopy(pumps)
+        # Save copied input tables to class instance
         self.superjunctions = superjunctions
         self.superlinks = superlinks
         self.orifices = orifices
@@ -41,12 +42,12 @@ class SuperLink():
         else:
             self.permutations = np.arange(len(superjunctions))
             self.banded = False
-        if links is None:
-            assert junctions is None
+        # If internal links and junctions are not provided, create them
+        if (links is None) or (junctions is None):
             generate_elems = True
             num_elems = 4
             total_elems = num_elems + 1
-            self.configure_internals(end_length=end_length)
+            self._configure_internals(end_length=end_length)
             links = self.links
             junctions = self.junctions
         else:
@@ -348,6 +349,7 @@ class SuperLink():
         self._A_k = np.zeros(self.NK, dtype=float)
         self._dt_ck = np.ones(self.NK, dtype=float)
         self._Q_in = np.zeros(self.M, dtype=float)
+        # Initialize state dictionary
         self.states = {}
         # Iteration counter
         self.iter_count = 0
@@ -431,7 +433,7 @@ class SuperLink():
         self.pumps = pumps
         self.permutations = permutations
 
-    def configure_internals(self, end_length=None):
+    def _configure_internals(self, end_length=None):
         """
         Generate internal structure of each superlink (links and junctions).
         """
@@ -3164,7 +3166,7 @@ class SuperLink():
         return A_1, A_2, Q, H_j
 
     def save_state(self):
-        self.states['t'] = self.t
+        self.states['t'] = copy.copy(self.t)
         self.states['H_j'] = np.copy(self.H_j)
         self.states['_h_Ik'] = np.copy(self._h_Ik)
         self.states['_Q_ik'] = np.copy(self._Q_ik)
