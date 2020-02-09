@@ -7,7 +7,8 @@ geom_code = {
     'rect_closed' : 2,
     'rect_open' : 3,
     'triangular' : 4,
-    'trapezoidal' : 5
+    'trapezoidal' : 5,
+    'parabolic' : 6
 }
 
 @njit
@@ -17,16 +18,12 @@ def Circular_A_ik(h_Ik, h_Ip1k, g1):
     """
     d = g1
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > d] = d[y > d]
     if y < 0:
         y = 0
     if y > d:
         y = d
     r = d / 2
     phi = y / r
-    # phi[phi < 0] = 0
-    # phi[phi > 2] = 2
     if phi < 0:
         phi = 0
     if phi > 2:
@@ -42,16 +39,12 @@ def Circular_Pe_ik(h_Ik, h_Ip1k, g1):
     """
     d = g1
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > d] = d[y > d]
     if y < 0:
         y = 0
     if y > d:
         y = d
     r = d / 2
     phi = y / r
-    # phi[phi < 0] = 0
-    # phi[phi > 2] = 2
     if phi < 0:
         phi = 0
     if phi > 2:
@@ -66,8 +59,6 @@ def Circular_R_ik(A_ik, Pe_ik):
     Compute hydraulic radius for link i, superlink k.
     """
     cond = Pe_ik > 0
-    # R = np.zeros(A_ik.size)
-    # R[cond] = A_ik[cond] / Pe_ik[cond]
     if cond:
         R = A_ik / Pe_ik
     else:
@@ -86,16 +77,11 @@ def Circular_B_ik(h_Ik, h_Ip1k, g1, pslot=0.001):
         y = 0
     r = d / 2
     phi = y / r
-    # phi[phi < 0] = 0
-    # phi[phi > 2] = 2
     if phi < 0:
         phi = 0
     if phi > 2:
         phi = 2
     theta = np.arccos(1 - phi)
-    # B = np.zeros(y.size)
-    # B[~cond] = pslot * d[~cond]
-    # B[cond] = 2 * r[cond] * np.sin(theta[cond])
     cond = (y < d)
     if cond:
         B = 2 * r * np.sin(theta)
@@ -112,8 +98,6 @@ def Rect_Closed_A_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     b = g2
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > y_max] = y_max[y > y_max]
     if y < 0:
         y = 0
     if y > y_max:
@@ -129,8 +113,6 @@ def Rect_Closed_Pe_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     b = g2
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > y_max] = y_max[y > y_max]
     if y < 0:
         y = 0
     if y > y_max:
@@ -144,8 +126,6 @@ def Rect_Closed_R_ik(A_ik, Pe_ik):
     Compute hydraulic radius for link i, superlink k.
     """
     cond = Pe_ik > 0
-    # R = np.zeros(A_ik.size)
-    # R[cond] = A_ik[cond] / Pe_ik[cond]
     if cond:
         R = A_ik / Pe_ik
     else:
@@ -160,13 +140,9 @@ def Rect_Closed_B_ik(h_Ik, h_Ip1k, g1, g2, pslot=0.001):
     y_max = g1
     b = g2
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
     if y < 0:
         y = 0
     cond = (y < y_max)
-    # B = np.zeros(y.size)
-    # B[~cond] = pslot * b[~cond]
-    # B[cond] = b[cond]
     if cond:
         B = b
     else:
@@ -182,8 +158,6 @@ def Rect_Open_A_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     b = g2
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > y_max] = y_max[y > y_max]
     if y < 0:
         y = 0
     if y > y_max:
@@ -199,8 +173,6 @@ def Rect_Open_Pe_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     b = g2
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > y_max] = y_max[y > y_max]
     if y < 0:
         y = 0
     if y > y_max:
@@ -214,8 +186,6 @@ def Rect_Open_R_ik(A_ik, Pe_ik):
     Compute hydraulic radius for link i, superlink k.
     """
     cond = Pe_ik > 0
-    # R = np.zeros(A_ik.size)
-    # R[cond] = A_ik[cond] / Pe_ik[cond]
     if cond:
         R = A_ik / Pe_ik
     else:
@@ -240,8 +210,6 @@ def Triangular_A_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     m = g2
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > y_max] = y_max[y > y_max]
     if y < 0:
         y = 0
     if y > y_max:
@@ -257,8 +225,6 @@ def Triangular_Pe_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     m = g2
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > y_max] = y_max[y > y_max]
     if y < 0:
         y = 0
     if y > y_max:
@@ -272,8 +238,6 @@ def Triangular_R_ik(A_ik, Pe_ik):
     Compute hydraulic radius for link i, superlink k.
     """
     cond = Pe_ik > 0
-    # R = np.zeros(A_ik.size)
-    # R[cond] = A_ik[cond] / Pe_ik[cond]
     if cond:
         R = A_ik / Pe_ik
     else:
@@ -288,14 +252,9 @@ def Triangular_B_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     m = g2
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
     if y < 0:
         y = 0
     cond = (y < y_max)
-    # B = np.zeros(y.size)
-    # # B[~cond] = 0.001 * 2 * m[~cond] * y[~cond]
-    # B[~cond] = 2 * m[~cond] * y_max[~cond]
-    # B[cond] = 2 * m[cond] * y[cond]
     if cond:
         B = 2 * m * y
     else:
@@ -312,8 +271,6 @@ def Trapezoidal_A_ik(h_Ik, h_Ip1k, g1, g2, g3):
     b = g2
     m = g3
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > y_max] = y_max[y > y_max]
     if y < 0:
         y = 0
     if y > y_max:
@@ -330,8 +287,6 @@ def Trapezoidal_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3):
     b = g2
     m = g3
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    # y[y > y_max] = y_max[y > y_max]
     if y < 0:
         y = 0
     if y > y_max:
@@ -345,8 +300,6 @@ def Trapezoidal_R_ik(A_ik, Pe_ik):
     Compute hydraulic radius for link i, superlink k.
     """
     cond = Pe_ik > 0
-    # R = np.zeros(A_ik.size)
-    # R[cond] = A_ik[cond] / Pe_ik[cond]
     if cond:
         R = A_ik / Pe_ik
     else:
@@ -362,17 +315,68 @@ def Trapezoidal_B_ik(h_Ik, h_Ip1k, g1, g2, g3):
     b = g2
     m = g3
     y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
     if y < 0:
         y = 0
     cond = (y < y_max)
-    # B = np.zeros(y.size)
-    # # B[~cond] = 0.001 * b[~cond]
-    # B[~cond] = b[~cond] + 2 * m[~cond] * y_max[~cond]
-    # B[cond] = b[cond] + 2 * m[cond] * y[cond]
     if cond:
         B = b + 2 * m * y
     else:
         B = b + 2 * m * y_max
+    return B
+
+@njit
+def Parabolic_A_ik(h_Ik, h_Ip1k, g1, g2):
+    """
+    Compute cross-sectional area of flow for link i, superlink k.
+    """
+    y_max = g1
+    b = g2
+    y = (h_Ik + h_Ip1k) / 2
+    if y < 0:
+        y = 0
+    if y > y_max:
+        y = y_max
+    A = 2 * b * y / 3
+    return A
+
+@njit
+def Parabolic_Pe_ik(h_Ik, h_Ip1k, g1, g2):
+    """
+    Compute perimeter of flow for link i, superlink k.
+    """
+    y_max = g1
+    b = g2
+    y = (h_Ik + h_Ip1k) / 2
+    if y < 0:
+        y = 0
+    if y > y_max:
+        y = y_max
+    x = 4 * y / b
+    Pe = (b / 2) * (np.sqrt(1 + x**2) + (1 / x) * np.log(x + np.sqrt(1 + x**2)))
+    return Pe
+
+@njit
+def Parabolic_R_ik(A_ik, Pe_ik):
+    """
+    Compute hydraulic radius for link i, superlink k.
+    """
+    cond = Pe_ik > 0
+    if cond:
+        R = A_ik / Pe_ik
+    else:
+        R = 0
+    return R
+
+@njit
+def Parabolic_B_ik(h_Ik, h_Ip1k, g1, g2):
+    """
+    Compute top width of flow for link i, superlink k.
+    """
+    y_max = g1
+    b = g2
+    y = (h_Ik + h_Ip1k) / 2
+    if y < 0:
+        y = 0
+    B = b * np.sqrt(y / y_max)
     return B
 

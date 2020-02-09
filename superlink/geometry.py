@@ -6,7 +6,8 @@ geom_code = {
     'rect_closed' : 2,
     'rect_open' : 3,
     'triangular' : 4,
-    'trapezoidal' : 5
+    'trapezoidal' : 5,
+    'parabolic' : 6
 }
 
 class Circular():
@@ -295,6 +296,60 @@ class Trapezoidal():
         B[~cond] = b[~cond] + 2 * m[~cond] * y_max[~cond]
         B[cond] = b[cond] + 2 * m[cond] * y[cond]
         return B
+
+class Parabolic():
+    def __init__(self):
+        pass
+
+    @classmethod
+    def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute cross-sectional area of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        y[y > y_max] = y_max[y > y_max]
+        A = 2 * b * y / 3
+        return A
+
+    @classmethod
+    def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute perimeter of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        y[y > y_max] = y_max[y > y_max]
+        x = 4 * y / b
+        Pe = (b / 2) * (np.sqrt(1 + x**2) + (1 / x) * np.log(x + np.sqrt(1 + x**2)))
+        return Pe
+
+    @classmethod
+    def R_ik(self, A_ik, Pe_ik):
+        """
+        Compute hydraulic radius for link i, superlink k.
+        """
+        cond = Pe_ik > 0
+        R = np.zeros(A_ik.size)
+        R[cond] = A_ik[cond] / Pe_ik[cond]
+        return R
+
+    @classmethod
+    def B_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute top width of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        B = b * np.sqrt(y / y_max)
+        return B
+
 
 class Irregular():
     def __init__(self, x, y, horiz_points=100, vert_points=100):
