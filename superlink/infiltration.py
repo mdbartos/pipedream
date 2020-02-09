@@ -123,8 +123,9 @@ class GreenAmpt():
             is_saturated[cond_0] = True
             self.is_saturated[case_3] = is_saturated
             # Run saturated case
-            sat_case = np.copy(case_3)
-            sat_case[~cond_0] = False
+            # TODO: This is kind of confusing and probably not efficient
+            sat_case = np.zeros(self.N, dtype=bool)
+            sat_case[np.flatnonzero(case_3)[np.flatnonzero(cond_0)]] = True
             self.saturated_case(dt, orig_ia, sat_case)
             F[cond_0] = self.F[case_3][cond_0]
             f[cond_0] = self.f[case_3][cond_0]
@@ -134,17 +135,20 @@ class GreenAmpt():
             f[cond_1] = ia[cond_1]
             dF = ia[cond_1] * dt
             F[cond_1] += dF
-            theta_du[cond_1] -= dF[cond_1] / Lu[cond_1]
+            theta_du[cond_1] -= dF / Lu[cond_1]
             theta_du[cond_1] = np.minimum(np.maximum(theta_du[cond_1], 0),
                                                 theta_dmax[cond_1])
         # Run third case
         # Solve integrated equation
         if cond_2.any():
             sub_dt = dt - (Fs[cond_2] - F[cond_2]) / ia[cond_2]
-            F_2 = scipy.optimize.newton(self.integrated_green_ampt, F[cond_2],
-                                        self.derivative_green_ampt,
-                                        args=(Fs[cond_2], sub_dt, Ks[cond_2],
-                                                theta_d[cond_2], psi_f[cond_2]))
+            n = sub_dt.size
+            F_2 = np.zeros(n, dtype=float)
+            for i in range(n):
+                F_2[i] = scipy.optimize.newton(self.integrated_green_ampt, F[cond_2][i],
+                                               self.derivative_green_ampt,
+                                               args=(Fs[cond_2][i], sub_dt[i], Ks[cond_2][i],
+                                                     theta_d[cond_2][i], psi_f[cond_2][i]))
             dF = F_2 - F[cond_2]
             F[cond_2] = F_2
             theta_du[cond_2] -= dF / Lu[cond_2]
@@ -155,7 +159,6 @@ class GreenAmpt():
         self.F[case_3] = F
         self.f[case_3] = f
         self.theta_du[case_3] = theta_du
-        # TODO: Problem may be that these are being double set for cond_0 ^^^
 
     def saturated_case(self, dt, ia, sat_case):
         ia = ia[sat_case]
@@ -172,9 +175,12 @@ class GreenAmpt():
         # Reset recovery time
         self.T[sat_case] = self.Tr[sat_case]
         # Solve integrated equation
-        F_2 = scipy.optimize.newton(self.integrated_green_ampt, F,
-                                    self.derivative_green_ampt,
-                                    args=(F, dt, Ks, theta_d, psi_f))
+        n = F.size
+        F_2 = np.zeros(n, dtype=float)
+        for i in range(n):
+            F_2[i] = scipy.optimize.newton(self.integrated_green_ampt, F[i],
+                                        self.derivative_green_ampt,
+                                        args=(F[i], dt, Ks[i], theta_d[i], psi_f[i]))
         dF = F_2 - F
         cond = (dF > ia * dt)
         if cond.any():
