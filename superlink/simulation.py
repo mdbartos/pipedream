@@ -53,7 +53,11 @@ class Simulation():
         self.max_rel_change = max_rel_change
         self.safety_factor = safety_factor
         # TODO: This needs to be generalized
-        self.state_variables = ('H_j', '_h_Ik', '_Q_ik', '_Q_uk', '_Q_dk')
+        self.state_variables = {'H_j' : 'j',
+                                '_h_Ik' : 'Ik',
+                                '_Q_ik' : 'ik',
+                                '_Q_uk' : 'k',
+                                '_Q_dk' : 'k'}
         if t_start is None:
             if any_inputs:
                 self.t_start = min(i.index.min() for i in self.inputs if i is not None)
@@ -87,9 +91,13 @@ class Simulation():
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         # TODO: Should be able to choose what to record
-        for state in self.state_variables:
+        for state, state_type in self.state_variables.items():
             d = getattr(self.states, state)
             df = pd.DataFrame.from_dict(d, orient='index')
+            if state_type == 'j':
+                df.columns = self.model.superjunction_names
+            elif state_type == 'k':
+                df.columns = self.model.superlink_names
             setattr(self.states, state, df)
 
     @property

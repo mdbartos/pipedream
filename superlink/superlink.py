@@ -42,19 +42,24 @@ class SuperLink():
         else:
             self.permutations = np.arange(len(superjunctions))
             self.banded = False
+        # TODO: What about id?
+        if 'name' in self.superjunctions.columns:
+            self.superjunction_names = self.superjunctions['name'].values
+        else:
+            self.superjunction_names = self.superjunctions.index.values
+        if 'name' in self.superlinks.columns:
+            self.superlink_names = self.superlinks['name'].values
+        else:
+            self.superlink_names = self.superlinks.index.values
         # If internal links and junctions are not provided, create them
         if (links is None) or (junctions is None):
             generate_elems = True
-            num_elems = 4
-            total_elems = num_elems + 1
             # self._configure_internals(end_length=end_length)
             self._configure_internals_variable(njunctions_fixed=njunctions_fixed)
             links = self.links
             junctions = self.junctions
         else:
             generate_elems = False
-            num_elems = None
-            total_elems = None
             self.links = links
             self.junctions = junctions
         self.transects = transects
@@ -410,6 +415,7 @@ class SuperLink():
         permutations = self._to_banded()
         perm_inv = np.argsort(permutations)
         # Permute superjunctions
+        # TODO: Should id be permuted, or should it stay constant?
         superjunctions['id'] = perm_inv[superjunctions['id'].values]
         superjunctions.index = superjunctions['id'].values
         superjunctions = superjunctions.sort_index()
