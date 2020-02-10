@@ -26,6 +26,69 @@ class NumbaLink(SuperLink):
                          bc_method, exit_hydraulics, auto_permute,
                          end_length, end_method, njunctions_fixed)
 
+    def configure_storages(self):
+        """
+        Prepare data structures for computation of superjunction storage.
+        """
+        # Import instance variables
+        storages = self.storages                # Table of storages
+        _storage_type = self._storage_type      # Type of storage (functional/tabular)
+        _storage_table = self._storage_table    # Tabular storages
+        _storage_factory = {}
+        _storage_indices = None
+        _storage_hs = np.array([])
+        _storage_As = np.array([])
+        _storage_inds = np.array([])
+        _storage_lens = np.array([])
+        _storage_js = np.array([])
+        _storage_codes = np.array([])
+        # Separate storages into functional and tabular
+        _functional = (_storage_type.str.lower() == 'functional').values
+        _tabular = (_storage_type.str.lower() == 'tabular').values
+        # All entries must either be function or tabular
+        assert (_tabular.sum() + _functional.sum()) == _storage_type.shape[0]
+        # Configure tabular storages
+        if storages:
+            _tabular_storages = _storage_table[_tabular]
+            _storage_indices = pd.Series(_tabular_storages.index, _tabular_storages.values)
+            unique_storage_names = np.unique(_storage_indices.index.values)
+            storage_name_to_ind = pd.Series(np.arange(unique_storage_names.size),
+                                            index=unique_storage_names)
+            sj_to_storage_ind = _storage_table.dropna().map(storage_name_to_ind)
+            _storage_inds = []
+            _storage_lens = []
+            _storage_As = []
+            _storage_hs = []
+            order = []
+            ix = 0
+            for name, storage in storages.items():
+                A = storage['A']
+                h = storage['h']
+                _storage_As.append(A)
+                _storage_hs.append(h)
+                _storage_inds.append(ix)
+                order.append(storage_name_to_ind[name])
+                ix += len(h)
+                _storage_lens.append(len(h))
+            order = np.argsort(order)
+            _storage_hs = np.concatenate([_storage_hs[i] for i in order])
+            _storage_As = np.concatenate([_storage_As[i] for i in order])
+            _storage_inds = np.asarray(_storage_inds)[order]
+            _storage_lens = np.asarray(_storage_lens)[order]
+            _storage_js = sj_to_storage_ind.index.values
+            _storage_codes = sj_to_storage_ind.values
+        # Export instance variables
+        self._storage_indices = _storage_indices
+        self._storage_factory = _storage_factory
+        self._storage_hs = _storage_hs
+        self._storage_As = _storage_As
+        self._storage_inds = _storage_inds
+        self._storage_lens = _storage_lens
+        self._storage_js = _storage_js
+        self._storage_codes = _storage_codes
+        self._functional = _functional
+        self._tabular = _tabular
+
     def link_hydraulic_geometry(self):
         """
         Compute hydraulic geometry for each link.
@@ -168,14 +231,20 @@ class NumbaLink(SuperLink):
         _z_inv_j = self._z_inv_j                    # Invert elevation at superjunction j
         min_depth = self.min_depth                  # Minimum depth allowed at superjunctions/nodes
         _A_sj = self._A_sj                          # Surface area at superjunction j
+        _storage_hs = self._storage_hs
+        _storage_As = self._storage_As
+        _storage_inds = self._storage_inds
+        _storage_lens = self._storage_lens
+        _storage_js = self._storage_js
+        _storage_codes = self._storage_codes
         # Compute storage areas
         _h_j = np.maximum(H_j - _z_inv_j, min_depth)
         numba_compute_functional_storage_areas(_h_j, _A_sj, _storage_a, _storage_b,
                                                 _storage_c, _functional)
         if _tabular.any():
-            for storage_name, generator in _storage_factory.items():
-                _j_g = _storage_indices.loc[[storage_name]].values
-                _A_sj[_j_g] = generator.A_sj(_h_j[_j_g])
+            numba_compute_tabular_storage_areas(_h_j, _A_sj, _storage_hs, _storage_As,
+                                                _storage_js, _storage_codes,
+                                                _storage_inds, _storage_lens)
         # Export instance variables
         self._A_sj = _A_sj
 
@@ -1214,6 +1283,34 @@ def numba_compute_functional_storage_volumes(h, a, b, c, _functional):
                 V[j] = (a[j] / (b[j] + 1)) * h[j] ** (b[j] + 1) + c[j] * h[j]
     return V
 
+@njit
+def numba_compute_tabular_storage_areas(h_j, A_sj, hs, As, sjs, sts, inds, lens):
+    n = sjs.size
+    A_out = np.zeros(n)
+    for i in range(n):
+        sj = sjs[i]
+        st = sts[i]
+        ind = inds[st]
+        size = lens[st]
+        h_range = hs[ind:ind+size]
+        A_range = As[ind:ind+size]
+        Amin = A_range.min()
+        Amax = A_range.max()
+        h_search = h_j[sj]
+        ix = np.searchsorted(h_range, h_search)
+        # NOTE: np.interp not supported in this version of numba
+        # A_result = np.interp(h_search, h_range, A_range)
+        # A_out[i] = A_result
+        if (ix == 0):
+            A_sj[sj] = Amin
+        elif (ix >= size):
+            A_sj[sj] = Amax
+        else:
+            dx_0 = h_search - h_range[ix - 1]
+            dx_1 = h_range[ix] - h_search
+            frac = dx_0 / (dx_0 + dx_1)
+            A_sj[sj] = (1 - frac) * A_range[ix - 1] + (frac) * A_range[ix]
+    return A_sj
 
 @njit
 def numba_a_ik(u_Ik, sigma_ik):
