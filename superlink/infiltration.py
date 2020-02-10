@@ -69,7 +69,7 @@ class GreenAmpt():
         # If min recovery time has expired, mark beginning of new rainfall event
         cond = (T <= 0)
         if cond.any():
-            theta_d[cond] = theta_du
+            theta_d[cond] = theta_du[cond]
             F[cond] = 0.
         # Export
         self.F[case_1] = F
