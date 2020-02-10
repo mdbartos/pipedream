@@ -1,0 +1,7 @@
+id,z_inv,h_0,A_sj,bc,storage,a,b,c,name
+0,10.7,1e-05,0.64,False,functional,0,0,1.16,A
+1,10.4,1e-05,0.25,False,functional,0,0,1.16,B
+2,10.0,1e-05,0.25,False,functional,0,0,1.16,C
+3,9.5,1e-05,0.25,True,functional,0,0,1.16,D
+4,10.1,1e-05,0.25,False,functional,0,0,1.16,E
+5,9.3,1e-05,0.25,True,functional,0,0,1.16,F
