@@ -212,6 +212,8 @@ class Simulation():
         # Infer if system is banded
         if not 'banded' in kwargs:
             banded = self.model.banded
+        else:
+            banded = kwargs.pop('banded')
         # Get superjunction runoff input
         if Q_in is not None:
             Q_in_index, Q_in_values = Q_in.index.values, Q_in.values
