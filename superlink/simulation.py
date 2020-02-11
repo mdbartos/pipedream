@@ -52,6 +52,8 @@ class Simulation():
         self.min_rel_change = min_rel_change
         self.max_rel_change = max_rel_change
         self.safety_factor = safety_factor
+        # Boundary conditions for convenience
+        self.bc = self.model.bc
         # TODO: This needs to be generalized
         self.state_variables = {'H_j' : 'j',
                                 '_h_Ik' : 'Ik',

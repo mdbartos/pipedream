@@ -5,9 +5,9 @@ def interpolate_sample(x, xp, fp):
     m = fp.shape[1]
     ix = np.searchsorted(xp, x)
     if (ix == 0):
-        result = np.zeros(m)
+        result = fp[0]
     elif (ix >= n):
-        result = np.zeros(m)
+        result = fp[n - 1]
     else:
         dx_0 = x - xp[ix - 1]
         dx_1 = xp[ix] - x
