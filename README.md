@@ -7,9 +7,7 @@ Journal of Hydraulic Engineering, 124(3), 307–315.
 doi: 10.1061/(asce)0733-9429(1998)124:3(307)
 ```
 
-## Example
-
-### Diagram of test case
+# A Minimal Example
 
 <img src="https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/example_network_ji.png" width="700">
 
@@ -61,20 +59,6 @@ with Simulation(superlink, Q_in=Q_in, H_bc=H_bc) as simulation:
 
 ### Plot results
 
-```python
-# Import modules
-import matplotlib.pyplot as plt
-
-# Initialize plot
-fig, ax = plt.subplots(3, figsize=(10, 12))
-
-# Compute average discharge in superlinks
-simulation.states.Q_k = (simulation.states._Q_uk + simulation.states._Q_dk) / 2
-
-# Plot results
-simulation.Q_in[['A', 'C']].plot(ax=ax[0], title='Input discharge (cms)')
-simulation.H_bc[['D', 'F']].plot(ax=ax[1], title='Boundary stage (m)')
-simulation.states.Q_k.plot(ax=ax[2], title='Superlink discharges (cms)')
-```
+See plotting code [here](https://github.com/mdbartos/superlink/blob/master/test/six_pipe_test.ipynb).
 
 ![Superlink Example](https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/superlink_test.png)
