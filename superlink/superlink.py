@@ -1178,6 +1178,9 @@ class SuperLink():
         _geom_codes = np.zeros(nk.sum(), dtype=int)
         for geom, indices in _geom_factory.items():
             _geom_codes[indices] = _geom_numbers[geom]
+        # NOTE: Handle case for elliptical geometry
+        _ellipse_ix = np.flatnonzero(_geom_codes ==
+                                     superlink.geometry.geom_code['elliptical'])
         self._has_irregular = _has_irregular
         self._geom_factory = _geom_factory
         self._transect_factory = _transect_factory
@@ -1189,6 +1192,7 @@ class SuperLink():
         self._uk_transect_indices = _uk_transect_indices
         self._dk_transect_indices = _dk_transect_indices
         self._geom_codes = _geom_codes
+        self._ellipse_ix = _ellipse_ix
 
     def configure_storages(self):
         """

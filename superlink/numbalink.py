@@ -107,10 +107,15 @@ class NumbaLink(SuperLink):
         _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
         _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
         _geom_codes = self._geom_codes
+        _ellipse_ix = self._ellipse_ix
         _transect_factory = self._transect_factory
         _transect_indices = self._transect_indices
         _has_irregular = self._has_irregular
         # Compute hydraulic geometry for regular geometries
+        # NOTE: Handle case for elliptical perimeter first
+        handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik,
+                                   _g1_ik, _g2_ik)
+        # Compute hydraulic geometries for all other regular geometries
         numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                                  _g1_ik, _g2_ik, _g3_ik, _geom_codes, _Ik, _ik)
         # Compute hydraulic geometry for irregular geometries
@@ -1185,6 +1190,17 @@ class NumbaLink(SuperLink):
                                     _b0, _z0, _x0, _m, _elem_pos, _i_1k, _I_1k,
                                     _I_Np1k, nk, NK, reposition)
 
+def handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik, _g1_ik, _g2_ik):
+    if (_ellipse_ix.size > 0):
+        _ik_g = _ellipse_ix
+        _Ik_g = _Ik[_ik_g]
+        _Ip1k_g = _Ip1k[_ik_g]
+        _Pe_ik[_ik_g] = superlink.geometry.Elliptical.Pe_ik(_h_Ik[_Ik_g],
+                                                            _h_Ik[_Ip1k_g],
+                                                            _g1_ik[_ik_g],
+                                                            _g2_ik[_ik_g])
+
+
 @njit
 def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                              _g1_ik, _g2_ik, _g3_ik, _geom_codes, _Ik, _ik):
@@ -1224,6 +1240,16 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _Pe_ik[i] = superlink.ngeometry.Trapezoidal_Pe_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
                 _R_ik[i] = superlink.ngeometry.Trapezoidal_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = superlink.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+            elif geom_code == 6:
+                _A_ik[i] = superlink.ngeometry.Parabolic_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = superlink.ngeometry.Parabolic_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = superlink.ngeometry.Parabolic_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = superlink.ngeometry.Parabolic_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 7:
+                # NOTE: Assumes that perimeter has already been calculated
+                _A_ik[i] = superlink.ngeometry.Elliptical_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = superlink.ngeometry.Elliptical_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = superlink.ngeometry.Elliptical_B_ik(h_I, h_Ip1, g1_i, g2_i)
     return 1
 
 @njit
@@ -1258,6 +1284,12 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
             elif geom_code == 5:
                 _A_bk[k] = superlink.ngeometry.Trapezoidal_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
                 _B_bk[k] = superlink.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+            elif geom_code == 6:
+                _A_bk[k] = superlink.ngeometry.Parabolic_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = superlink.ngeometry.Parabolic_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 7:
+                _A_bk[k] = superlink.ngeometry.Elliptical_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = superlink.ngeometry.Elliptical_B_ik(h_I, h_Ip1, g1_i, g2_i)
     return 1
 
 @njit

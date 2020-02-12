@@ -7,8 +7,11 @@ geom_code = {
     'rect_open' : 3,
     'triangular' : 4,
     'trapezoidal' : 5,
-    'parabolic' : 6
+    'parabolic' : 6,
+    'elliptical' : 7
 }
+
+eps = np.finfo(float).eps
 
 class Circular():
     def __init__(self):
@@ -322,7 +325,7 @@ class Parabolic():
         y_max = g1
         b = g2
         y = (h_Ik + h_Ip1k) / 2
-        y[y < 0] = 0
+        y[y <= 0] = eps
         y[y > y_max] = y_max[y > y_max]
         x = 4 * y / b
         Pe = (b / 2) * (np.sqrt(1 + x**2) + (1 / x) * np.log(x + np.sqrt(1 + x**2)))
@@ -348,6 +351,71 @@ class Parabolic():
         y = (h_Ik + h_Ip1k) / 2
         y[y < 0] = 0
         B = b * np.sqrt(y / y_max)
+        return B
+
+class Elliptical():
+    def __init__(self):
+        pass
+
+    @classmethod
+    def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute cross-sectional area of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g1 / 2
+        a = g2 / 2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        y[y > y_max] = y_max[y > y_max]
+        theta = np.arcsin((y - b) / b)
+        A_a = a * b * (np.pi / 2 + theta - np.sin(theta) * np.cos(theta))
+        A_b = a * b * np.cos(theta) * np.sin(theta)
+        A = A_a + A_b
+        return A
+
+    @classmethod
+    def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute perimeter of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g1 / 2
+        a = g2 / 2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        y[y > y_max] = y_max[y > y_max]
+        theta = np.arcsin((y - b) / b)
+        m = (1 - a**2 / b**2)
+        Pe_a = 2 * b * scipy.special.ellipe(m)
+        Pe_b = 2 * b * scipy.special.ellipeinc(theta, m)
+        Pe = Pe_a + Pe_b
+        return Pe
+
+    @classmethod
+    def R_ik(self, A_ik, Pe_ik):
+        """
+        Compute hydraulic radius for link i, superlink k.
+        """
+        cond = Pe_ik > 0
+        R = np.zeros(A_ik.size)
+        R[cond] = A_ik[cond] / Pe_ik[cond]
+        return R
+
+    @classmethod
+    def B_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute top width of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g1 / 2
+        a = g2 / 2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        y[y > y_max] = y_max[y > y_max]
+        theta = np.arcsin((y - b) / b)
+        B = 2 * np.cos(theta) * np.sqrt(a**2 * np.cos(theta)**2
+                                        + b**2 * np.sin(theta)**2)
         return B
 
 
