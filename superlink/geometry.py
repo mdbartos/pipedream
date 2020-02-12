@@ -369,7 +369,7 @@ class Elliptical():
         y[y < 0] = 0
         y[y > y_max] = y_max[y > y_max]
         theta = np.arcsin((y - b) / b)
-        A_a = a * b * (np.pi / 2 + theta - np.sin(theta) * np.cos(theta))
+        A_a = a * b * (np.pi / 2 + theta)
         A_b = a * b * np.cos(theta) * np.sin(theta)
         A = A_a + A_b
         return A
