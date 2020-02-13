@@ -9,16 +9,17 @@ try:
 except:
     _HAS_NUMBA = False
 if _HAS_NUMBA:
-    from superlink.nutils import interpolate_sample
+    from superlink.nutils import interpolate_sample, _kalman_semi_implicit
 else:
-    from superlink.utils import interpolate_sample
+    from superlink.utils import interpolate_sample, _kalman_semi_implicit
 
 eps = np.finfo(float).eps
 
 class Simulation():
     def __init__(self, model, Q_in=None, H_bc=None, Q_Ik=None, t_start=None,
                  t_end=None, dt=None, max_iter=None, min_dt=1, max_dt=200,
-                 tol=0.01, min_rel_change=0.5, max_rel_change=1.5, safety_factor=0.9):
+                 tol=0.01, min_rel_change=0.5, max_rel_change=1.5, safety_factor=0.9,
+                 Qcov=None, Rcov=None, C=None, H=None):
         self.model = model
         if Q_in is not None:
             self.Q_in = Q_in.copy(deep=True)
@@ -71,6 +72,48 @@ class Simulation():
                 self.t_end = max(i.index.max() for i in self.inputs if i is not None)
             else:
                 self.t_end = np.inf
+        # Configure kalman filtering
+        if Rcov is None:
+            self.Rcov = np.zeros((model.M, model.M))
+        elif np.isscalar(Rcov):
+            self.Rcov = Rcov * np.eye(model.M)
+        elif (Rcov.shape[0] == Rcov.size):
+            assert isinstance(Rcov, np.ndarray)
+            self.Rcov = np.diag(Rcov)
+        else:
+            assert isinstance(Rcov, np.ndarray)
+            self.Rcov = Rcov
+        if Qcov is None:
+            self.Qcov = np.zeros((model.M, model.M))
+        elif np.isscalar(Qcov):
+            self.Qcov = Qcov * np.eye(model.M)
+        elif (Qcov.shape[0] == Qcov.size):
+            assert isinstance(Qcov, np.ndarray)
+            self.Qcov = np.diag(Qcov)
+        else:
+            assert isinstance(Qcov, np.ndarray)
+            self.Qcov = Qcov
+        if C is None:
+            self.C = np.eye(model.M)
+        elif np.isscalar(C):
+            self.C = C * np.eye(model.M)
+        elif (C.shape[0] == C.size):
+            assert isinstance(C, np.ndarray)
+            self.C = np.diag(C)
+        else:
+            assert isinstance(C, np.ndarray)
+            self.C = C
+        if H is None:
+            self.H = np.eye(model.M)
+        elif np.isscalar(H):
+            self.H = H * np.eye(model.M)
+        elif (H.shape[0] == H.size):
+            assert isinstance(H, np.ndarray)
+            self.H = np.diag(H)
+        else:
+            assert isinstance(H, np.ndarray)
+            self.H = H
+        self.P_x_k_k = self.C @ self.Qcov @ self.C.T
         # Progress bar checkpoints
         if np.isfinite(self.t_end):
             self._checkpoints = np.linspace(self.t_start, self.t_end)
@@ -178,9 +221,32 @@ class Simulation():
         # Return new step size
         return dt
 
+    def kalman_filter(self, Z, H=None, C=None, Qcov=None, Rcov=None, P_x_k_k=None,
+                      dt=None):
+        if dt is None:
+            dt = self.dt
+        if P_x_k_k is None:
+            P_x_k_k = self.P_x_k_k
+        if H is None:
+            H = self.H
+        if C is None:
+            C = self.C
+        if Qcov is None:
+            Qcov = self.Qcov
+        if Rcov is None:
+            Rcov = self.Rcov
+        A_1, A_2, b = self.model._semi_implicit_system(_dt=dt)
+        b_hat, P_x_k_k = _kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
+                                               Qcov, Rcov)
+        self.P_x_k_k = P_x_k_k
+        self.model.b = b_hat
+        self.model._solve_step(dt=dt)
+
     def step(self, dt=None, subdivisions=1, retries=0, **kwargs):
         if dt is None:
             dt = self.dt
+        else:
+            self.dt = dt
         # Advance model forward one large step
         self._step(dt=dt, **kwargs)
         # NOTE: This is stored after stepping, because of the way save state works

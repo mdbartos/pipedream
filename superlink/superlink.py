@@ -3239,7 +3239,7 @@ class SuperLink():
         self._A_k = _A_k
         self._dt_ck = _dt_ck
 
-    def augmented_system(self, _Q_0j=None, _dt=None):
+    def _augmented_system(self, _Q_0j=None, _dt=None):
         A = self.A                    # Superlink/superjunction matrix
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
@@ -3280,6 +3280,32 @@ class SuperLink():
         Q[-1] = 0.0
         return A_1, A_2, Q, H_j
 
+    def _semi_implicit_system(self, _dt=None):
+        A = self.A                    # Superlink/superjunction matrix
+        O = self.O                    # Orifice matrix
+        W = self.W                    # Weir matrix
+        P = self.P                    # Pump matrix
+        b = self.b
+        M = self.M                    # Number of superjunctions in system
+        H_j = self.H_j                # Head at superjunction j
+        _A_sj = self._A_sj            # Surface area of superjunction j
+        bc = self.bc                  # Superjunction j has a fixed boundary condition (y/n)
+        n_o = self.n_o                # Number of orifices
+        n_w = self.n_w                # Number of weirs
+        n_p = self.n_p                # Number of pumps
+        # If no time step specified, use instance time step
+        if _dt is None:
+            _dt = self._dt
+        has_control = n_o + n_w + n_p
+        # Get A_1
+        if has_control:
+            A_1 = A + O + W + P
+        else:
+            A_1 = A
+        # Get A_2
+        A_2 = np.diag(np.where(~bc, _A_sj / _dt, 0))
+        return A_1, A_2, b
+
     def save_state(self):
         self.states['t'] = copy.copy(self.t)
         self.states['H_j'] = np.copy(self.H_j)
@@ -3301,14 +3327,12 @@ class SuperLink():
         self.compute_storage_areas()
         self.node_velocities()
 
-    def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
+    def _setup_step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         self.save_state()
         if dt is None:
             dt = self._dt
         self._Q_in = Q_in
-        _method = self._method
-        _exit_hydraulics = self._exit_hydraulics
         if not implicit:
             raise NotImplementedError
         self.link_hydraulic_geometry()
@@ -3334,6 +3358,11 @@ class SuperLink():
         self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
+
+    def _solve_step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
+             first_time=False, implicit=True, banded=False, first_iter=True):
+        _method = self._method
+        _exit_hydraulics = self._exit_hydraulics
         if banded:
             self.solve_banded_matrix(implicit=implicit)
         else:
@@ -3361,3 +3390,12 @@ class SuperLink():
             self.solve_internals_lsq()
         self.iter_count += 1
         self.t += dt
+
+    def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
+             first_time=False, implicit=True, banded=False, first_iter=True):
+        self._setup_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                         first_time=first_time, implicit=implicit, banded=banded,
+                         first_iter=first_iter)
+        self._solve_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                         first_time=first_time, implicit=implicit, banded=banded,
+                         first_iter=first_iter)

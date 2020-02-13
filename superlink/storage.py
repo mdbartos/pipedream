@@ -8,8 +8,7 @@ class Functional():
     @classmethod
     def A_sj(self, h, a=1, b=1, c=0, **kwargs):
         """
-        TODO: Wrong description
-        Compute cross-sectional area of flow for link i, superlink k.
+        Compute surface area of flow for link i, superlink k.
         """
         h[h < 0] = 0
         A = a * h**b + c
@@ -25,8 +24,7 @@ class Tabular():
 
     def A_sj(self, h):
         """
-        TODO: Wrong description
-        Compute cross-sectional area of flow for link i, superlink k.
+        Compute surface area of flow for link i, superlink k.
         """
         hmax = self.hmax
         hmin = self.hmin
