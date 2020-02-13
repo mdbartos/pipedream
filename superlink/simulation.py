@@ -67,11 +67,15 @@ class Simulation():
                 self.model.t = self.t_start
             else:
                 self.t_start = model.t
+        else:
+            self.t_start = t_start
         if t_end is None:
             if any_inputs:
                 self.t_end = max(i.index.max() for i in self.inputs if i is not None)
             else:
                 self.t_end = np.inf
+        else:
+            self.t_end = t_end
         # Configure kalman filtering
         if Rcov is None:
             self.Rcov = np.zeros((model.M, model.M))
@@ -279,35 +283,44 @@ class Simulation():
                 self.step(dt=dt, subdivisions=subdivisions, retries=retries-1, **kwargs)
 
     def _step(self, dt=None, **kwargs):
-        # Import inputs
-        Q_in = self.Q_in
-        H_bc = self.H_bc
-        Q_Ik = self.Q_Ik
         # Specify current timestamps
         t_next = self.t + dt
+        # Import inputs
+        if not 'Q_in' in kwargs:
+            Q_in = self.Q_in
+            # Get superjunction runoff input
+            if Q_in is not None:
+                Q_in_index, Q_in_values = Q_in.index.values, Q_in.values
+                Q_in_next = interpolate_sample(t_next, Q_in_index, Q_in_values)
+            else:
+                Q_in_next = None
+        else:
+            Q_in_next = kwargs.pop('Q_in')
+        if not 'H_bc' in kwargs:
+            H_bc = self.H_bc
+            # Get head boundary conditions
+            if H_bc is not None:
+                H_bc_index, H_bc_values = H_bc.index.values, H_bc.values
+                H_bc_next = interpolate_sample(t_next, H_bc_index, H_bc_values)
+            else:
+                H_bc_next = None
+        else:
+            H_bc_next = kwargs.pop('H_bc')
+        if not 'Q_Ik' in kwargs:
+            Q_Ik = self.Q_Ik
+            # Get junction runoff input
+            if Q_Ik is not None:
+                Q_Ik_index, Q_Ik_values = Q_Ik.index.values, Q_Ik.values
+                Q_Ik_next = interpolate_sample(t_next, Q_Ik_index, Q_Ik_values)
+            else:
+                Q_Ik_next = None
+        else:
+            Q_Ik_next = kwargs.pop('Q_Ik')
         # Infer if system is banded
         if not 'banded' in kwargs:
             banded = self.model.banded
         else:
             banded = kwargs.pop('banded')
-        # Get superjunction runoff input
-        if Q_in is not None:
-            Q_in_index, Q_in_values = Q_in.index.values, Q_in.values
-            Q_in_next = interpolate_sample(t_next, Q_in_index, Q_in_values)
-        else:
-            Q_in_next = None
-        # Get head boundary conditions
-        if H_bc is not None:
-            H_bc_index, H_bc_values = H_bc.index.values, H_bc.values
-            H_bc_next = interpolate_sample(t_next, H_bc_index, H_bc_values)
-        else:
-            H_bc_next = None
-        # Get junction runoff input
-        if Q_Ik is not None:
-            Q_Ik_index, Q_Ik_values = Q_Ik.index.values, Q_Ik.values
-            Q_Ik_next = interpolate_sample(t_next, Q_Ik_index, Q_Ik_values)
-        else:
-            Q_Ik_next = None
         # Step model forward with stepsize dt
         self.model.step(Q_in=Q_in_next, H_bc=H_bc_next, dt=dt, banded=banded,
                         **kwargs)

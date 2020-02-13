@@ -39,6 +39,12 @@ class SuperLink():
         if auto_permute:
             self._initialize_with_permuted_columns()
             self.banded = True
+            # TODO: Redundant, but safer
+            superjunctions = self.superjunctions
+            superlinks = self.superlinks
+            orifices = self.orifices
+            weirs = self.weirs
+            pumps = self.pumps
         else:
             self.permutations = np.arange(len(superjunctions))
             self.banded = False
@@ -78,8 +84,8 @@ class SuperLink():
         self._Ip1k = links['j_1'].values.astype(int)
         self._kI = junctions['k'].values.astype(int)
         self._ki = links['k'].values.astype(int)
-        self.start_nodes = superlinks['j_0'].values.astype(int)
-        self.end_nodes = superlinks['j_1'].values.astype(int)
+        self.start_nodes = self.superlinks['j_0'].values.astype(int)
+        self.end_nodes = self.superlinks['j_1'].values.astype(int)
         self._is_start = np.zeros(self._I.size, dtype=bool)
         self._is_end = np.zeros(self._I.size, dtype=bool)
         self._is_start[self.start_nodes] = True
@@ -316,7 +322,7 @@ class SuperLink():
         self._beta_dkl = np.zeros(self.M, dtype=float)
         self._chi_ukl = np.zeros(self.M, dtype=float)
         self._chi_dkm = np.zeros(self.M, dtype=float)
-        self._k = superlinks.index.values
+        self._k = self.superlinks.index.values
         self._A_sj = np.zeros(self.M, dtype=float)
         self._F_jj = np.zeros(self.M, dtype=float)
         # TODO: Allow initial input to be specified
