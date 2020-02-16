@@ -193,6 +193,19 @@ class Simulation():
         sys.stdout.write('\r[{0}] {1}{2}'.format(bar, pct_finished, '%'))
         sys.stdout.flush()
 
+    def _error_metric(self, err, atol=1e-6, rtol=1e-3):
+        if atol is None:
+            atol = self.atol
+        if rtol is None:
+            rtol = self.rtol
+        current_state = self.model.H_j
+        previous_state = self.model.states['H_j']
+        # TODO: This should probably be absolute value
+        max_state = np.maximum(current_state, previous_state)
+        scaled_err = err / (atol + max_state * rtol)
+        normed_err = np.sqrt((scaled_err**2).sum() / scaled_err.size)
+        return normed_err
+
     def compute_step_size(self, dt=None, err=None, min_dt=None, max_dt=None, tol=None,
                           min_rel_change=None, max_rel_change=None,
                           safety_factor=None):
@@ -271,11 +284,14 @@ class Simulation():
             # Copy fine-stepped estimate of state
             states_fine = np.copy(self.model.H_j)
             # TODO: Is there a way to generalize this error metric?
-            err = (np.abs(states_coarse - states_fine)).sum()
+            raw_err = states_coarse - states_fine
+            err = self._error_metric(raw_err)
+            # err = (np.abs(states_coarse - states_fine)).sum()
         self.err = err
         # TODO: This will not save the dt needed for the next step
         if (retries) and (err is not None):
-            tol = self.tol
+            # tol = self.tol
+            tol = 1.
             min_dt = self.min_dt
             dt = self.compute_step_size(dt, err=err)
             if (err > tol) and (dt > min_dt):

@@ -39,6 +39,7 @@ class NumbaLink(SuperLink):
         _storage_indices = None
         _storage_hs = np.array([])
         _storage_As = np.array([])
+        _storage_Vs = np.array([])
         _storage_inds = np.array([])
         _storage_lens = np.array([])
         _storage_js = np.array([])
