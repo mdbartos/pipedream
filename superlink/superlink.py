@@ -324,6 +324,7 @@ class SuperLink():
         self._chi_dkm = np.zeros(self.M, dtype=float)
         self._k = self.superlinks.index.values
         self._A_sj = np.zeros(self.M, dtype=float)
+        self._V_sj = np.zeros(self.M, dtype=float)
         self._F_jj = np.zeros(self.M, dtype=float)
         # TODO: Allow initial input to be specified
         self._Q_0j = 0
@@ -1434,6 +1435,39 @@ class SuperLink():
                 _A_sj[_j_g] = generator.A_sj(_h_j[_j_g])
         # Export instance variables
         self._A_sj = _A_sj
+
+    def compute_storage_volumes(self):
+        """
+        Compute surface area of superjunctions at current time step.
+        """
+        # Import instance variables
+        _functional = self._functional              # Superlinks with functional area curves
+        _tabular = self._tabular                    # Superlinks with tabular area curves
+        _storage_factory = self._storage_factory    # Dictionary of storage curves
+        _storage_indices = self._storage_indices    # Indices of storage curves
+        _storage_a = self._storage_a                # Coefficient of functional storage curve
+        _storage_b = self._storage_b                # Exponent of functional storage curve
+        _storage_c = self._storage_c                # Constant of functional storage curve
+        H_j = self.H_j                              # Head at superjunction j
+        _z_inv_j = self._z_inv_j                    # Invert elevation at superjunction j
+        min_depth = self.min_depth                  # Minimum depth allowed at superjunctions/nodes
+        _V_sj = self._V_sj                          # Surface area at superjunction j
+        # Compute storage areas
+        _h_j = np.maximum(H_j - _z_inv_j, min_depth)
+        if _functional.any():
+            generator = getattr(superlink.storage, 'Functional')
+            _V_sj[_functional] = generator.V_sj(_h_j[_functional],
+                                                _storage_a[_functional],
+                                                _storage_b[_functional],
+                                                _storage_c[_functional])
+        if _tabular.any():
+            for storage_name, generator in _storage_factory.items():
+                _j_g = _storage_indices.loc[[storage_name]].values
+                _V_sj[_j_g] = generator.V_sj(_h_j[_j_g])
+        # Export instance variables
+        self._V_sj = _V_sj
+        # TODO: Temporary to maintain compatibility
+        return _V_sj
 
     def node_velocities(self):
         """

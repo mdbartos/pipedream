@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import scipy.linalg
 import scipy.optimize
+import scipy.integrate
 import scipy.sparse
 import scipy.sparse.linalg
 from numba import njit, prange
@@ -58,13 +59,16 @@ class NumbaLink(SuperLink):
             _storage_inds = []
             _storage_lens = []
             _storage_As = []
+            _storage_Vs = []
             _storage_hs = []
             order = []
             ix = 0
             for name, storage in storages.items():
                 A = storage['A']
                 h = storage['h']
+                V = scipy.integrate.cumtrapz(h, A, initial=0.)
                 _storage_As.append(A)
+                _storage_Vs.append(V)
                 _storage_hs.append(h)
                 _storage_inds.append(ix)
                 order.append(storage_name_to_ind[name])
@@ -73,6 +77,7 @@ class NumbaLink(SuperLink):
             order = np.argsort(order)
             _storage_hs = np.concatenate([_storage_hs[i] for i in order])
             _storage_As = np.concatenate([_storage_As[i] for i in order])
+            _storage_Vs = np.concatenate([_storage_Vs[i] for i in order])
             _storage_inds = np.asarray(_storage_inds)[order]
             _storage_lens = np.asarray(_storage_lens)[order]
             _storage_js = sj_to_storage_ind.index.values
@@ -82,6 +87,7 @@ class NumbaLink(SuperLink):
         self._storage_factory = _storage_factory
         self._storage_hs = _storage_hs
         self._storage_As = _storage_As
+        self._storage_Vs = _storage_Vs
         self._storage_inds = _storage_inds
         self._storage_lens = _storage_lens
         self._storage_js = _storage_js
@@ -1143,18 +1149,26 @@ class NumbaLink(SuperLink):
         H_j = self.H_j                              # Head at superjunction j
         _z_inv_j = self._z_inv_j                    # Invert elevation at superjunction j
         min_depth = self.min_depth                  # Minimum depth allowed at superjunctions/nodes
-        _A_sj = self._A_sj                          # Surface area at superjunction j
+        _V_sj = self._V_sj                          # Surface area at superjunction j
+        _storage_hs = self._storage_hs
+        _storage_As = self._storage_As
+        _storage_Vs = self._storage_Vs
+        _storage_inds = self._storage_inds
+        _storage_lens = self._storage_lens
+        _storage_js = self._storage_js
+        _storage_codes = self._storage_codes
         # Compute storage areas
         _h_j = np.maximum(H_j - _z_inv_j, min_depth)
-        vol = numba_compute_functional_storage_volumes(_h_j, _storage_a, _storage_b,
-                                                       _storage_c, _functional)
+        numba_compute_functional_storage_volumes(_h_j, _V_sj, _storage_a, _storage_b,
+                                                 _storage_c, _functional)
         if _tabular.any():
-            raise NotImplementedError
-            # for storage_name, generator in _storage_factory.items():
-            #     _j_g = _storage_indices.loc[[storage_name]].values
-            #     _A_sj[_j_g] = generator.A_sj(_h_j[_j_g])
+            numba_compute_tabular_storage_volumes(_h_j, _V_sj, _storage_hs, _storage_As,
+                                                  _storage_Vs, _storage_js, _storage_codes,
+                                                  _storage_inds, _storage_lens)
         # Export instance variables
-        return vol
+        self._V_sj = _V_sj
+        # TODO: Temporary to maintain compatibility
+        return _V_sj
 
     def reposition_junctions(self, reposition=None):
         """
@@ -1304,9 +1318,8 @@ def numba_compute_functional_storage_areas(h, A, a, b, c, _functional):
     return A
 
 @njit
-def numba_compute_functional_storage_volumes(h, a, b, c, _functional):
+def numba_compute_functional_storage_volumes(h, V, a, b, c, _functional):
     M = h.size
-    V = np.zeros(M)
     for j in range(M):
         if _functional[j]:
             if h[j] < 0:
@@ -1318,7 +1331,6 @@ def numba_compute_functional_storage_volumes(h, a, b, c, _functional):
 @njit
 def numba_compute_tabular_storage_areas(h_j, A_sj, hs, As, sjs, sts, inds, lens):
     n = sjs.size
-    A_out = np.zeros(n)
     for i in range(n):
         sj = sjs[i]
         st = sts[i]
@@ -1343,6 +1355,37 @@ def numba_compute_tabular_storage_areas(h_j, A_sj, hs, As, sjs, sts, inds, lens)
             frac = dx_0 / (dx_0 + dx_1)
             A_sj[sj] = (1 - frac) * A_range[ix - 1] + (frac) * A_range[ix]
     return A_sj
+
+@njit
+def numba_compute_tabular_storage_volumes(h_j, V_sj, hs, As, Vs, sjs, sts, inds, lens):
+    n = sjs.size
+    for i in range(n):
+        sj = sjs[i]
+        st = sts[i]
+        ind = inds[st]
+        size = lens[st]
+        h_range = hs[ind:ind+size]
+        A_range = As[ind:ind+size]
+        V_range = Vs[ind:ind+size]
+        hmax = h_range.max()
+        Vmin = V_range.min()
+        Vmax = V_range.max()
+        Amax = A_range.max()
+        h_search = h_j[sj]
+        ix = np.searchsorted(h_range, h_search)
+        # NOTE: np.interp not supported in this version of numba
+        # A_result = np.interp(h_search, h_range, A_range)
+        # A_out[i] = A_result
+        if (ix == 0):
+            V_sj[sj] = Vmin
+        elif (ix >= size):
+            V_sj[sj] = Vmax + Amax * (h_search - hmax)
+        else:
+            dx_0 = h_search - h_range[ix - 1]
+            dx_1 = h_range[ix] - h_search
+            frac = dx_0 / (dx_0 + dx_1)
+            V_sj[sj] = (1 - frac) * V_range[ix - 1] + (frac) * V_range[ix]
+    return V_sj
 
 @njit
 def numba_a_ik(u_Ik, sigma_ik):
