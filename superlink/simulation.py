@@ -1,6 +1,7 @@
 import copy
 import sys
 from itertools import count
+from collections import deque
 import numpy as np
 import pandas as pd
 try:
@@ -53,6 +54,9 @@ class Simulation():
         self.min_rel_change = min_rel_change
         self.max_rel_change = max_rel_change
         self.safety_factor = safety_factor
+        # Add queue of dts
+        self.dts = deque([dt], maxlen=3)
+        self.errs = deque([eps], maxlen=3)
         # Boundary conditions for convenience
         self.bc = self.model.bc
         # TODO: This needs to be generalized
@@ -193,7 +197,7 @@ class Simulation():
         sys.stdout.write('\r[{0}] {1}{2}'.format(bar, pct_finished, '%'))
         sys.stdout.flush()
 
-    def _error_metric(self, err, atol=1e-6, rtol=1e-3):
+    def _scaled_error(self, err, atol=1e-6, rtol=1e-3):
         if atol is None:
             atol = self.atol
         if rtol is None:
@@ -203,7 +207,22 @@ class Simulation():
         # TODO: This should probably be absolute value
         max_state = np.maximum(current_state, previous_state)
         scaled_err = err / (atol + max_state * rtol)
-        normed_err = np.sqrt((scaled_err**2).sum() / scaled_err.size)
+        return scaled_err
+
+    def _normed_error(self, scaled_err, norm=2):
+        n = scaled_err.size
+        if (norm == 0):
+            normed_err = (scaled_err > 0).astype(int).sum() / n
+        elif (norm == 1):
+            normed_err = scaled_err.sum() / n
+        elif (norm == 2):
+            normed_err = np.sqrt((scaled_err**2).sum() / n)
+        # TODO: should check for inf too
+        elif (norm == -1):
+            normed_err = np.max(np.abs(scaled_err))
+        else:
+            raise
+        normed_err = max(abs(normed_err), eps)
         return normed_err
 
     def compute_step_size(self, dt=None, err=None, min_dt=None, max_dt=None, tol=None,
@@ -238,6 +257,51 @@ class Simulation():
         # Return new step size
         return dt
 
+    def filter_step_size(self, tol=0.5, dts=None, errs=None, coeffs=[0.5, 0.5, 0, 0.5, 0],
+                         min_dt=None, max_dt=None, min_rel_change=None, max_rel_change=None,
+                         safety_factor=1.0, k=2):
+        """
+        Recommended coeffs:
+         k(b1)  k(b2)  k(b3)    a2     a3
+        ----------------------------------
+        [    1     0      0      0     0 ]  Elementary
+        [  1/2   1/2      0    1/2     0 ]  H0211
+        [  1/6   1/6      0      0     0 ]  H211 PI
+        [  1/4   1/2    1/4    3/4   1/4 ]  H0312
+        [ 1/18   1/9   1/18      0     0 ]  H312 PID
+        [  5/4   1/2   -3/4   -1/4  -3/4 ]  H0321
+        [  1/3  1/18  -5/18   -5/6  -1/6 ]  H321
+        ----------------------------------
+        """
+        if dts is None:
+            dts = self.dts
+            if len(dts) < 3:
+                return dts[0]
+        if errs is None:
+            errs = self.errs
+        if min_dt is None:
+            min_dt = self.min_dt
+        if max_dt is None:
+            max_dt = self.max_dt
+        if min_rel_change is None:
+            min_rel_change = self.min_rel_change
+        if max_rel_change is None:
+            max_rel_change = self.max_rel_change
+        err_n, err_nm1, err_nm2 = errs
+        dt_n, dt_nm1, dt_nm2 = dts
+        beta_1, beta_2, beta_3, alpha_2, alpha_3 = coeffs
+        t_0 = (tol / err_n) ** (beta_1 / k)
+        t_1 = (tol / err_nm1) ** (beta_2 / k)
+        t_2 = (tol / err_nm2) ** (beta_3 / k)
+        t_3 = (dt_n / dt_nm1) ** (-alpha_2)
+        t_4 = (dt_nm1 / dt_nm2) ** (-alpha_3)
+        factor = t_0 * t_1 * t_2 * t_3 * t_4
+        factor = min(max(factor, min_rel_change), max_rel_change)
+        factor = safety_factor * factor
+        dt_np1 = factor * dt_n
+        dt_np1 = min(max(dt_np1, min_dt), max_dt)
+        return dt_np1
+
     def kalman_filter(self, Z, H=None, C=None, Qcov=None, Rcov=None, P_x_k_k=None,
                       dt=None):
         if dt is None:
@@ -259,7 +323,8 @@ class Simulation():
         self.model.b = b_hat
         self.model._solve_step(dt=dt)
 
-    def step(self, dt=None, subdivisions=1, retries=0, **kwargs):
+    def step(self, dt=None, subdivisions=1, retries=0, tol=1, norm=2,
+             coeffs=[0.5, 0.5, 0, 0.5, 0], safety_factor=1.0, **kwargs):
         if dt is None:
             dt = self.dt
         else:
@@ -285,16 +350,22 @@ class Simulation():
             states_fine = np.copy(self.model.H_j)
             # TODO: Is there a way to generalize this error metric?
             raw_err = states_coarse - states_fine
-            err = self._error_metric(raw_err)
-            # err = (np.abs(states_coarse - states_fine)).sum()
+            scaled_err = self._scaled_error(raw_err)
+            err = self._normed_error(scaled_err, norm=norm)
+        # Set instance variables
+        self.dt = dt
+        self.dts.appendleft(dt)
         self.err = err
+        self.errs.appendleft(err)
         # TODO: This will not save the dt needed for the next step
         if (retries) and (err is not None):
-            # tol = self.tol
-            tol = 1.
             min_dt = self.min_dt
-            dt = self.compute_step_size(dt, err=err)
+            # dt = self.compute_step_size(dt, tol=tol, err=err)
+            dt = self.filter_step_size(tol=tol, coeffs=coeffs,
+                                       safety_factor=safety_factor)
             if (err > tol) and (dt > min_dt):
+                self.dts.popleft()
+                self.errs.popleft()
                 self.load_state(initial_state)
                 self.step(dt=dt, subdivisions=subdivisions, retries=retries-1, **kwargs)
 
