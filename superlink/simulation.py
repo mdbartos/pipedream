@@ -57,6 +57,13 @@ class Simulation():
         # Add queue of dts
         self.dts = deque([dt], maxlen=3)
         self.errs = deque([eps], maxlen=3)
+        self.h0100 = [1, 0, 0, 0, 0]
+        self.h0211 = [1/2, 1/2, 0, 1/2, 0]
+        self.h211  = [1/6, 1/6, 0, 0, 0]
+        self.h0312 = [1/4, 1/2, 1/4, 3/4, 1/4]
+        self.h312  = [1/18, 1/9, 1/18, 0, 0]
+        self.h0321 = [5/4, 1/2, -3/4, -1/4, -3/4]
+        self.h321  = [1/3, 1/18, -5/18, -5/6, -1/6]
         # Boundary conditions for convenience
         self.bc = self.model.bc
         # TODO: This needs to be generalized
@@ -363,8 +370,9 @@ class Simulation():
         if (retries) and (err is not None):
             min_dt = self.min_dt
             # dt = self.compute_step_size(dt, tol=tol, err=err)
-            dt = self.filter_step_size(tol=tol, coeffs=coeffs,
-                                       safety_factor=safety_factor)
+            # dt = self.filter_step_size(tol=tol, coeffs=coeffs,
+            #                            safety_factor=safety_factor)
+            dt = 0.5 * dt
             if (err > tol) and (dt > min_dt):
                 self.dts.popleft()
                 self.errs.popleft()
