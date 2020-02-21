@@ -367,17 +367,18 @@ class Simulation():
         self.err = err
         self.errs.appendleft(err)
         # TODO: This will not save the dt needed for the next step
-        if (retries) and (err is not None):
+        if ((retries) and (err is not None)):
             min_dt = self.min_dt
             # dt = self.compute_step_size(dt, tol=tol, err=err)
             # dt = self.filter_step_size(tol=tol, coeffs=coeffs,
             #                            safety_factor=safety_factor)
             dt = 0.5 * dt
-            if (err > tol) and (dt > min_dt):
+            if ((err > tol) or (not np.isfinite(err))) and (dt > min_dt):
                 self.dts.popleft()
                 self.errs.popleft()
                 self.load_state(initial_state)
                 self.step(dt=dt, subdivisions=subdivisions, retries=retries-1, **kwargs)
+        assert np.isfinite(self.model.H_j).all()
 
     def _step(self, dt=None, **kwargs):
         # Specify current timestamps
