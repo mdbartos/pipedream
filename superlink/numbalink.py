@@ -303,7 +303,7 @@ class NumbaLink(SuperLink):
         _C_ik = self._C_ik         # Discharge coefficient of control structure at link ik
         _ctrl = self._ctrl         # Control structure exists at link ik (y/n)
         inertial_damping = self.inertial_damping    # Use inertial damping (y/n)
-        g = 9.91
+        g = 9.81
         # If using inertial damping, import coefficient
         if inertial_damping:
             _sigma_ik = self._sigma_ik
@@ -325,7 +325,8 @@ class NumbaLink(SuperLink):
         self._a_ik = _a_ik
         self._b_ik = _b_ik
         self._c_ik = _c_ik
-        self._P_ik = _P_ik
+        if first_iter:
+            self._P_ik = _P_ik
 
     def node_coeffs(self, _Q_0Ik=None, _dt=None, first_iter=True):
         """
@@ -2339,6 +2340,9 @@ def numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
             else:
                 z_m = _z0[k]
                 x_m = _x0[k]
+                # NOTE: Changing this to not move instead
+                # z_m = _z_inv_I[pos_prev]
+                # x_m = _x_I[pos_prev]
             # Determine new x-position of junction
             c = np.searchsorted(_x_I, x_m)
             cm1 = c - 1
@@ -2366,7 +2370,7 @@ def numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
             shifted = (pos_prev != pos_next)
             # If position has shifted interpolate flow
             # TODO: For testing only, remove this later
-            r = 0.5
+            # r = 0.5
             if shifted:
                 ix = np.arange(nlinks)
                 ix[pos_prev] = pos_next

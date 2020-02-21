@@ -296,6 +296,8 @@ class Simulation():
         t_3 = (dt_n / dt_nm1) ** (-alpha_2)
         t_4 = (dt_nm1 / dt_nm2) ** (-alpha_3)
         factor = t_0 * t_1 * t_2 * t_3 * t_4
+        if np.isnan(factor):
+            return dt_n
         factor = min(max(factor, min_rel_change), max_rel_change)
         factor = safety_factor * factor
         dt_np1 = factor * dt_n
