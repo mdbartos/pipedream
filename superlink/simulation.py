@@ -1,3 +1,4 @@
+import time
 import copy
 import sys
 from itertools import count
@@ -135,6 +136,9 @@ class Simulation():
         else:
             self._checkpoints = np.array([np.inf])
         self._checkpoint_num = 0
+        self._iter_count = 0
+        self._clock_start_time = 0
+        self._clock_current_time = 0
         # Create a sequence iterator
         if max_iter is None:
             self.steps = count()
@@ -193,6 +197,8 @@ class Simulation():
                 return None
             else:
                 self._checkpoint_num = current_checkpoint
+        # Get clock time
+        elapsed_time = round(time.time() - self._clock_start_time, 2)
         # Prevent from going over 100%
         if t > t_end:
             t = t_end
@@ -201,7 +207,7 @@ class Simulation():
         progress_len = int(round(bar_len * progress_ratio))
         pct_finished = round(100.0 * progress_ratio, 1)
         bar = '=' * progress_len + '-' * (bar_len - progress_len)
-        sys.stdout.write('\r[{0}] {1}{2}'.format(bar, pct_finished, '%'))
+        sys.stdout.write('\r[{0}] {1}{2} [{3} s]'.format(bar, pct_finished, '%', elapsed_time))
         sys.stdout.flush()
 
     def _scaled_error(self, err, atol=1e-6, rtol=1e-3):
@@ -334,6 +340,8 @@ class Simulation():
 
     def step(self, dt=None, subdivisions=1, retries=0, tol=1, norm=2,
              coeffs=[0.5, 0.5, 0, 0.5, 0], safety_factor=1.0, **kwargs):
+        if (self._iter_count == 0):
+            self._clock_start_time = time.time()
         if dt is None:
             dt = self.dt
         else:
@@ -379,6 +387,7 @@ class Simulation():
                 self.load_state(initial_state)
                 self.step(dt=dt, subdivisions=subdivisions, retries=retries-1, **kwargs)
         assert np.isfinite(self.model.H_j).all()
+        self._iter_count += 1
 
     def _step(self, dt=None, **kwargs):
         # Specify current timestamps
