@@ -870,6 +870,7 @@ class NumbaLink(SuperLink):
             H_j_next = scipy.sparse.linalg.spsolve(l, r)
         else:
             H_j_next = scipy.linalg.solve(l, r)
+        assert np.isfinite(H_j_next).all()
         # Constrain heads based on allowed maximum/minimum depths
         # TODO: Not sure what's happening here
         # H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
@@ -910,6 +911,7 @@ class NumbaLink(SuperLink):
         AB = numba_create_banded(l, bandwidth, M)
         H_j_next = scipy.linalg.solve_banded((bandwidth, bandwidth), AB, r,
                                              check_finite=False, overwrite_ab=True)
+        assert np.isfinite(H_j_next).all()
         # Constrain heads based on allowed maximum/minimum depths
         # TODO: Not sure what's happening here
         # H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
@@ -943,12 +945,16 @@ class NumbaLink(SuperLink):
         _h_uk = self._h_uk                  # Depth at upstream end of superlink k
         _h_dk = self._h_dk                  # Depth at downstream end of superlink k
         min_depth = self.min_depth          # Minimum allowable water depth
+        max_depth_k = self.max_depth_k
         # Solve internals
         numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
                               _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
-                              min_depth, first_link_backwards=True)
+                              min_depth, max_depth_k, first_link_backwards=True)
+        # TODO: Temporary
+        assert np.isfinite(_h_Ik).all()
         # Ensure non-negative depths?
         _h_Ik[_h_Ik < min_depth] = min_depth
+        # _h_Ik[_h_Ik > junction_max_depth] = junction_max_depth
         # _h_Ik[_h_Ik > max_depth] = max_depth
         # Export instance variables
         self._h_Ik = _h_Ik
@@ -978,10 +984,11 @@ class NumbaLink(SuperLink):
         _h_uk = self._h_uk                  # Depth at upstream end of superlink k
         _h_dk = self._h_dk                  # Depth at downstream end of superlink k
         min_depth = self.min_depth          # Minimum allowable water depth
+        max_depth_k = self.max_depth_k
         # Solve internals
         numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
                               _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
-                              min_depth, first_link_backwards=False)
+                              min_depth, max_depth_k, first_link_backwards=False)
         # Ensure non-negative depths?
         _h_Ik[_h_Ik < min_depth] = min_depth
         # _h_Ik[_h_Ik > max_depth] = max_depth
@@ -1485,7 +1492,7 @@ def numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk, _dt,
 @njit
 def numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
                           _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
-                          min_depth, first_link_backwards=True):
+                          min_depth, max_depth_k, first_link_backwards=True):
     for k in range(NK):
         n = nk[k]
         i_1 = _i_1k[k]
@@ -1498,6 +1505,8 @@ def numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
         _h_Np1k = _h_dk[k]
         _h_Ik[I_1] = _h_1k
         _h_Ik[I_Np1] = _h_Np1k
+        # Set max depth
+        max_depth = max_depth_k[k]
         # Compute internal depths and flows (except first link flow)
         for j in range(n - 1):
             I = I_N - j
@@ -1507,6 +1516,8 @@ def numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
             _h_Ik[I] = h_i_b(_Q_ik[i], _h_Np1k, _X_Ik[I], _Y_Ik[I], _Z_Ik[I])
             if _h_Ik[I] < min_depth:
                 _h_Ik[I] = min_depth
+            if _h_Ik[I] > max_depth:
+                _h_Ik[I] = max_depth
         if first_link_backwards:
             _Q_ik[i_1] = Q_i_b(_h_Ik[I_1], _h_Np1k, _X_Ik[I_1], _Y_Ik[I_1],
                             _Z_Ik[I_1])

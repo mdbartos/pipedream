@@ -128,10 +128,16 @@ class SuperLink():
         self._storage_a = superjunctions['a'].values.astype(float)
         self._storage_b = superjunctions['b'].values.astype(float)
         self._storage_c = superjunctions['c'].values.astype(float)
+        # Set maximum superjunction depth
         if 'max_depth' in superjunctions:
             self.max_depth = superjunctions['max_depth'].values.astype(float)
         else:
             self.max_depth = np.full(len(superjunctions), np.inf, dtype=float)
+        # Set maximum superlink depth for stability
+        if 'max_depth' in superlinks:
+            self.max_depth_k = superlinks['max_depth'].values.astype(float)
+        else:
+            self.max_depth_k = np.full(len(superlinks), np.inf, dtype=float)
         self._h_Ik = junctions.loc[self._I, 'h_0'].values.astype(float)
         self._A_SIk = junctions.loc[self._I, 'A_s'].values.astype(float)
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(float)
@@ -371,6 +377,9 @@ class SuperLink():
         self._compute_bandwidth()
         # Initialize to stable state
         self.step(dt=1e-6, first_time=True)
+        # Reset iteration counter
+        self.iter_count = 0
+        self.t = 0
 
     @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
@@ -1579,7 +1588,8 @@ class SuperLink():
         self._a_ik = _a_ik
         self._b_ik = _b_ik
         self._c_ik = _c_ik
-        self._P_ik = _P_ik
+        if first_iter:
+            self._P_ik = _P_ik
 
     def node_coeffs(self, _Q_0Ik=None, _dt=None, first_iter=True):
         """
@@ -3369,7 +3379,8 @@ class SuperLink():
 
     def _setup_step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
-        self.save_state()
+        if first_iter:
+            self.save_state()
         if dt is None:
             dt = self._dt
         self._Q_in = Q_in
@@ -3379,6 +3390,7 @@ class SuperLink():
         self.upstream_hydraulic_geometry()
         self.downstream_hydraulic_geometry()
         self.compute_storage_areas()
+        # self.compute_storage_volumes()
         self.node_velocities()
         if self.inertial_damping:
             self.compute_flow_regime()
@@ -3432,10 +3444,39 @@ class SuperLink():
         self.t += dt
 
     def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
-             first_time=False, implicit=True, banded=False, first_iter=True):
+             first_time=False, implicit=True, banded=False, first_iter=True,
+             num_iter=1, head_tol=0.0015):
         self._setup_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
         self._solve_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
+        num_iter -= 1
+        if (num_iter > 0):
+            H_j_prev = self.states['H_j']
+            H_j_next = np.copy(self.H_j)
+            h_Ik_prev = self.states['_h_Ik']
+            Q_ik_prev = self.states['_Q_ik']
+            Q_uk_prev = self.states['_Q_uk']
+            Q_dk_prev = self.states['_Q_dk']
+            residual = np.abs(H_j_next - H_j_prev)
+            if not (residual < head_tol).all():
+                for _ in range(num_iter):
+                    self.iter_count -= 1
+                    self.t -= dt
+                    self.H_j = H_j_prev
+                    self._h_Ik = (h_Ik_prev + self._h_Ik) / 2
+                    self._Q_ik = (Q_ik_prev + self._Q_ik) / 2
+                    self._Q_uk = (Q_uk_prev + self._Q_uk) / 2
+                    self._Q_dk = (Q_dk_prev + self._Q_dk) / 2
+                    self._setup_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                     first_time=first_time, implicit=implicit, banded=banded,
+                                     first_iter=False)
+                    self._solve_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                     first_time=first_time, implicit=implicit, banded=banded,
+                                     first_iter=False)
+                    residual = np.abs(H_j_next - self.H_j)
+                    if (residual < head_tol).all():
+                        break
+                    H_j_next = np.copy(self.H_j)
