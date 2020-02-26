@@ -171,11 +171,12 @@ class Simulation():
     def load_state(self, state={}):
         self.model.load_state(state)
 
-    def record_state(self, state_variables=()):
+    def record_state(self, state_variables={}):
         # TODO: Should be able to choose what to record
         # if not state_variables:
         model = self.model
-        state_variables = self.state_variables
+        if not state_variables:
+            state_variables = self.state_variables
         for state in state_variables:
             if not hasattr(self.states, state):
                 setattr(self.states, state, {})

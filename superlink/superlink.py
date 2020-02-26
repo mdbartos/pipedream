@@ -23,6 +23,20 @@ class SuperLink():
         orifices = copy.deepcopy(orifices)
         weirs = copy.deepcopy(weirs)
         pumps = copy.deepcopy(pumps)
+        # TODO: This needs to be done for orifices/weirs/pumps as well
+        # Ensure nominal direction of superlinks is correct
+        if (superlinks is not None) and (superjunctions is not None):
+            for k in superlinks.index.values:
+                sj_0 = superlinks.loc[k, 'sj_0']
+                sj_1 = superlinks.loc[k, 'sj_1']
+                z_inv_0 = superjunctions.loc[sj_0, 'z_inv']
+                z_inv_1 = superjunctions.loc[sj_1, 'z_inv']
+                z_inv_uk = superlinks.loc[k, 'in_offset']
+                z_inv_dk = superlinks.loc[k, 'out_offset']
+                cond = z_inv_0 + z_inv_uk < z_inv_1 + z_inv_dk
+                if cond:
+                    superlinks.loc[k, 'sj_0'] = sj_1
+                    superlinks.loc[k, 'sj_1'] = sj_0
         # Save copied input tables to class instance
         self.superjunctions = superjunctions
         self.superlinks = superlinks
@@ -3377,7 +3391,7 @@ class SuperLink():
         self.compute_storage_areas()
         self.node_velocities()
 
-    def _setup_step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
+    def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         if first_iter:
             self.save_state()
@@ -3390,12 +3404,12 @@ class SuperLink():
         self.upstream_hydraulic_geometry()
         self.downstream_hydraulic_geometry()
         self.compute_storage_areas()
-        # self.compute_storage_volumes()
+        self.compute_storage_volumes()
         self.node_velocities()
         if self.inertial_damping:
             self.compute_flow_regime()
         self.link_coeffs(_dt=dt, first_iter=first_iter)
-        self.node_coeffs(_dt=dt, first_iter=first_iter)
+        self.node_coeffs(_Q_0Ik=Q_0Ik, _dt=dt, first_iter=first_iter)
         self.forward_recurrence()
         self.backward_recurrence()
         self.superlink_upstream_head_coefficients()
@@ -3411,7 +3425,7 @@ class SuperLink():
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
 
-    def _solve_step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
+    def _solve_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         _method = self._method
         _exit_hydraulics = self._exit_hydraulics
@@ -3443,13 +3457,13 @@ class SuperLink():
         self.iter_count += 1
         self.t += dt
 
-    def step(self, H_bc=None, Q_in=None, u_o=None, u_w=None, u_p=None, dt=None,
+    def step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True,
              num_iter=1, head_tol=0.0015):
-        self._setup_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+        self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
-        self._solve_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+        self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
         num_iter -= 1
