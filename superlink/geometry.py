@@ -8,7 +8,8 @@ geom_code = {
     'triangular' : 4,
     'trapezoidal' : 5,
     'parabolic' : 6,
-    'elliptical' : 7
+    'elliptical' : 7,
+    'wide' : 8
 }
 
 eps = np.finfo(float).eps
@@ -418,6 +419,52 @@ class Elliptical():
                                         + b**2 * np.sin(theta)**2)
         return B
 
+
+class Wide():
+    def __init__(self):
+        pass
+
+    @classmethod
+    def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute cross-sectional area of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g2
+        y = (h_Ik + h_Ip1k) / 2
+        y[y < 0] = 0
+        y[y > y_max] = y_max[y > y_max]
+        A = y * b
+        return A
+
+    @classmethod
+    def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute perimeter of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g2
+        Pe = b
+        return Pe
+
+    @classmethod
+    def R_ik(self, A_ik, Pe_ik):
+        """
+        Compute hydraulic radius for link i, superlink k.
+        """
+        cond = Pe_ik > 0
+        R = np.zeros(A_ik.size)
+        R[cond] = A_ik[cond] / Pe_ik[cond]
+        return R
+
+    @classmethod
+    def B_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute top width of flow for link i, superlink k.
+        """
+        y_max = g1
+        b = g2
+        return b
 
 class Irregular():
     def __init__(self, x, y, horiz_points=100, vert_points=100):

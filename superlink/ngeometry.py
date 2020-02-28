@@ -8,7 +8,9 @@ geom_code = {
     'rect_open' : 3,
     'triangular' : 4,
     'trapezoidal' : 5,
-    'parabolic' : 6
+    'parabolic' : 6,
+    'elliptical' : 7,
+    'wide' : 8
 }
 
 eps = np.finfo(float).eps
@@ -430,4 +432,50 @@ def Elliptical_B_ik(h_Ik, h_Ip1k, g1, g2):
     B = 2 * np.cos(theta) * np.sqrt(a**2 * np.cos(theta)**2
                                     + b**2 * np.sin(theta)**2)
     return B
+
+
+@njit
+def Wide_A_ik(h_Ik, h_Ip1k, g1, g2):
+    """
+    Compute cross-sectional area of flow for link i, superlink k.
+    """
+    y_max = g1
+    b = g2
+    y = (h_Ik + h_Ip1k) / 2
+    if y < 0:
+        y = 0
+    if y > y_max:
+        y = y_max
+    A = y * b
+    return A
+
+@njit
+def Wide_Pe_ik(h_Ik, h_Ip1k, g1, g2):
+    """
+    Compute perimeter of flow for link i, superlink k.
+    """
+    b = g2
+    Pe = b
+    return Pe
+
+@njit
+def Wide_R_ik(A_ik, Pe_ik):
+    """
+    Compute hydraulic radius for link i, superlink k.
+    """
+    cond = Pe_ik > 0
+    if cond:
+        R = A_ik / Pe_ik
+    else:
+        R = 0
+    return R
+
+@njit
+def Wide_B_ik(h_Ik, h_Ip1k, g1, g2):
+    """
+    Compute top width of flow for link i, superlink k.
+    """
+    y_max = g1
+    b = g2
+    return b
 

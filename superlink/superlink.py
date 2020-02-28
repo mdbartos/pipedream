@@ -163,15 +163,26 @@ class SuperLink():
         self._Q_0Ik = np.zeros(self._I.size, dtype=float)
         # Handle orifices
         if orifices is not None:
+            self.n_o = self.orifices.shape[0]
             self._J_uo = self.orifices['sj_0'].values.astype(int)
             self._J_do = self.orifices['sj_1'].values.astype(int)
-            self._Ao = self.orifices['A'].values.astype(float)
+            self._Ao_max = self.orifices['A'].values.astype(float)
+            self._Ao = np.copy(self._Ao_max)
             self._Co = self.orifices['C'].values.astype(float)
             self._z_o = self.orifices['z_o'].values.astype(float)
             self._y_max_o = self.orifices['y_max'].values.astype(float)
             self._orient_o = self.orifices['orientation'].values
             self._tau_o = (self._orient_o == 'side').astype(float)
-            self.n_o = self.orifices.shape[0]
+            if 'shape' in self.orifices.columns:
+                self._shape_o = self.orifices['shape']
+                self._g1_o = self.orifices['g1'].values.astype(float)
+                self._g2_o = self.orifices['g2'].values.astype(float)
+                self._g3_o = self.orifices['g3'].values.astype(float)
+            else:
+                self._shape_o = pd.Series(['rect_open'] * self.n_o)
+                self._g1_o = np.sqrt(self._Ao_max)
+                self._g2_o = np.sqrt(self._Ao_max)
+                self._g3_o = np.zeros(self.n_o)
             self._Qo = np.zeros(self.n_o, dtype=float)
             self._alpha_o = np.zeros(self.n_o, dtype=float)
             self._beta_o = np.zeros(self.n_o, dtype=float)
@@ -183,11 +194,16 @@ class SuperLink():
         else:
             self._J_uo = np.array([], dtype=int)
             self._J_do = np.array([], dtype=int)
+            self._Ao_max = np.array([], dtype=float)
             self._Ao = np.array([], dtype=float)
             self._Co = np.array([], dtype=float)
             self._z_o = np.array([], dtype=float)
             self._y_max_o = np.array([], dtype=float)
             self._orient_o = np.array([])
+            self._shape_o = pd.Series(np.array([]))
+            self._g1_o = np.array([], dtype=float)
+            self._g2_o = np.array([], dtype=float)
+            self._g3_o = np.array([], dtype=float)
             self.n_o = 0
             self._Qo = np.array([], dtype=float)
             self._alpha_o = np.array([], dtype=float)
@@ -1164,13 +1180,16 @@ class SuperLink():
         # Import instance variables
         transects = self.transects          # Table of transects
         _shape_ik = self._shape_ik          # Shape of link ik
+        _shape_o = self._shape_o
         _transect_ik = self._transect_ik    # Transect associated with link ik
         _link_start = self._link_start      # Link is first link in superlink k
         _link_end = self._link_end          # Link is last link in superlink k
         _geom_numbers = superlink.geometry.geom_code
         nk = self.nk
+        n_o = self.n_o
         # Set attributes
         _geom_factory = {}
+        _geom_factory_o = {}
         _transect_factory = {}
         _transect_indices = None
         _uk_geom_factory = {}
@@ -1211,6 +1230,20 @@ class SuperLink():
         # NOTE: Handle case for elliptical geometry
         _ellipse_ix = np.flatnonzero(_geom_codes ==
                                      superlink.geometry.geom_code['elliptical'])
+        # Handle orifices
+        if n_o:
+            _unique_geom_o = set(_shape_o.str.lower().unique())
+            _geom_indices_o = pd.Series(_shape_o.index, index=_shape_o.str.lower().values)
+            for geom in _unique_geom_o:
+                _o_g = _geom_indices_o.loc[[geom]].values
+                _geom_factory_o[geom] = _o_g
+            _geom_codes_o = np.zeros(n_o, dtype=int)
+            for geom, indices in _geom_factory_o.items():
+                _geom_codes_o[indices] = _geom_numbers[geom]
+            # Export instance variables
+            self._geom_factory_o = _geom_factory_o
+            self._geom_codes_o = _geom_codes_o
+        # Export instance variables
         self._has_irregular = _has_irregular
         self._geom_factory = _geom_factory
         self._transect_factory = _transect_factory
@@ -1427,6 +1460,42 @@ class SuperLink():
                 _B_dk[_ki_g] = generator.B_ik(_h_Ip1k_g, _H_j_g)
         # Export to instance variables
         self._A_dk = _A_dk
+
+    def orifice_hydraulic_geometry(self, u=None):
+        """
+        Compute hydraulic geometry for each link.
+        """
+        # Import instance variables
+        _Ao = self._Ao             # Flow area at link ik
+        _g1_o = self._g1_o           # Geometry 1 of link ik (vertical)
+        _g2_o = self._g2_o           # Geometry 2 of link ik (horizontal)
+        _g3_o = self._g3_o           # Geometry 3 of link ik (other)
+        _geom_factory_o = self._geom_factory_o
+        n_o = self.n_o
+        _z_o = self._z_o
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        H_j = self.H_j
+        _z_inv_j = self._z_inv_j
+        # Compute effective head
+        H_uo = H_j[_J_uo]
+        H_do = H_j[_J_do]
+        _z_inv_uo = _z_inv_j[_J_uo]
+        h_e = np.maximum(H_uo - _z_inv_uo - _z_o, H_do - _z_inv_uo - _z_o)
+        if u is None:
+            u = np.zeros(n_o, dtype=float)
+        # Compute hydraulic geometry for regular geometries
+        for geom, indices in _geom_factory_o.items():
+            Geom = geom.title()
+            _o_g = indices
+            generator = getattr(superlink.geometry, Geom)
+            _g1_g = _g1_o[_o_g] * u[_o_g]
+            _g2_g = _g2_o[_o_g]
+            _g3_g = _g3_o[_o_g]
+            _Ao[_o_g] = generator.A_ik(h_e, h_e,
+                                       g1=_g1_g, g2=_g2_g, g3=_g3_g)
+        # Export to instance variables
+        self._Ao = _Ao
 
     def compute_storage_areas(self):
         """
@@ -1993,7 +2062,8 @@ class SuperLink():
         _y_max_o = self._y_max_o     # Maximum height of orifice o
         _Qo = self._Qo               # Current flow rate of orifice o
         _Co = self._Co               # Discharge coefficient of orifice o
-        _Ao = self._Ao               # Maximum flow area of orifice o
+        _Ao = self._Ao               # NOTE: Flow area of orifice now
+        _tau_o = self._tau_o
         _alpha_o = self._alpha_o     # Orifice flow coefficient alpha_o
         _beta_o = self._beta_o       # Orifice flow coefficient beta_o
         _chi_o = self._chi_o         # Orifice flow coefficient chi_o
@@ -2006,7 +2076,6 @@ class SuperLink():
         _z_inv_uo = _z_inv_j[_J_uo]
         # Create indicator functions
         _omega_o = (_H_uo >= _H_do).astype(float)
-        _tau_o = (_orient_o == 'side').astype(float)
         # Compute universal coefficients
         _gamma_o = self.gamma_o(_Qo, _Ao, _Co)
         # Create conditionals
@@ -2019,22 +2088,22 @@ class SuperLink():
         # Fill coefficient arrays
         # Submerged on both sides
         a = (cond_0 & cond_1)
-        _alpha_o[a] = _gamma_o[a] * u[a]**2
-        _beta_o[a] = -_gamma_o[a] * u[a]**2
+        _alpha_o[a] = _gamma_o[a]
+        _beta_o[a] = - _gamma_o[a]
         _chi_o[a] = 0.0
         # Submerged on one side
         b = (cond_0 & ~cond_1)
-        _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
-        _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
-        _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b])
+        _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b])
+        _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b])
                                       * (- _z_inv_uo[b] - _z_o[b] -
                                          _tau_o[b] * _y_max_o[b] * u[b] / 2))
         # Weir flow
         c = (~cond_0 & cond_2)
-        _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
-        _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+        _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c])
+        _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c])
         _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
-                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
+                     * (- _z_inv_uo[c] - _z_o[c]))
         # No flow
         d = (~cond_0 & ~cond_2)
         _alpha_o[d] = 0.0
@@ -2498,6 +2567,7 @@ class SuperLink():
         _y_max_o = self._y_max_o      # Maximum height of orifice o
         _Co = self._Co                # Discharge coefficient of orifice o
         _Ao = self._Ao                # Maximum flow area of orifice o
+        _tau_o = self._tau_o
         # If no input signal, assume orifice is closed
         if u is None:
             u = np.zeros(self.n_o, dtype=float)
@@ -2512,7 +2582,6 @@ class SuperLink():
         _z_inv_uo = _z_inv_j[_J_uo]
         # Create indicator functions
         _omega_o = (_H_uo >= _H_do).astype(float)
-        _tau_o = (_orient_o == 'side').astype(float)
         # Compute universal coefficients
         _gamma_oo = 2 * g * _Co**2 * _Ao**2
         # Create conditionals
@@ -2525,22 +2594,22 @@ class SuperLink():
         # Fill coefficient arrays
         # Submerged on both sides
         a = (cond_0 & cond_1)
-        _alpha_oo[a] = _gamma_oo[a] * u[a]**2
-        _beta_oo[a] = -_gamma_oo[a] * u[a]**2
+        _alpha_oo[a] = _gamma_oo[a]
+        _beta_oo[a] = -_gamma_oo[a]
         _chi_oo[a] = 0.0
         # Submerged on one side
         b = (cond_0 & ~cond_1)
-        _alpha_oo[b] = _gamma_oo[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
-        _beta_oo[b] = _gamma_oo[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
-        _chi_oo[b] = (_gamma_oo[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+        _alpha_oo[b] = _gamma_oo[b] * _omega_o[b] * (-1)**(1 - _omega_o[b])
+        _beta_oo[b] = _gamma_oo[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b])
+        _chi_oo[b] = (_gamma_oo[b] * (-1)**(1 - _omega_o[b])
                                       * (- _z_inv_uo[b] - _z_o[b]
                                          - _tau_o[b] * _y_max_o[b] * u[b] / 2))
         # Weir flow on one side
         c = (~cond_0 & cond_2)
-        _alpha_oo[c] = _gamma_oo[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
-        _beta_oo[c] = _gamma_oo[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+        _alpha_oo[c] = _gamma_oo[c] * _omega_o[c] * (-1)**(1 - _omega_o[c])
+        _beta_oo[c] = _gamma_oo[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c])
         _chi_oo[c] = (_gamma_oo[c] * (-1)**(1 - _omega_o[c])
-                                      * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
+                                      * (- _z_inv_uo[c] - _z_o[c]))
         # No flow
         d = (~cond_0 & ~cond_2)
         _alpha_oo[d] = 0.0
@@ -3377,6 +3446,12 @@ class SuperLink():
         self.states['_Q_ik'] = np.copy(self._Q_ik)
         self.states['_Q_uk'] = np.copy(self._Q_uk)
         self.states['_Q_dk'] = np.copy(self._Q_dk)
+        if self.n_o:
+            self.states['_Qo'] = np.copy(self._Qo)
+        if self.n_w:
+            self.states['_Qw'] = np.copy(self._Qw)
+        if self.n_p:
+            self.states['_Qp'] = np.copy(self._Qp)
 
     def load_state(self, states={}):
         # If no states given, load previous states
@@ -3416,6 +3491,7 @@ class SuperLink():
         self.superlink_downstream_head_coefficients()
         self.superlink_flow_coefficients()
         if self.orifices is not None:
+            self.orifice_hydraulic_geometry(u=u_o)
             self.orifice_flow_coefficients(u=u_o)
         if self.weirs is not None:
             self.weir_flow_coefficients(u=u_w)
@@ -3474,6 +3550,12 @@ class SuperLink():
             Q_ik_prev = self.states['_Q_ik']
             Q_uk_prev = self.states['_Q_uk']
             Q_dk_prev = self.states['_Q_dk']
+            if self.n_o:
+                Q_o_prev = self.states['_Qo']
+            if self.n_w:
+                Q_w_prev = self.states['_Qw']
+            if self.n_p:
+                Q_p_prev = self.states['_Qp']
             residual = np.abs(H_j_next - H_j_prev)
             if not (residual < head_tol).all():
                 for _ in range(num_iter):
@@ -3484,6 +3566,12 @@ class SuperLink():
                     self._Q_ik = (Q_ik_prev + self._Q_ik) / 2
                     self._Q_uk = (Q_uk_prev + self._Q_uk) / 2
                     self._Q_dk = (Q_dk_prev + self._Q_dk) / 2
+                    if self.n_o:
+                        self._Qo = (Q_o_prev + self._Qo) / 2
+                    if self.n_w:
+                        self._Qw = (Q_w_prev + self._Qw) / 2
+                    if self.n_p:
+                        self._Qp = (Q_p_prev + self._Qp) / 2
                     self._setup_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                      first_time=first_time, implicit=implicit, banded=banded,
                                      first_iter=False)

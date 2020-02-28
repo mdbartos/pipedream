@@ -227,6 +227,35 @@ class NumbaLink(SuperLink):
         # Export to instance variables
         self._A_dk = _A_dk
 
+    def orifice_hydraulic_geometry(self, u=None):
+        """
+        Compute hydraulic geometry for each link.
+        """
+        # Import instance variables
+        _Ao = self._Ao             # Flow area at link ik
+        _g1_o = self._g1_o           # Geometry 1 of link ik (vertical)
+        _g2_o = self._g2_o           # Geometry 2 of link ik (horizontal)
+        _g3_o = self._g3_o           # Geometry 3 of link ik (other)
+        _geom_factory_o = self._geom_factory_o
+        _geom_codes_o = self._geom_codes_o
+        n_o = self.n_o
+        _z_o = self._z_o
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        H_j = self.H_j
+        _z_inv_j = self._z_inv_j
+        # Compute effective head
+        H_uo = H_j[_J_uo]
+        H_do = H_j[_J_do]
+        _z_inv_uo = _z_inv_j[_J_uo]
+        h_e = np.maximum(H_uo - _z_inv_uo - _z_o, H_do - _z_inv_uo - _z_o)
+        if u is None:
+            u = np.zeros(n_o, dtype=float)
+        # Compute orifice geometries
+        numba_orifice_geometry(_Ao, h_e, u, _g1_o, _g2_o, _g3_o, _geom_codes_o, n_o)
+        # Export to instance variables
+        self._Ao = _Ao
+
     def compute_storage_areas(self):
         """
         Compute surface area of superjunctions at current time step.
@@ -1273,6 +1302,11 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _A_ik[i] = superlink.ngeometry.Elliptical_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _R_ik[i] = superlink.ngeometry.Elliptical_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = superlink.ngeometry.Elliptical_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 8:
+                _A_ik[i] = superlink.ngeometry.Wide_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = superlink.ngeometry.Wide_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = superlink.ngeometry.Wide_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = superlink.ngeometry.Wide_B_ik(h_I, h_Ip1, g1_i, g2_i)
     return 1
 
 @njit
@@ -1313,6 +1347,37 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
             elif geom_code == 7:
                 _A_bk[k] = superlink.ngeometry.Elliptical_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _B_bk[k] = superlink.ngeometry.Elliptical_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 8:
+                _A_bk[k] = superlink.ngeometry.Wide_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = superlink.ngeometry.Wide_B_ik(h_I, h_Ip1, g1_i, g2_i)
+    return 1
+
+@njit
+def numba_orifice_geometry(_Ao, h_eo, u_o, _g1_o, _g2_o, _g3_o, _geom_codes_o, n_o):
+    for i in range(n_o):
+        geom_code = _geom_codes_o[i]
+        g1 = _g1_o[i]
+        g2 = _g2_o[i]
+        g3 = _g3_o[i]
+        u = u_o[i]
+        h_e = h_eo[i]
+        if geom_code:
+            if geom_code == 1:
+                _Ao[i] = superlink.ngeometry.Circular_A_ik(h_e, h_e, g1 * u)
+            elif geom_code == 2:
+                _Ao[i] = superlink.ngeometry.Rect_Closed_A_ik(h_e, h_e, g1 * u, g2)
+            elif geom_code == 3:
+                _Ao[i] = superlink.ngeometry.Rect_Open_A_ik(h_e, h_e, g1 * u, g2)
+            elif geom_code == 4:
+                _Ao[i] = superlink.ngeometry.Triangular_A_ik(h_e, h_e, g1 * u, g2)
+            elif geom_code == 5:
+                _Ao[i] = superlink.ngeometry.Trapezoidal_A_ik(h_e, h_e, g1 * u, g2, g3)
+            elif geom_code == 6:
+                _Ao[i] = superlink.ngeometry.Parabolic_A_ik(h_e, h_e, g1 * u, g2)
+            elif geom_code == 7:
+                _Ao[i] = superlink.ngeometry.Elliptical_A_ik(h_e, h_e, g1 * u, g2)
+            elif geom_code == 8:
+                _Ao[i] = superlink.ngeometry.Wide_A_ik(h_e, h_e, g1 * u, g2)
     return 1
 
 @njit
@@ -1957,22 +2022,22 @@ def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_i
     # Fill coefficient arrays
     # Submerged on both sides
     a = (cond_0 & cond_1)
-    _alpha_o[a] = _gamma_o[a] * u[a]**2
-    _beta_o[a] = -_gamma_o[a] * u[a]**2
+    _alpha_o[a] = _gamma_o[a]
+    _beta_o[a] = -_gamma_o[a]
     _chi_o[a] = 0.0
     # Submerged on one side
     b = (cond_0 & ~cond_1)
-    _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
-    _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
-    _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+    _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b])
+    _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b])
+    _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b])
                                     * (- _z_inv_uo[b] - _z_o[b] -
                                         _tau_o[b] * _y_max_o[b] * u[b] / 2))
     # Weir flow
     c = (~cond_0 & cond_2)
-    _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
-    _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+    _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c])
+    _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c])
     _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
-                                    * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
+                                    * (- _z_inv_uo[c] - _z_o[c]))
     # No flow
     d = (~cond_0 & ~cond_2)
     _alpha_o[d] = 0.0
@@ -2006,22 +2071,22 @@ def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
     # Fill coefficient arrays
     # Submerged on both sides
     a = (cond_0 & cond_1)
-    _alpha_o[a] = _gamma_o[a] * u[a]**2
-    _beta_o[a] = -_gamma_o[a] * u[a]**2
+    _alpha_o[a] = _gamma_o[a]
+    _beta_o[a] = -_gamma_o[a]
     _chi_o[a] = 0.0
     # Submerged on one side
     b = (cond_0 & ~cond_1)
-    _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
-    _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b]) * u[b]**2
-    _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b]) * u[b]**2
+    _alpha_o[b] = _gamma_o[b] * _omega_o[b] * (-1)**(1 - _omega_o[b])
+    _beta_o[b] = _gamma_o[b] * (1 - _omega_o[b]) * (-1)**(1 - _omega_o[b])
+    _chi_o[b] = (_gamma_o[b] * (-1)**(1 - _omega_o[b])
                                     * (- _z_inv_uo[b] - _z_o[b]
                                         - _tau_o[b] * _y_max_o[b] * u[b] / 2))
     # Weir flow on one side
     c = (~cond_0 & cond_2)
-    _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
-    _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c]) / _y_max_o[c]**2 / 2
+    _alpha_o[c] = _gamma_o[c] * _omega_o[c] * (-1)**(1 - _omega_o[c])
+    _beta_o[c] = _gamma_o[c] * (1 - _omega_o[c]) * (-1)**(1 - _omega_o[c])
     _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
-                                    * (- _z_inv_uo[c] - _z_o[c])) / _y_max_o[c]**2 / 2
+                                    * (- _z_inv_uo[c] - _z_o[c]))
     # No flow
     d = (~cond_0 & ~cond_2)
     _alpha_o[d] = 0.0
