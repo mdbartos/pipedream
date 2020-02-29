@@ -459,7 +459,7 @@ class NumbaLink(SuperLink):
         _A_uk = self._A_uk             # Flow area at upstream end of superlink k
         _B_uk = self._B_uk             # Top width at upstream end of superlink k
         # Placeholder discharge coefficient
-        _C_uk = 0.67
+        _C_uk = self._C_uk
         # Current upstream flows
         _Q_uk_t = self._Q_uk
         if _bc_method == 'z':
@@ -503,7 +503,7 @@ class NumbaLink(SuperLink):
         _A_dk = self._A_dk             # Flow area at downstream end of superlink k
         _B_dk = self._B_dk             # Top width at downstream end of superlink k
         # Placeholder discharge coefficient
-        _C_dk = 0.67
+        _C_dk = self._C_dk
         # Current downstream flows
         _Q_dk_t = self._Q_dk
         if _bc_method == 'z':
@@ -1099,7 +1099,7 @@ class NumbaLink(SuperLink):
                                      _h_uk, _Ik, _ki, n)
         return Q_ik_b, Q_ik_f
 
-    def solve_orifice_flows(self, u=None):
+    def solve_orifice_flows(self, dt, u=None):
         """
         Solve for orifice discharges given superjunction heads at time t + dt.
         """
@@ -1113,12 +1113,17 @@ class NumbaLink(SuperLink):
         _y_max_o = self._y_max_o      # Maximum height of orifice o
         _Co = self._Co                # Discharge coefficient of orifice o
         _Ao = self._Ao                # Maximum flow area of orifice o
+        _V_sj = self._V_sj
         # If no input signal, assume orifice is closed
         if u is None:
             u = np.zeros(self.n_o, dtype=float)
         # Compute orifice flows
         _Qo_next = numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o, _tau_o, _y_max_o, _Co, _Ao,
                                              _J_uo, _J_do)
+        # TODO: Move this inside numba function
+        upstream_ctrl = (H_j[_J_uo] > H_j[_J_do])
+        _Qo_max = np.where(upstream_ctrl, _V_sj[_J_uo], _V_sj[_J_do]) / dt
+        _Qo_next = np.sign(_Qo_next) * np.minimum(np.abs(_Qo_next), _Qo_max)
         # Export instance variables
         self._Qo = _Qo_next
 

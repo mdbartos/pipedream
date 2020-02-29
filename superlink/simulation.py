@@ -72,7 +72,10 @@ class Simulation():
                                 '_h_Ik' : 'Ik',
                                 '_Q_ik' : 'ik',
                                 '_Q_uk' : 'k',
-                                '_Q_dk' : 'k'}
+                                '_Q_dk' : 'k',
+                                '_Qo' : 'o',
+                                '_Qw' : 'w',
+                                '_Qp' : 'p'}
         if t_start is None:
             if any_inputs:
                 self.t_start = min(i.index.min() for i in self.inputs if i is not None)
@@ -146,9 +149,10 @@ class Simulation():
             self.steps = range(max_iter)
         self.states = States()
         for state in self.state_variables:
-            setattr(self.states, state, {})
-            getattr(self.states, state).update({float(model.t) :
-                                                np.copy(model.states[state])})
+            if state in self.model.states:
+                setattr(self.states, state, {})
+                getattr(self.states, state).update({float(model.t) :
+                                                    np.copy(model.states[state])})
 
     def __enter__(self):
         return self
@@ -156,13 +160,14 @@ class Simulation():
     def __exit__(self, exc_type, exc_value, exc_traceback):
         # TODO: Should be able to choose what to record
         for state, state_type in self.state_variables.items():
-            d = getattr(self.states, state)
-            df = pd.DataFrame.from_dict(d, orient='index')
-            if state_type == 'j':
-                df.columns = self.model.superjunction_names
-            elif state_type == 'k':
-                df.columns = self.model.superlink_names
-            setattr(self.states, state, df)
+            if hasattr(self.states, state):
+                d = getattr(self.states, state)
+                df = pd.DataFrame.from_dict(d, orient='index')
+                if state_type == 'j':
+                    df.columns = self.model.superjunction_names
+                elif state_type == 'k':
+                    df.columns = self.model.superlink_names
+                setattr(self.states, state, df)
 
     @property
     def t(self):
@@ -178,10 +183,11 @@ class Simulation():
         if not state_variables:
             state_variables = self.state_variables
         for state in state_variables:
-            if not hasattr(self.states, state):
-                setattr(self.states, state, {})
-            getattr(self.states, state).update({float(model.t) :
-                                                np.copy(getattr(model, state))})
+            if state in self.model.states:
+                if not hasattr(self.states, state):
+                    setattr(self.states, state, {})
+                getattr(self.states, state).update({float(model.t) :
+                                                    np.copy(getattr(model, state))})
         # TODO: Add ability to record error and retry attempts
 
     def print_progress(self, use_checkpoints=True):

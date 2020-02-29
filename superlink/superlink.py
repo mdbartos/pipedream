@@ -152,6 +152,14 @@ class SuperLink():
             self.max_depth_k = superlinks['max_depth'].values.astype(float)
         else:
             self.max_depth_k = np.full(len(superlinks), np.inf, dtype=float)
+        if 'C_uk' in superlinks:
+            self._C_uk = superlinks['C_uk'].values.astype(float)
+        else:
+            self._C_uk = 0.67 * np.ones(self.NK)
+        if 'C_dk' in superlinks:
+            self._C_dk = superlinks['C_dk'].values.astype(float)
+        else:
+            self._C_dk = 0.67 * np.ones(self.NK)
         self._h_Ik = junctions.loc[self._I, 'h_0'].values.astype(float)
         self._A_SIk = junctions.loc[self._I, 'A_s'].values.astype(float)
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(float)
@@ -1888,7 +1896,7 @@ class SuperLink():
         _A_uk = self._A_uk             # Flow area at upstream end of superlink k
         _B_uk = self._B_uk             # Top width at upstream end of superlink k
         # Placeholder discharge coefficient
-        _C_uk = 0.67
+        _C_uk = self._C_uk
         # Current upstream flows
         _Q_uk_t = self._Q_uk
         if _bc_method == 'z':
@@ -1932,7 +1940,7 @@ class SuperLink():
         _A_dk = self._A_dk             # Flow area at downstream end of superlink k
         _B_dk = self._B_dk             # Top width at downstream end of superlink k
         # Placeholder discharge coefficient
-        _C_dk = 0.67
+        _C_dk = self._C_dk
         # Current downstream flows
         _Q_dk_t = self._Q_dk
         if _bc_method == 'z':
@@ -2553,7 +2561,7 @@ class SuperLink():
         self._Q_uk = _Q_uk_next
         self._Q_dk = _Q_dk_next
 
-    def solve_orifice_flows(self, u=None):
+    def solve_orifice_flows(self, dt, u=None):
         """
         Solve for orifice discharges given superjunction heads at time t + dt.
         """
@@ -2568,6 +2576,7 @@ class SuperLink():
         _Co = self._Co                # Discharge coefficient of orifice o
         _Ao = self._Ao                # Maximum flow area of orifice o
         _tau_o = self._tau_o
+        _V_sj = self._V_sj
         # If no input signal, assume orifice is closed
         if u is None:
             u = np.zeros(self.n_o, dtype=float)
@@ -2581,7 +2590,8 @@ class SuperLink():
         _H_do = H_j[_J_do]
         _z_inv_uo = _z_inv_j[_J_uo]
         # Create indicator functions
-        _omega_o = (_H_uo >= _H_do).astype(float)
+        upstream_ctrl = (_H_uo >= _H_do)
+        _omega_o = (upstream_ctrl).astype(float)
         # Compute universal coefficients
         _gamma_oo = 2 * g * _Co**2 * _Ao**2
         # Create conditionals
@@ -2618,6 +2628,8 @@ class SuperLink():
         # Compute flow
         _Qo_next = (-1)**(1 - _omega_o) * np.sqrt(np.abs(
                 _alpha_oo * _H_uo + _beta_oo * _H_do + _chi_oo))
+        _Qo_max = np.where(upstream_ctrl, _V_sj[_J_uo], _V_sj[_J_do]) / dt
+        _Qo_next = np.sign(_Qo_next) * np.minimum(np.abs(_Qo_next), _Qo_max)
         # Export instance variables
         self._Qo = _Qo_next
 
@@ -3511,7 +3523,7 @@ class SuperLink():
             self.solve_sparse_matrix(implicit=implicit)
         self.solve_superlink_flows()
         if self.orifices is not None:
-            self.solve_orifice_flows(u=u_o)
+            self.solve_orifice_flows(dt=dt, u=u_o)
         if self.weirs is not None:
             self.solve_weir_flows(u=u_w)
         if self.pumps is not None:
