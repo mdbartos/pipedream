@@ -37,7 +37,6 @@ class Simulation():
             self.H_bc = H_bc
         if Q_Ik is not None:
             self.Q_Ik = Q_Ik.copy(deep=True)
-            self.Q_Ik = self.Q_Ik.iloc[:, model.permutations]
             self.Q_Ik.index = self.Q_Ik.index.astype(float)
         else:
             self.Q_Ik = Q_Ik
@@ -436,7 +435,7 @@ class Simulation():
         else:
             banded = kwargs.pop('banded')
         # Step model forward with stepsize dt
-        self.model.step(Q_in=Q_in_next, H_bc=H_bc_next, dt=dt, banded=banded,
+        self.model.step(Q_in=Q_in_next, H_bc=H_bc_next, Q_0Ik=Q_Ik_next, dt=dt, banded=banded,
                         **kwargs)
 
 class States():

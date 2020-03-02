@@ -2,20 +2,26 @@ import numpy as np
 import scipy.optimize
 
 class GreenAmpt():
-    def __init__(self, Ks, theta_s, theta_i, theta_r, psi_b, lambda_o):
+    def __init__(self, psi_f, Ks, theta_s, theta_i):
+        # Suction head
+        self.psi_f = psi_f
+        # Saturated hydraulic conductivity
         self.Ks = Ks
+        # Saturated soil moisture content
         self.theta_s = theta_s
+        # Minimum (initial) soil moisture content
         self.theta_i = theta_i
-        self.theta_r = theta_r
-        self.psi_b = psi_b
+        # Initial soil moisture deficit
         self.theta_d = (theta_s - theta_i)
+        # Soil moisture deficit in upper layer
         self.theta_du = np.copy(self.theta_d)
+        # Maximum soil moisture deficit
         self.theta_dmax = np.copy(self.theta_d)
         self.N = len(Ks)
         # Initialize constant parameters
         m_to_in = 39.97
         in_to_m = 0.0254
-        self.psi_f = self.suction_head(theta_i, theta_s, theta_r, Ks, psi_b, lambda_o)
+        # Soil capillary suction
         self.Lu = (4 * np.sqrt(Ks * m_to_in)) * in_to_m
         self.kr = np.sqrt(Ks * m_to_in) / 75
         self.Tr = 4.5 / np.sqrt(Ks * m_to_in)
@@ -27,14 +33,16 @@ class GreenAmpt():
         self.is_saturated = np.zeros(self.N, dtype=bool)
         self.iter_count = 0
 
-    def s2(self, theta_i, theta_s, theta_r, Ks, psi_b, lambda_o):
+    @classmethod
+    def s2(cls, theta_i, theta_s, theta_r, Ks, psi_b, lambda_o):
         num = 2*(theta_s - theta_i) * Ks * psi_b * ((theta_s - theta_r)**(1 / lambda_o + 3)
                                             - (theta_i - theta_r)**(1 / lambda_o + 3))
         den = (lambda_o * ((theta_s - theta_r)**(1 / lambda_o + 3)))*(1 / lambda_o + 3)
         return num / den
 
-    def suction_head(self, theta_i, theta_s, theta_r, Ks, psi_b, lambda_o):
-        num = self.s2(theta_i, theta_s, theta_r, Ks, psi_b, lambda_o)
+    @classmethod
+    def suction_head(cls, theta_i, theta_s, theta_r, Ks, psi_b, lambda_o):
+        num = cls.s2(theta_i, theta_s, theta_r, Ks, psi_b, lambda_o)
         den = (2 * Ks * (theta_s - theta_i))
         return num / den
 
