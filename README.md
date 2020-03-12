@@ -16,7 +16,7 @@ doi: 10.1061/(asce)0733-9429(1998)124:3(307)
 ```python
 # Import modules
 import pandas as pd
-from superlink.superlink import SuperLink
+from superlink.hydraulics import SuperLink
 from superlink.simulation import Simulation
 
 # Specify data path
