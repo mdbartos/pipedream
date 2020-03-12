@@ -54,7 +54,7 @@ with Simulation(superlink, Q_in=Q_in, H_bc=H_bc) as simulation:
         simulation.print_progress()
 ```
 
-> `[==================================================] 100.0%`
+> `[==================================================] 100.0% [0.82 s]`
 
 
 ### Plot results
