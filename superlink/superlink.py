@@ -1686,7 +1686,7 @@ class SuperLink():
 
     def orifice_hydraulic_geometry(self, u=None):
         """
-        Compute hydraulic geometry for each link.
+        Compute hydraulic geometry for each orifice.
         """
         # Import instance variables
         _Ao = self._Ao             # Flow area at link ik

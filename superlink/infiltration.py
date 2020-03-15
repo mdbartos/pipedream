@@ -2,39 +2,71 @@ import numpy as np
 import scipy.optimize
 
 class GreenAmpt():
-    def __init__(self, psi_f, Ks, theta_s, theta_i):
-        # Suction head
-        self.psi_f = psi_f
-        # Saturated hydraulic conductivity
-        self.Ks = Ks
-        # Saturated soil moisture content
-        self.theta_s = theta_s
-        # Minimum (initial) soil moisture content
-        self.theta_i = theta_i
+    """
+    Green Ampt infiltration model, as described in:
+
+    Green, W.H. & Ampt, G. (1911). Studies of soil physics, Part I -
+    the flow of air and water through soils. J. Ag. Sci. 4:1-24.
+
+    Inputs:
+    -------
+    soil_params: pd.DataFrame
+        Table containing soil parameters for all catchments.
+        The following fields are required.
+
+        |---------+-------+------+------------------------------------------------------|
+        | Field   | Type  | Unit | Description                                          |
+        |---------+-------+------+------------------------------------------------------|
+        | psi_f   | float | m    | Matric potential of the wetting front (suction head) |
+        | Ks      | float | m/s  | Saturated hydraulic conductivity                     |
+        | theta_s | float | -    | Saturated soil moisture content                      |
+        | theta_i | float | -    | Initial soil moisture content                        |
+        |---------+-------+------+------------------------------------------------------|
+
+    Methods:
+    --------
+    step: Advances model forward in time, computing infiltration
+
+    Attributes:
+    -----------
+    f: infiltration rate (m/s)
+    F: cumulative infiltration (m)
+    d: ponded depth (m)
+    T: recovery time (s)
+    is_saturated: indicates whether soil element is currently saturated (t/f)
+    """
+    def __init__(self, soil_params):
+        self.N = len(soil_params)
+        for field in ('psi_f', 'Ks', 'theta_s', 'theta_i'):
+            if field in soil_params.columns:
+                setattr(self, field, soil_params[field].values.astype(float))
+            else:
+                raise KeyError('Field `{}` required in soil_params table'.format(field))
         # Initial soil moisture deficit
-        self.theta_d = (theta_s - theta_i)
+        self.theta_d = (self.theta_s - self.theta_i)
         # Soil moisture deficit in upper layer
         self.theta_du = np.copy(self.theta_d)
         # Maximum soil moisture deficit
         self.theta_dmax = np.copy(self.theta_d)
-        self.N = len(Ks)
         # Initialize constant parameters
         m_to_in = 39.97
         in_to_m = 0.0254
+        s_to_hr = 3600
+        hr_to_s = 1 / 3600
         # Soil capillary suction
-        self.Lu = (4 * np.sqrt(Ks * m_to_in)) * in_to_m
-        self.kr = np.sqrt(Ks * m_to_in) / 75
-        self.Tr = 4.5 / np.sqrt(Ks * m_to_in)
+        self.Lu = (4 * np.sqrt(self.Ks * m_to_in * s_to_hr)) * in_to_m
+        self.kr = (np.sqrt(self.Ks * m_to_in * s_to_hr) / 75) * hr_to_s
+        self.Tr = (4.5 / np.sqrt(self.Ks * m_to_in * s_to_hr)) * s_to_hr
         # Initialize time-dependent variables
-        self.d = np.zeros(self.N, dtype=float)              # Ponded depth
-        self.F = np.zeros(self.N, dtype=float)              # Cumulative infiltration (m)
-        self.f = np.zeros(self.N, dtype=float)              # Instantaneous infiltration rate (m/hr)
-        self.T = np.zeros(self.N, dtype=float)              # Recovery time before next event (hr)
+        self.d = np.zeros(self.N, dtype=float)
+        self.F = np.zeros(self.N, dtype=float)
+        self.f = np.zeros(self.N, dtype=float)
+        self.T = np.zeros(self.N, dtype=float)
         self.is_saturated = np.zeros(self.N, dtype=bool)
         self.iter_count = 0
 
     @classmethod
-    def s2(cls, theta_i, theta_s, theta_r, Ks, psi_b, lambda_o):
+    def _s2(cls, theta_i, theta_s, theta_r, Ks, psi_b, lambda_o):
         num = 2*(theta_s - theta_i) * Ks * psi_b * ((theta_s - theta_r)**(1 / lambda_o + 3)
                                             - (theta_i - theta_r)**(1 / lambda_o + 3))
         den = (lambda_o * ((theta_s - theta_r)**(1 / lambda_o + 3)))*(1 / lambda_o + 3)
@@ -42,21 +74,55 @@ class GreenAmpt():
 
     @classmethod
     def suction_head(cls, theta_i, theta_s, theta_r, Ks, psi_b, lambda_o):
-        num = cls.s2(theta_i, theta_s, theta_r, Ks, psi_b, lambda_o)
+        """
+        Compute suction head of soil (matric potential of wetting front).
+        """
+        num = cls._s2(theta_i, theta_s, theta_r, Ks, psi_b, lambda_o)
         den = (2 * Ks * (theta_s - theta_i))
         return num / den
 
     def available_rainfall(self, dt, i):
+        """
+        Compute available rainfall rate
+
+        Inputs:
+        -------
+        dt: float
+            Time step (seconds)
+        i: float
+            Rainfall rate (m/s)
+        """
         d = self.d
         # 1. Compute available rainfall rate
         ia = i + d / dt
         return ia
 
     def decrement_recovery_time(self, dt):
+        """
+        Decrement recovery time
+
+        Inputs:
+        -------
+        dt: float
+            Time step (seconds)
+        """
         # 2. Decrease recovery time
         self.T -= dt
 
     def unsaturated_case_1(self, dt, case_1):
+        """
+        Solve Green-Ampt model for first unsaturated case:
+
+        1) Soil is unsaturated
+        2) Available rainfall is zero
+
+        Inputs:
+        -------
+        dt: float
+            Time step (seconds)
+        case_1: np.ndarray (bool)
+            Indicates whether case 1 applies to given element
+        """
         # 3. If available rainfall is zero:
         kr = self.kr[case_1]
         Lu = self.Lu[case_1]
@@ -79,13 +145,29 @@ class GreenAmpt():
         if cond.any():
             theta_d[cond] = theta_du[cond]
             F[cond] = 0.
-        # Export
+        # Export instance variables
         self.F[case_1] = F
         self.f[case_1] = f
         self.theta_du[case_1] = theta_du
         self.theta_d[case_1] = theta_d
 
     def unsaturated_case_2(self, dt, ia, case_2):
+        """
+        Solve Green-Ampt model for second unsaturated case:
+
+        1) Soil is unsaturated
+        2) Available rainfall greater than zero
+        3) Available rainfall is less than saturated hydraulic conductivity
+
+        Inputs:
+        -------
+        dt: float
+            Time step (seconds)
+        ia: np.ndarray (float)
+            Available rainfall (m/s)
+        case_2: np.ndarray (bool)
+            Indicates whether case 2 applies to given element
+        """
         # 4. If available rainfall does not exceed saturated hydr. conductivity
         ia = ia[case_2]
         Lu = self.Lu[case_2]
@@ -99,12 +181,27 @@ class GreenAmpt():
         F += dF
         theta_du -= dF / Lu
         theta_du[:] = np.minimum(np.maximum(theta_du, 0), theta_dmax)
-        # Export
+        # Export instance variables
         self.F[case_2] = F
         self.f[case_2] = f
         self.theta_du[case_2] = theta_du
 
     def unsaturated_case_3(self, dt, ia, case_3):
+        """
+        Solve Green-Ampt model for second unsaturated case:
+
+        1) Soil is unsaturated
+        2) Available rainfall is greater than saturated hydraulic conductivity
+
+        Inputs:
+        -------
+        dt: float
+            Time step (seconds)
+        ia: np.ndarray (float)
+            Available rainfall (m/s)
+        case_3: np.ndarray (bool)
+            Indicates whether case 3 applies to given element
+        """
         # 5. If availble rainfall rate exceeds saturated hydr. conductivity
         orig_ia = np.copy(ia)
         ia = ia[case_3]
@@ -163,12 +260,26 @@ class GreenAmpt():
             theta_du[cond_2] = np.minimum(np.maximum(theta_du[cond_2], 0),
                                                 theta_dmax[cond_2])
             f[cond_2] = dF / dt
-        # Export
+        # Export instance variables
         self.F[case_3] = F
         self.f[case_3] = f
         self.theta_du[case_3] = theta_du
 
     def saturated_case(self, dt, ia, sat_case):
+        """
+        Solve Green-Ampt model for saturated case:
+
+        1) Soil is saturated
+
+        Inputs:
+        -------
+        dt: float
+            Time step (seconds)
+        ia: np.ndarray (float)
+            Available rainfall (m/s)
+        sat_case: np.ndarray (bool)
+            Indicates whether saturated case applies to given element
+        """
         ia = ia[sat_case]
         Lu = self.Lu[sat_case]
         Ks = self.Ks[sat_case]
@@ -199,23 +310,69 @@ class GreenAmpt():
         theta_du -= dF / Lu
         theta_du[:] = np.minimum(np.maximum(theta_du, 0), theta_dmax)
         f[:] = dF / dt
-        # Export
+        # Export instance variables
         self.F[sat_case] = F
         self.f[sat_case] = f
         self.theta_du[sat_case] = theta_du
         self.is_saturated[sat_case] = is_saturated
 
     def integrated_green_ampt(self, F_2, F_1, dt, Ks, theta_d, psi_s):
-        # NOTE: I'm putting abs to prevent log error
+        """
+        Solve integrated form of Green Ampt equation for cumulative infiltration.
+
+        Inputs:
+        -------
+        F_2: np.ndarray (float)
+            Cumulative infiltration at current timestep (m)
+        F_1: np.ndarray (float)
+            Cumulative infiltration at next timestep (m)
+        dt: float
+            Time step (seconds)
+        Ks: np.ndarray (float)
+            Saturated hydraulic conductivity (m/s)
+        theta_d: np.ndarray (float)
+            Soil moisture deficit
+        psi_s: np.ndarray (float)
+            Soil suction head (m)
+        """
         C = Ks * dt + F_1 - psi_s * theta_d * np.log(F_1 + np.abs(psi_s) * theta_d)
         zero = C + psi_s * theta_d * np.log(F_2 + np.abs(psi_s) * theta_d) - F_2
         return zero
 
     def derivative_green_ampt(self, F_2, F_1, dt, Ks, theta_d, psi_s):
+        """
+        Derivative of Green Ampt equation for cumulative infiltration.
+
+        Inputs:
+        -------
+        F_2: np.ndarray (float)
+            Cumulative infiltration at current timestep (m)
+        F_1: np.ndarray (float)
+            Cumulative infiltration at next timestep (m)
+        dt: float
+            Time step (seconds)
+        Ks: np.ndarray (float)
+            Saturated hydraulic conductivity (m/s)
+        theta_d: np.ndarray (float)
+            Soil moisture deficit
+        psi_s: np.ndarray (float)
+            Soil suction head (m)
+        """
         zero = (psi_s * theta_d / (psi_s * theta_d + F_2)) - 1
         return zero
 
     def step(self, dt, i):
+        """
+        Advance model forward in time, computing infiltration rate and cumulative
+        infiltration.
+
+        Inputs:
+        -------
+        dt: float
+            Time step (seconds)
+        i: np.ndarray (float)
+            Precipitation rate (m/s)
+        """
         is_saturated = self.is_saturated
         Ks = self.Ks
         ia = self.available_rainfall(dt, i)
