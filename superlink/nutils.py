@@ -18,8 +18,25 @@ def interpolate_sample(x, xp, fp):
     return result
 
 @njit
+def newton_raphson(f, df, x0, args,
+                   max_iter=50, atol=1.48e-8, rtol=0.0):
+    p0 = 1.0 * x0
+    for n in range(max_iter):
+        fx = f(p0, args)
+        if fx == 0:
+            return p0
+        dfx = df(p0, args)
+        if dfx == 0:
+            raise ValueError('Derivative is zero')
+        p = p0 - fx / dfx
+        if np.abs(p - p0) <= (atol + rtol * np.abs(p0)):
+            return p
+        p0 = p
+    raise ValueError('No solution found')
+
+@njit
 def bounded_newton_raphson(f, df, x0, x_lb, x_ub, args,
-                           max_iter=1000, eps=1e-8):
+                           max_iter=50, atol=1.48e-8, rtol=0.0):
     # 1. Initial steps
     # 1a.
     x = x0
@@ -47,7 +64,7 @@ def bounded_newton_raphson(f, df, x0, x_lb, x_ub, args,
             dx = fx / dfx
             x = x - dx
         # 4.
-        if np.abs(dx) < eps:
+        if np.abs(dx) < atol:
             return x
         # 5.
         fx = f(x, args)
@@ -56,6 +73,15 @@ def bounded_newton_raphson(f, df, x0, x_lb, x_ub, args,
             x_lb = x
         else:
             x_ub = x
+    raise ValueError('No zero found')
+
+@njit
+def numba_any(x):
+    n = x.size
+    for i in range(n):
+        if x[i]:
+            return True
+    return False
 
 @njit
 def _kalman_semi_implicit(Z_next, P_x_k_k, A_1, A_2, b, H, C,
