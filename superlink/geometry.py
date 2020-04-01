@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.interpolate
 
+# Allowed geometries and their numeric codes
 geom_code = {
     'circular' : 1,
     'rect_closed' : 2,
@@ -12,9 +13,18 @@ geom_code = {
     'wide' : 8
 }
 
+# Machine precision
 eps = np.finfo(float).eps
 
 class Circular():
+    """
+    Class for computing circular hydraulic geometries.
+
+    Inputs:
+    -------
+    g1: np.ndarray
+        Diameter of circular cross-section
+    """
     def __init__(self):
         pass
 
