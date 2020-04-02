@@ -249,8 +249,32 @@ class SuperLink():
 
     end_method: str
         (Deprecated)
-    """
 
+    Methods:
+    -----------
+    step : Advance model to next time step, computing hydraulic states
+
+    Attributes:
+    -----------
+    t        : Current time (s)
+    H_j      : Superjunction heads (m)
+    h_Ik     : Junction depths (m)
+    Q_ik     : Link flows (m^3/s)
+    Q_uk     : Flows into upstream ends of superlinks (m^3/s)
+    Q_dk     : Flows into downstream ends of superlinks (m^3/s)
+    Q_o      : Orifice flows (m^3/s)
+    Q_w      : Weir flows (m^3/s)
+    Q_p      : Pump flows (m^3/s)
+    A_ik     : Cross-sectional area of flow in links (m^2)
+    Pe_ik    : Wetted perimeter in links (m)
+    R_ik     : Hydraulic radius in links (m)
+    B_ik     : Top width of flow in links (m)
+    A_sj     : Superjunction surface areas (m^2)
+    V_sj     : Superjunction stored volumes (m^3)
+    z_inv_j  : Superjunction invert elevation (m)
+    z_inv_uk : Offset of superlink upstream invert above superjunction (m)
+    z_inv_dk : Offset of superlink downstream invert above superjunction (m)
+    """
     def __init__(self, superlinks, superjunctions,
                  links=None, junctions=None,
                  transects={}, storages={},
@@ -660,6 +684,70 @@ class SuperLink():
         # Reset iteration counter
         self.iter_count = 0
         self.t = 0
+
+    @property
+    def h_Ik(self):
+        return self._h_Ik
+
+    @property
+    def Q_ik(self):
+        return self._Q_ik
+
+    @property
+    def Q_uk(self):
+        return self._Q_uk
+
+    @property
+    def Q_dk(self):
+        return self._Q_dk
+
+    @property
+    def Q_o(self):
+        return self._Qo
+
+    @property
+    def Q_w(self):
+        return self._Qw
+
+    @property
+    def Q_p(self):
+        return self._Qp
+
+    @property
+    def A_ik(self):
+        return self._A_ik
+
+    @property
+    def Pe_ik(self):
+        return self._Pe_ik
+
+    @property
+    def R_ik(self):
+        return self._R_ik
+
+    @property
+    def B_ik(self):
+        return self._B_ik
+
+    @property
+    def A_sj(self):
+        return self._A_sj
+
+    @property
+    def V_sj(self):
+        return self._V_sj
+
+    @property
+    def z_inv_j(self):
+        return self._z_inv_j
+
+    @property
+    def z_inv_uk(self):
+        return self._z_inv_uk
+
+    @property
+    def z_inv_dk(self):
+        return self._z_inv_dk
 
     @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):

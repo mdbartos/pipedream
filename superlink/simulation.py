@@ -497,6 +497,8 @@ class Simulation():
             Filter coefficients for computing adaptive step size
         safety_factor : float
             Safety factor for adaptive step size
+        kwargs : **dict
+            Keyword arguments passed to self.model.step
         """
         if (self._iter_count == 0):
             self._clock_start_time = time.time()
@@ -591,6 +593,9 @@ class Simulation():
                         **kwargs)
 
 class States():
+    """
+    Class for holding model states
+    """
     def __init__(self):
         pass
 
