@@ -201,6 +201,36 @@ class nGreenAmpt(GreenAmpt):
 @njit
 def run_green_ampt_newton(F_2, x0, F_1, dt, Ks, theta_d, psi_f, ia, max_iter=50,
                           atol=1.48e-8, rtol=0.0, bounded=True):
+    """
+    Use Newton-Raphson iteration to find cumulative infiltration at next time step (F_2).
+
+    Inputs:
+    -------
+    F_2 : np.ndarray (float)
+        Cumulative infiltration at next time step (meters).
+    x0 : np.ndarray (float)
+        Initial guess for cumulative infiltration (meters)
+    F_1 : np.ndarray (float)
+        Cumulative infiltration at previous time step (meters)
+    dt : np.ndarray (float)
+        Time step (seconds)
+    Ks : np.ndarray (float)
+        Saturated hydraulic conductivity (m/s)
+    theta_d : np.ndarray (float)
+        Soil moisture deficit (-)
+    psi_f : np.ndarray (float)
+        Matric potential of the wetting front (m)
+    ia : np.ndarray (float)
+        Available rainfall depth (meters)
+    max_iter : int
+        Maximum number of Newton-Raphson iterations
+    atol : float
+        Allowable (absolute) error of the zero value
+    rtol : float
+        Allowable (relative) error of the zero value
+    bounded : bool
+        If True, use bounded Newton-Raphson iteration
+    """
     n = F_2.size
     for i in range(n):
         x_0_i = x0[i]

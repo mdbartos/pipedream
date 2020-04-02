@@ -137,6 +137,11 @@ def bounded_newton_raphson(f, df, x0, x_lb, x_ub, args,
 def numba_any(x):
     """
     Determine if array x has any nonzero elements.
+
+    Inputs:
+    -------
+    x : np.ndarray
+        Array to check
     """
     n = x.size
     for i in range(n):
