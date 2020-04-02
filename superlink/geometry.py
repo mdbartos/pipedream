@@ -17,14 +17,6 @@ geom_code = {
 eps = np.finfo(float).eps
 
 class Circular():
-    """
-    Class for computing circular hydraulic geometries.
-
-    Inputs:
-    -------
-    g1: np.ndarray
-        Diameter of circular cross-section
-    """
     def __init__(self):
         pass
 
@@ -40,7 +32,7 @@ class Circular():
         h_Ip1k: np.ndarray
             Depth at downstream junction (meters)
         g1: np.ndarray
-            Diameter of circular cross-section (meters)
+            Diameter of channel (meters)
         """
         d = g1
         y = (h_Ik + h_Ip1k) / 2
@@ -66,7 +58,7 @@ class Circular():
         h_Ip1k: np.ndarray
             Depth at downstream junction (meters)
         g1: np.ndarray
-            Diameter of circular cross-section (meters)
+            Diameter of channel (meters)
         """
         d = g1
         y = (h_Ik + h_Ip1k) / 2
@@ -109,9 +101,9 @@ class Circular():
         h_Ip1k: np.ndarray
             Depth at downstream junction (meters)
         g1: np.ndarray
-            Diameter of circular cross-section (meters)
+            Diameter of channel (meters)
         pslot: float
-            Width of Preisman slot (as a ratio of the diameter)
+            Width of Preissman slot (as a ratio of the diameter)
         """
         d = g1
         y = (h_Ik + h_Ip1k) / 2
@@ -211,6 +203,8 @@ class Rect_Closed():
             Height of channel (meters)
         g2: np.ndarray
             Width of channel (meters)
+        pslot: float
+            Width of Preissman slot (as a ratio of the width)
         """
         y_max = g1
         b = g2
@@ -403,7 +397,6 @@ class Triangular():
         y[y < 0] = 0
         cond = (y < y_max)
         B = np.zeros(y.size)
-        # B[~cond] = 0.001 * 2 * m[~cond] * y[~cond]
         B[~cond] = 2 * m[~cond] * y_max[~cond]
         B[cond] = 2 * m[cond] * y[cond]
         return B
