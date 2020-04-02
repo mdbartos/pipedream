@@ -3,6 +3,18 @@ from numba import njit
 
 @njit
 def interpolate_sample(x, xp, fp):
+    """
+    Interpolate a sample `fp` over domain `xp` at point `x`.
+
+    Inputs:
+    -------
+    x : float
+        The x-coordinate at which to evaluate the interpolated value
+    xp: np.ndarray (float)
+        The x-coordinates of the data points
+    fp: np.ndarray (float)
+        The y-coordinates of the data points
+    """
     n = xp.shape[0]
     m = fp.shape[1]
     ix = np.searchsorted(xp, x)
@@ -20,6 +32,27 @@ def interpolate_sample(x, xp, fp):
 @njit
 def newton_raphson(f, df, x0, args,
                    max_iter=50, atol=1.48e-8, rtol=0.0):
+    """
+    Perform the Newton-Raphson iteration to find the zero of a function over a
+    bounded interval.
+
+    Inputs:
+    -------
+    f : function
+        Function to evaluate
+    df: function
+        Derivative of the function to evaluate
+    x0: float
+        Initial estimate of the zero
+    args: sequence
+        Extra arguments to function `f`
+    max_iter: int
+        Maximum number of Newton-Raphson iterations
+    atol: float
+        Allowable (absolute) error of the zero value
+    rtol: float
+        Allowable (relative) error of the zero value
+    """
     p0 = 1.0 * x0
     for n in range(max_iter):
         fx = f(p0, args)
@@ -37,6 +70,31 @@ def newton_raphson(f, df, x0, args,
 @njit
 def bounded_newton_raphson(f, df, x0, x_lb, x_ub, args,
                            max_iter=50, atol=1.48e-8, rtol=0.0):
+    """
+    Perform the Newton-Raphson iteration to find the zero of a function over a
+    bounded interval.
+
+    Inputs:
+    -------
+    f : function
+        Function to evaluate
+    df: function
+        Derivative of the function to evaluate
+    x0: float
+        Initial estimate of the zero
+    x_lb: float
+        Lower bound
+    x_ub: float
+        Upper bound
+    args: sequence
+        Extra arguments to function `f`
+    max_iter: int
+        Maximum number of Newton-Raphson iterations
+    atol: float
+        Allowable (absolute) error of the zero value
+    rtol: float
+        Allowable (relative) error of the zero value
+    """
     # 1. Initial steps
     # 1a.
     x = x0
@@ -77,6 +135,9 @@ def bounded_newton_raphson(f, df, x0, x_lb, x_ub, args,
 
 @njit
 def numba_any(x):
+    """
+    Determine if array x has any nonzero elements.
+    """
     n = x.size
     for i in range(n):
         if x[i]:
@@ -86,6 +147,9 @@ def numba_any(x):
 @njit
 def _kalman_semi_implicit(Z_next, P_x_k_k, A_1, A_2, b, H, C,
                           Qcov, Rcov):
+    """
+    Perform Kalman filtering to estimate state and error covariance.
+    """
     I = np.eye(A_1.shape[0])
     y_k1_k = b
     A_1_inv = np.linalg.inv(A_1)
