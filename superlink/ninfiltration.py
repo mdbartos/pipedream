@@ -5,6 +5,39 @@ from numba import njit
 import scipy.optimize
 
 class nGreenAmpt(GreenAmpt):
+    """
+    Green Ampt infiltration model, as described in:
+
+    Green, W.H. & Ampt, G. (1911). Studies of soil physics, Part I -
+    the flow of air and water through soils. J. Ag. Sci. 4:1-24.
+
+    Inputs:
+    -------
+    soil_params: pd.DataFrame
+        Table containing soil parameters for all catchments.
+        The following fields are required.
+
+        |---------+-------+------+------------------------------------------------------|
+        | Field   | Type  | Unit | Description                                          |
+        |---------+-------+------+------------------------------------------------------|
+        | psi_f   | float | m    | Matric potential of the wetting front (suction head) |
+        | Ks      | float | m/s  | Saturated hydraulic conductivity                     |
+        | theta_s | float | -    | Saturated soil moisture content                      |
+        | theta_i | float | -    | Initial soil moisture content                        |
+        |---------+-------+------+------------------------------------------------------|
+
+    Methods:
+    --------
+    step: Advances model forward in time, computing infiltration
+
+    Attributes:
+    -----------
+    f: infiltration rate (m/s)
+    F: cumulative infiltration (m)
+    d: ponded depth (m)
+    T: recovery time (s)
+    is_saturated: indicates whether soil element is currently saturated (t/f)
+    """
     def __init__(self, soil_params):
         super().__init__(soil_params)
 

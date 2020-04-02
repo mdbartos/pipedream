@@ -222,6 +222,33 @@ class SuperLink():
         - `b`   : Backwards (default)
         - `f`   : Forwards
         - `lsq` : Least-squares
+
+    auto_permute: bool
+        If True, permute the superjunctions to enable use of a banded matrix solver and
+        increase solver speed. Superjunctions are permuted using the Reverse
+        Cuthill-McKee algorithm.
+
+    njunctions_fixed: int
+        If junctions/links are not provided, this gives the number of fixed internal
+        junctions that will be generated inside each superlink.
+
+    sparse: bool
+        (Deprecated)
+
+    bc_method: str
+        (Deprecated)
+
+    exit_hydraulics: bool
+        (Deprecated)
+
+    end_length: float
+        (Deprecated)
+
+    bc_method: str
+        (Deprecated)
+
+    end_method: str
+        (Deprecated)
     """
 
     def __init__(self, superlinks, superjunctions,
