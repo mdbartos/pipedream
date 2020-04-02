@@ -18,6 +18,69 @@ else:
 eps = np.finfo(float).eps
 
 class Simulation():
+    """
+    Class for managing and executing simulations.
+
+    Inputs:
+    -------
+    model : superlink.Superlink instance
+        Hydraulic model to simulate
+    Q_in : pd.DataFrame (T x M)
+        Flow input at each superjunction (m^3/s)
+    H_bc : pd.DataFrame (T x M)
+        Boundary stage at each superjunction (m)
+    Q_Ik : pd.DataFrame (T x MK)
+        Flow input at each internal junction (m^3/s)
+    t_start : int
+        Simulation start time (defaults to minimum of input data start times)
+    t_end : int
+        Simulation end time (defaults to maximum of input data end times)
+    dt : float
+        Default step size for simulation (seconds)
+    max_iter : int
+        Maximum allowable number of time steps in simulation
+    min_dt : float
+        Minimum allowable step size for simulation
+    max_dt : float
+        Maximum allowable step size for simulation
+    tol : float
+        Tolerance for truncation error when computing adaptive step size
+    min_rel_change : float
+        Minimum relative change for adaptive step size
+    max_rel_change : float
+        Maximum relative change for adaptive step size
+    safety_factor : float
+        Safety factor for adaptive step size
+    Qcov : np.ndarray (M x M)
+        Process noise covariance for Kalman Filter
+    Rcov : np.ndarray (M x M)
+        Measurement noise covariance for Kalman Filter
+    C : np.ndarray (M x a)
+        Signal-input matrix for Kalman Filter
+    H : np.ndarray (b x M)
+        Observation matrix for Kalman Filter
+
+    Methods:
+    --------
+    step : Advance model forward in time
+    record_state : Record current simulation state
+    load_state : Load recorded simulation state
+    print_progress : Print progress bar
+    filter_step_size : Compute adaptive step size
+    kalman_filter : Fuse observed data using Kalman Filter
+
+    Attributes:
+    -----------
+    states : superlink.simulation.States instance
+        Class containing a collection of model states, including:
+            H_j  - Superjunction heads (meters)
+            Q_ik - Link flows (m^3/s)
+            h_Ik - Junction depths (m)
+            Q_uk - Flow into upstream ends of superlinks (m^3/s)
+            Q_dk - Flow into downstream ends of superlinks (m^3/s)
+    t : float
+        Current simulation time
+    """
     def __init__(self, model, Q_in=None, H_bc=None, Q_Ik=None, t_start=None,
                  t_end=None, dt=None, max_iter=None, min_dt=1, max_dt=200,
                  tol=0.01, min_rel_change=0.5, max_rel_change=1.5, safety_factor=0.9,
@@ -173,9 +236,25 @@ class Simulation():
         return self.model.t
 
     def load_state(self, state={}):
+        """
+        Load simulation state
+
+        Inputs:
+        -------
+        state : dict
+            Dict of state variables {variable_name : array}
+        """
         self.model.load_state(state)
 
     def record_state(self, state_variables={}):
+        """
+        Save simulation state
+
+        Inputs:
+        -------
+        state_variables : dict
+            Dict of state variables {variable_name : indexing_scheme}
+        """
         # TODO: Should be able to choose what to record
         # if not state_variables:
         model = self.model
@@ -190,6 +269,14 @@ class Simulation():
         # TODO: Add ability to record error and retry attempts
 
     def print_progress(self, use_checkpoints=True):
+        """
+        Print simulation progress
+
+        Inputs:
+        -------
+        use_checkpoints : bool
+            If True, use checkpoints to speed printing
+        """
         # Import current and ending time
         t = self.t
         t_end = self.t_end
@@ -280,6 +367,8 @@ class Simulation():
                          min_dt=None, max_dt=None, min_rel_change=None, max_rel_change=None,
                          safety_factor=1.0, k=2):
         """
+        Compute adaptive step size
+
         Recommended coeffs:
          k(b1)  k(b2)  k(b3)    a2     a3
         ----------------------------------
@@ -291,6 +380,29 @@ class Simulation():
         [  5/4   1/2   -3/4   -1/4  -3/4 ]  H0321
         [  1/3  1/18  -5/18   -5/6  -1/6 ]  H321
         ----------------------------------
+
+        Inputs:
+        -------
+        tol : float
+            Allowable tolerance for scaled error
+        dts : list
+            Timestep sizes at previous n iterations (seconds)
+        errs : list
+            Scaled and normed errors at previous n iterations
+        coeffs : list (length 6)
+            Filter coefficients for computing stepsize
+        min_dt : float
+            Minimum allowed stepsize (seconds)
+        max_dt : float
+            Maximum allowed stepsize (seconds)
+        min_rel_change : float
+            Minimum relative change in stepsize
+        max_rel_change : float
+            Maximum relative change in stepsize
+        safety_factor : float
+            Safety factor for computing stepsize
+        k : int
+            Order of the truncation error
         """
         if dts is None:
             dts = self.dts
@@ -325,6 +437,26 @@ class Simulation():
 
     def kalman_filter(self, Z, H=None, C=None, Qcov=None, Rcov=None, P_x_k_k=None,
                       dt=None):
+        """
+        Apply Kalman Filter to fuse observed data into model.
+
+        Inputs:
+        -------
+        Z : np.ndarray (b x 1)
+            Observed data
+        H : np.ndarray (M x b)
+            Observation matrix
+        C : np.ndarray (a x M)
+            Signal-input matrix
+        Qcov : np.ndarray (M x M)
+            Process noise covariance
+        Rcov : np.ndarray (M x M)
+            Measurement noise covariance
+        P_x_k_k : np.ndarray (M x M)
+            Posterior error covariance estimate at previous timestep
+        dt : float
+            Timestep (seconds)
+        """
         if dt is None:
             dt = self.dt
         if P_x_k_k is None:
@@ -346,6 +478,26 @@ class Simulation():
 
     def step(self, dt=None, subdivisions=1, retries=0, tol=1, norm=2,
              coeffs=[0.5, 0.5, 0, 0.5, 0], safety_factor=1.0, **kwargs):
+        """
+        Advance model forward to next timestep.
+
+        Inputs:
+        -------
+        dt : float
+            Timestep
+        subdivisions : int
+            Number of subdivisions for error estimation
+        retries : int
+            Number of retries if error exceeds allowed threshold
+        tol : float
+            Tolerance of scaled truncation error
+        norm : float
+            Norm to apply when computing total truncation error
+        coeffs : list (length 6)
+            Filter coefficients for computing adaptive step size
+        safety_factor : float
+            Safety factor for adaptive step size
+        """
         if (self._iter_count == 0):
             self._clock_start_time = time.time()
         if dt is None:
