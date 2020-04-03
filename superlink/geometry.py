@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.interpolate
 
+# Allowed geometries and their numeric codes
 geom_code = {
     'circular' : 1,
     'rect_closed' : 2,
@@ -12,6 +13,7 @@ geom_code = {
     'wide' : 8
 }
 
+# Machine precision
 eps = np.finfo(float).eps
 
 class Circular():
@@ -22,6 +24,15 @@ class Circular():
     def A_ik(self, h_Ik, h_Ip1k, g1, **kwargs):
         """
         Compute cross-sectional area of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Diameter of channel (meters)
         """
         d = g1
         y = (h_Ik + h_Ip1k) / 2
@@ -39,6 +50,15 @@ class Circular():
     def Pe_ik(self, h_Ik, h_Ip1k, g1, **kwargs):
         """
         Compute perimeter of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Diameter of channel (meters)
         """
         d = g1
         y = (h_Ik + h_Ip1k) / 2
@@ -56,6 +76,13 @@ class Circular():
     def R_ik(self, A_ik, Pe_ik):
         """
         Compute hydraulic radius for link i, superlink k.
+
+        Inputs:
+        -------
+        A_ik: np.ndarray
+            Area of cross section (square meters)
+        Pe_ik: np.ndarray
+            Wetted perimeter of cross section (meters)
         """
         cond = Pe_ik > 0
         R = np.zeros(A_ik.size)
@@ -66,6 +93,17 @@ class Circular():
     def B_ik(self, h_Ik, h_Ip1k, g1, pslot=0.001, **kwargs):
         """
         Compute top width of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Diameter of channel (meters)
+        pslot: float
+            Width of Preissman slot (as a ratio of the diameter)
         """
         d = g1
         y = (h_Ik + h_Ip1k) / 2
@@ -89,6 +127,17 @@ class Rect_Closed():
     def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute cross-sectional area of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -102,6 +151,17 @@ class Rect_Closed():
     def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute perimeter of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -115,6 +175,13 @@ class Rect_Closed():
     def R_ik(self, A_ik, Pe_ik):
         """
         Compute hydraulic radius for link i, superlink k.
+
+        Inputs:
+        -------
+        A_ik: np.ndarray
+            Area of cross section (square meters)
+        Pe_ik: np.ndarray
+            Wetted perimeter of cross section (meters)
         """
         cond = Pe_ik > 0
         R = np.zeros(A_ik.size)
@@ -125,6 +192,19 @@ class Rect_Closed():
     def B_ik(self, h_Ik, h_Ip1k, g1, g2, pslot=0.001, **kwargs):
         """
         Compute top width of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
+        pslot: float
+            Width of Preissman slot (as a ratio of the width)
         """
         y_max = g1
         b = g2
@@ -144,6 +224,17 @@ class Rect_Open():
     def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute cross-sectional area of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -157,6 +248,17 @@ class Rect_Open():
     def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute perimeter of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -170,6 +272,13 @@ class Rect_Open():
     def R_ik(self, A_ik, Pe_ik):
         """
         Compute hydraulic radius for link i, superlink k.
+
+        Inputs:
+        -------
+        A_ik: np.ndarray
+            Area of cross section (square meters)
+        Pe_ik: np.ndarray
+            Wetted perimeter of cross section (meters)
         """
         cond = Pe_ik > 0
         R = np.zeros(A_ik.size)
@@ -180,6 +289,17 @@ class Rect_Open():
     def B_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute top width of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -194,6 +314,17 @@ class Triangular():
     def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute cross-sectional area of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Inverse slope of channel sides (run/rise)
         """
         y_max = g1
         m = g2
@@ -207,6 +338,17 @@ class Triangular():
     def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute perimeter of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Inverse slope of channel sides (run/rise)
         """
         y_max = g1
         m = g2
@@ -220,6 +362,13 @@ class Triangular():
     def R_ik(self, A_ik, Pe_ik):
         """
         Compute hydraulic radius for link i, superlink k.
+
+        Inputs:
+        -------
+        A_ik: np.ndarray
+            Area of cross section (square meters)
+        Pe_ik: np.ndarray
+            Wetted perimeter of cross section (meters)
         """
         cond = Pe_ik > 0
         R = np.zeros(A_ik.size)
@@ -230,6 +379,17 @@ class Triangular():
     def B_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute top width of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Inverse slope of channel sides (run/rise)
         """
         y_max = g1
         m = g2
@@ -237,7 +397,6 @@ class Triangular():
         y[y < 0] = 0
         cond = (y < y_max)
         B = np.zeros(y.size)
-        # B[~cond] = 0.001 * 2 * m[~cond] * y[~cond]
         B[~cond] = 2 * m[~cond] * y_max[~cond]
         B[cond] = 2 * m[cond] * y[cond]
         return B
@@ -250,6 +409,19 @@ class Trapezoidal():
     def A_ik(self, h_Ik, h_Ip1k, g1, g2, g3, **kwargs):
         """
         Compute cross-sectional area of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
+        g3: np.ndarray
+            Inverse slope of channel sides (run/rise)
         """
         y_max = g1
         b = g2
@@ -264,6 +436,19 @@ class Trapezoidal():
     def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, g3, **kwargs):
         """
         Compute perimeter of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
+        g3: np.ndarray
+            Inverse slope of channel sides (run/rise)
         """
         y_max = g1
         b = g2
@@ -278,6 +463,13 @@ class Trapezoidal():
     def R_ik(self, A_ik, Pe_ik):
         """
         Compute hydraulic radius for link i, superlink k.
+
+        Inputs:
+        -------
+        A_ik: np.ndarray
+            Area of cross section (square meters)
+        Pe_ik: np.ndarray
+            Wetted perimeter of cross section (meters)
         """
         cond = Pe_ik > 0
         R = np.zeros(A_ik.size)
@@ -288,6 +480,19 @@ class Trapezoidal():
     def B_ik(self, h_Ik, h_Ip1k, g1, g2, g3, **kwargs):
         """
         Compute top width of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
+        g3: np.ndarray
+            Inverse slope of channel sides (run/rise)
         """
         y_max = g1
         b = g2
@@ -309,6 +514,17 @@ class Parabolic():
     def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute cross-sectional area of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -322,6 +538,17 @@ class Parabolic():
     def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute perimeter of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -336,6 +563,13 @@ class Parabolic():
     def R_ik(self, A_ik, Pe_ik):
         """
         Compute hydraulic radius for link i, superlink k.
+
+        Inputs:
+        -------
+        A_ik: np.ndarray
+            Area of cross section (square meters)
+        Pe_ik: np.ndarray
+            Wetted perimeter of cross section (meters)
         """
         cond = Pe_ik > 0
         R = np.zeros(A_ik.size)
@@ -346,6 +580,17 @@ class Parabolic():
     def B_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute top width of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -362,6 +607,17 @@ class Elliptical():
     def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute cross-sectional area of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Full height of channel (meters)
+        g2: np.ndarray
+            Full width of channel (meters)
         """
         y_max = g1
         b = g1 / 2
@@ -379,6 +635,17 @@ class Elliptical():
     def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute perimeter of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Full height of channel (meters)
+        g2: np.ndarray
+            Full width of channel (meters)
         """
         y_max = g1
         b = g1 / 2
@@ -397,6 +664,13 @@ class Elliptical():
     def R_ik(self, A_ik, Pe_ik):
         """
         Compute hydraulic radius for link i, superlink k.
+
+        Inputs:
+        -------
+        A_ik: np.ndarray
+            Area of cross section (square meters)
+        Pe_ik: np.ndarray
+            Wetted perimeter of cross section (meters)
         """
         cond = Pe_ik > 0
         R = np.zeros(A_ik.size)
@@ -407,6 +681,17 @@ class Elliptical():
     def B_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute top width of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Full height of channel (meters)
+        g2: np.ndarray
+            Full width of channel (meters)
         """
         y_max = g1
         b = g1 / 2
@@ -428,6 +713,17 @@ class Wide():
     def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute cross-sectional area of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -441,6 +737,17 @@ class Wide():
     def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute perimeter of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2
@@ -451,6 +758,13 @@ class Wide():
     def R_ik(self, A_ik, Pe_ik):
         """
         Compute hydraulic radius for link i, superlink k.
+
+        Inputs:
+        -------
+        A_ik: np.ndarray
+            Area of cross section (square meters)
+        Pe_ik: np.ndarray
+            Wetted perimeter of cross section (meters)
         """
         cond = Pe_ik > 0
         R = np.zeros(A_ik.size)
@@ -461,6 +775,17 @@ class Wide():
     def B_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
         """
         Compute top width of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Height of channel (meters)
+        g2: np.ndarray
+            Width of channel (meters)
         """
         y_max = g1
         b = g2

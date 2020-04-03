@@ -9,7 +9,19 @@ class Functional():
     @classmethod
     def A_sj(self, h, a=1, b=1, c=0, **kwargs):
         """
-        Compute surface area for superjunction j
+        Compute surface area for superjunction j using functional relation:
+        A_sj = a * h**b + c
+
+        Inputs:
+        -------
+        h : np.ndarray
+            Depth of water at superjunction
+        a : np.ndarray or float
+            Coefficient parameter
+        b : np.ndarray or float
+            Exponent parameter
+        c : np.ndarray or float
+            Constant parameter
         """
         h[h < 0] = 0
         A = a * h**b + c
@@ -18,13 +30,35 @@ class Functional():
     @classmethod
     def V_sj(self, h, a=1, b=1, c=0, **kwargs):
         """
-        Compute surface area for superjunction j
+        Compute surface area for superjunction j using functional relation:
+        V_sj = a * h**(b + 1) / (b + 1) + c * h
+
+        Inputs:
+        -------
+        h : np.ndarray
+            Depth of water at superjunction
+        a : np.ndarray or float
+            Coefficient parameter
+        b : np.ndarray or float
+            Exponent parameter
+        c : np.ndarray or float
+            Constant parameter
         """
         h[h < 0] = 0
-        A = a * h**(b + 1) / (b + 1) + c * h
-        return A
+        V = a * h**(b + 1) / (b + 1) + c * h
+        return V
 
 class Tabular():
+    """
+    Class for computing tabular area/volume-depth relations at superjunctions.
+
+    Inputs:
+    -------
+    h : np.ndarray
+        Depth points on depth-area profile (meters)
+    A : np.ndarray
+        Surface areas associated with each depth (square meters)
+    """
     def __init__(self, h, A):
         self.h = np.asarray(h)
         self.A = np.asarray(A)
@@ -38,6 +72,11 @@ class Tabular():
     def A_sj(self, h):
         """
         Compute surface area for superjunction j
+
+        Inputs:
+        -------
+        h : np.ndarray
+            Depth of water at superjunction
         """
         hmax = self.hmax
         hmin = self.hmin
@@ -50,6 +89,11 @@ class Tabular():
     def V_sj(self, h):
         """
         Compute surface area of flow for superjunction j
+
+        Inputs:
+        -------
+        h : np.ndarray
+            Depth of water at superjunction
         """
         hmax = self.hmax
         hmin = self.hmin

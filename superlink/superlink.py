@@ -9,6 +9,274 @@ import superlink.geometry
 import superlink.storage
 
 class SuperLink():
+    """
+    SUPERLINK hydraulic solver, as described in:
+
+    Ji, Z. (1998). General Hydrodynamic Model for Sewer/Channel Network Systems.
+    Journal of Hydraulic Engineering, 124(3), 307–315.
+    doi: 10.1061/(asce)0733-9429(1998)124:3(307)
+
+    Inputs:
+    -----------
+    superlinks: pd.DataFrame
+        Table containing all superlinks in the network along with their attributes.
+        The following fields are required:
+
+        |------------+-------+------+-----------------------------------------------------------|
+        | Field      | Type  | Unit | Description                                               |
+        |------------+-------+------+-----------------------------------------------------------|
+        | id         | int   |      | Integer id for the superlink                              |
+        | name       | str   |      | Name of the superlink                                     |
+        | sj_0       | int   |      | Index of the upstream superjunction                       |
+        | sj_1       | int   |      | Index of the downstream superjunction                     |
+        | in_offset  | float | m    | Offset of superlink invert above upstream superjunction   |
+        | out_offset | float | m    | Offset of superlink invert above downstream superjunction |
+        | C_uk       | float | -    | Upstream discharge coefficient                            |
+        | C_dk       | float | -    | Downstream discharge coefficient                          |
+        |------------+-------+------+-----------------------------------------------------------|
+
+        If internal links and junctions are provided (arguments 3 and 4), the following
+        fields are required:
+
+        |-------+------+------+------------------------------------------|
+        | Field | Type | Unit | Description                              |
+        |-------+------+------+------------------------------------------|
+        | j_0   | int  |      | Index of first junction inside superlink |
+        | j_1   | int  |      | Index of last junction inside superlink  |
+        |-------+------+------+------------------------------------------|
+
+        If internal links and junctions are not provided (arguments 3 and 4), the following
+        fields are required:
+
+        |-------+-------+-------+------------------------------------------------------|
+        | Field | Type  | Unit  | Description                                          |
+        |-------+-------+-------+------------------------------------------------------|
+        | dx    | float | m     | Length of superlink                                  |
+        | n     | float | -     | Manning's roughness coefficient for superlink        |
+        | shape | str   |       | Cross-sectional geometry type (see geometry module)  |
+        | g1    | float | m     | First dimension of cross-sectional geometry          |
+        | g2    | float | m     | Second dimension of cross-sectional geometry         |
+        | g3    | float | m     | Third dimension of cross-sectional geometry          |
+        | g4    | float | m     | Fourth dimension of cross-sectional geometry         |
+        | Q_0   | float | m^3/s | Initial flow in internal links                       |
+        | h_0   | float | m     | Initial depth in internal junctions                  |
+        | A_s   | float | m     | Surface area of internal junctions                   |
+        | ctrl  | bool  |       | Indicates presence of control structure in superlink |
+        | A_c   | float | m^2   | Cross-sectional area of internal control structure   |
+        | C     | float | -     | Discharge coefficient of internal control structure  |
+        |-------+-------+-------+------------------------------------------------------|
+
+    superjunctions: pd.DataFrame
+        Table containing all superjunctions in the network along with their attributes.
+        The following fields are required:
+
+        |-----------+-------+------+-------------------------------------------------------|
+        | Field     | Type  | Unit | Description                                           |
+        |-----------+-------+------+-------------------------------------------------------|
+        | id        | int   |      | Integer id for superjunction                          |
+        | name      | str   |      | Name of superjunction                                 |
+        | z_inv     | float | m    | Elevation of bottom of superjunction                  |
+        | h_0       | float | m    | Initial depth in superjunction                        |
+        | bc        | bool  |      | Indicates boundary condition at superjunction         |
+        | storage   | str   |      | Storage type: `functional` or `tabular`               |
+        | a         | float | m    | `a` value in function relating surface area and depth |
+        | b         | float | -    | `b` value in function relating surface area and depth |
+        | c         | float | m^2  | `c` value in function relating surface area and depth |
+        | max_depth | float | m    | Maximum depth allowed at superjunction                |
+        |-----------+-------+------+-------------------------------------------------------|
+
+    links: pd.DataFrame (optional)
+        Table containing all links in the network along with their attributes.
+        Note that if links and junction are not supplied, they will automatically be
+        generated at even intervals within each superlink.
+        The following fields are required:
+
+        |-------+-------+-------+-----------------------------------------------------|
+        | Field | Type  | Unit  | Description                                         |
+        |-------+-------+-------+-----------------------------------------------------|
+        | j_0   | int   |       | Index of upstream junction                          |
+        | j_1   | int   |       | Index of downstream junction                        |
+        | k     | int   |       | Index of containing superlink                       |
+        | dx    | float | m     | Length of link                                      |
+        | n     | float | -     | Manning's roughness coefficient for link            |
+        | shape | str   |       | Cross-sectional geometry type (see geometry module) |
+        | g1    | float | m     | First dimension of cross-sectional geometry         |
+        | g2    | float | m     | Second dimension of cross-sectional geometry        |
+        | g3    | float | m     | Third dimension of cross-sectional geometry         |
+        | g4    | float | m     | Fourth dimension of cross-sectional geometry        |
+        | Q_0   | float | m^3/s | Initial flow in internal links                      |
+        | h_0   | float | m     | Initial depth in internal junctions                 |
+        | A_s   | float | m     | Surface area of internal junctions                  |
+        | ctrl  | bool  |       | Indicates presence of control structure in link     |
+        | A_c   | float | m^2   | Cross-sectional area of internal control structure  |
+        | C     | float | -     | Discharge coefficient of internal control structure |
+        |-------+-------+-------+-----------------------------------------------------|
+
+    junctions: pd.DataFrame (optional)
+        Table containing all junctions in the network along with their attributes.
+        Note that if links and junction are not supplied, they will automatically be
+        generated at even intervals within each superlink.
+        The following fields are required:
+
+        |-------+-------+------+-------------------------------|
+        | Field | Type  | Unit | Description                   |
+        |-------+-------+------+-------------------------------|
+        | id    | int   |      | Integer id for junction       |
+        | k     | int   |      | Index of containing superlink |
+        | h_0   | float | m    | Initial depth at junction     |
+        | A_s   | float | m^2  | Surface area of junction      |
+        | z_inv | float | m    | Invert elevation of junction  |
+        |-------+-------+------+-------------------------------|
+
+    transects: dict (optional)
+        Dictionary describing nonfunctional channel cross-sectional geometries.
+        Takes the following structure:
+
+        {
+            <transect_name> :
+                {
+                    'x' : <x-coordinates of cross-section (list of floats)>,
+                    'y' : <y-coordinates of cross-section (list of floats)>,
+                    'horiz_points' : <Number of horizontal sampling points (int)>
+                    'vert_points' : <Number of vertical sampling points (int)>
+                }
+            ...
+        }
+
+    storages: dict (optional)
+        Dictionary describing tabular storages for superjunctions.
+        Takes the following structure:
+
+        {
+            <storage_name> :
+                {
+                    'h' : <Depths (list of floats)>,
+                    'A' : <Surface areas associated with depths (list of floats)>,
+                }
+            ...
+        }
+
+    orifices: pd.DataFrame (optional)
+        Table containing orifice control structures, and their attributes.
+        The following fields are required:
+
+        |-------------+-------+------+------------------------------------------------------|
+        | Field       | Type  | Unit | Description                                          |
+        |-------------+-------+------+------------------------------------------------------|
+        | id          | int   |      | Integer id for the orifice                           |
+        | name        | str   |      | Name of the orifice                                  |
+        | sj_0        | int   |      | Index of the upstream superjunction                  |
+        | sj_1        | int   |      | Index of the downstream superjunction                |
+        | orientation | str   |      | Orifice orientation: `bottom` or `side`              |
+        | C           | float | -    | Discharge coefficient for orifice                    |
+        | A           | float | m^2  | Full area of orifice                                 |
+        | y_max       | float | m    | Full height of orifice                               |
+        | z_o         | float | m    | Offset of bottom above upstream superjunction invert |
+        |-------------+-------+------+------------------------------------------------------|
+
+    weirs: pd.DataFrame (optional)
+        Table containing weir control structures, and their attributes.
+        The following fields are required:
+
+        |-------+-------+------+------------------------------------------------------|
+        | Field | Type  | Unit | Description                                          |
+        |-------+-------+------+------------------------------------------------------|
+        | id    | int   |      | Integer id for the weir                              |
+        | name  | str   |      | Name of the weir                                     |
+        | sj_0  | int   |      | Index of the upstream superjunction                  |
+        | sj_1  | int   |      | Index of the downstream superjunction                |
+        | z_w   | float | m    | Offset of bottom above upstream superjunction invert |
+        | y_max | float | m    | Full height of weir                                  |
+        | C_r   | float | -    | Discharge coefficient for rectangular portion        |
+        | C_t   | float | -    | Discharge coefficient for triangular portions        |
+        | L     | float | m    | Length of rectangular portion of weir                |
+        | s     | float | -    | Inverse slope of triangular portion of weir          |
+        |-------+-------+------+------------------------------------------------------|
+
+    pumps: pd.DataFrame (optional)
+        Table containing pump control structures and their attributes.
+        The following fields are required:
+
+        |--------+-------+------+------------------------------------------------------|
+        | Field  | Type  | Unit | Description                                          |
+        |--------+-------+------+------------------------------------------------------|
+        | id     | int   |      | Integer id for the pump                              |
+        | name   | str   |      | Name of the pump                                     |
+        | sj_0   | int   |      | Index of the upstream superjunction                  |
+        | sj_1   | int   |      | Index of the downstream superjunction                |
+        | z_p    | float | m    | Offset of bottom above upstream superjunction invert |
+        | a_q    | float |      | Vertical coefficient of pump ellipse                 |
+        | a_h    | float |      | Horizontal coefficient of pump ellipse               |
+        | dH_min | float | m    | Minimum pump head                                    |
+        | dH_max | float | m    | Maximum pump head                                    |
+        |--------+-------+------+------------------------------------------------------|
+
+    dt: float
+        Default timestep of model (in seconds).
+
+    min_depth: float
+        Minimum depth allowed at junctions and superjunctions (in meters).
+
+    method: str
+        Method for computing internal states in superlinks. Must be one of the following:
+        - `b`   : Backwards (default)
+        - `f`   : Forwards
+        - `lsq` : Least-squares
+
+    auto_permute: bool
+        If True, permute the superjunctions to enable use of a banded matrix solver and
+        increase solver speed. Superjunctions are permuted using the Reverse
+        Cuthill-McKee algorithm.
+
+    njunctions_fixed: int
+        If junctions/links are not provided, this gives the number of fixed internal
+        junctions that will be generated inside each superlink.
+
+    sparse: bool
+        (Deprecated)
+
+    bc_method: str
+        (Deprecated)
+
+    exit_hydraulics: bool
+        (Deprecated)
+
+    end_length: float
+        (Deprecated)
+
+    bc_method: str
+        (Deprecated)
+
+    end_method: str
+        (Deprecated)
+
+    Methods:
+    -----------
+    step : Advance model to next time step, computing hydraulic states
+    save_state : Save current model state
+    load_state : Load model state
+
+    Attributes:
+    -----------
+    t        : Current time (s)
+    H_j      : Superjunction heads (m)
+    h_Ik     : Junction depths (m)
+    Q_ik     : Link flows (m^3/s)
+    Q_uk     : Flows into upstream ends of superlinks (m^3/s)
+    Q_dk     : Flows into downstream ends of superlinks (m^3/s)
+    Q_o      : Orifice flows (m^3/s)
+    Q_w      : Weir flows (m^3/s)
+    Q_p      : Pump flows (m^3/s)
+    A_ik     : Cross-sectional area of flow in links (m^2)
+    Pe_ik    : Wetted perimeter in links (m)
+    R_ik     : Hydraulic radius in links (m)
+    B_ik     : Top width of flow in links (m)
+    A_sj     : Superjunction surface areas (m^2)
+    V_sj     : Superjunction stored volumes (m^3)
+    z_inv_j  : Superjunction invert elevation (m)
+    z_inv_uk : Offset of superlink upstream invert above superjunction (m)
+    z_inv_dk : Offset of superlink downstream invert above superjunction (m)
+    """
     def __init__(self, superlinks, superjunctions,
                  links=None, junctions=None,
                  transects={}, storages={},
@@ -418,6 +686,70 @@ class SuperLink():
         # Reset iteration counter
         self.iter_count = 0
         self.t = 0
+
+    @property
+    def h_Ik(self):
+        return self._h_Ik
+
+    @property
+    def Q_ik(self):
+        return self._Q_ik
+
+    @property
+    def Q_uk(self):
+        return self._Q_uk
+
+    @property
+    def Q_dk(self):
+        return self._Q_dk
+
+    @property
+    def Q_o(self):
+        return self._Qo
+
+    @property
+    def Q_w(self):
+        return self._Qw
+
+    @property
+    def Q_p(self):
+        return self._Qp
+
+    @property
+    def A_ik(self):
+        return self._A_ik
+
+    @property
+    def Pe_ik(self):
+        return self._Pe_ik
+
+    @property
+    def R_ik(self):
+        return self._R_ik
+
+    @property
+    def B_ik(self):
+        return self._B_ik
+
+    @property
+    def A_sj(self):
+        return self._A_sj
+
+    @property
+    def V_sj(self):
+        return self._V_sj
+
+    @property
+    def z_inv_j(self):
+        return self._z_inv_j
+
+    @property
+    def z_inv_uk(self):
+        return self._z_inv_uk
+
+    @property
+    def z_inv_dk(self):
+        return self._z_inv_dk
 
     @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
@@ -1471,7 +1803,7 @@ class SuperLink():
 
     def orifice_hydraulic_geometry(self, u=None):
         """
-        Compute hydraulic geometry for each link.
+        Compute hydraulic geometry for each orifice.
         """
         # Import instance variables
         _Ao = self._Ao             # Flow area at link ik
@@ -3452,6 +3784,9 @@ class SuperLink():
         return A_1, A_2, b
 
     def save_state(self):
+        """
+        Save current model state to dict stored in self.states.
+        """
         self.states['t'] = copy.copy(self.t)
         self.states['H_j'] = np.copy(self.H_j)
         self.states['_h_Ik'] = np.copy(self._h_Ik)
@@ -3466,6 +3801,14 @@ class SuperLink():
             self.states['_Qp'] = np.copy(self._Qp)
 
     def load_state(self, states={}):
+        """
+        Load model state.
+
+        Inputs:
+        -------
+        states : dict
+            Dict of model states. If empty, load current state stored in self.states dict.
+        """
         # If no states given, load previous states
         if not states:
             states = self.states
@@ -3548,12 +3891,45 @@ class SuperLink():
     def step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True,
              num_iter=1, head_tol=0.0015):
+        """
+        Advance model forward to next time step, computing hydraulic states.
+
+        Inputs:
+        -------
+        H_bc : np.ndarray (M)
+            Boundary stage at each superjunction (m)
+        Q_in : np.ndarray (M)
+            Direct inflow at each superjunction (m^3/s)
+        Q_0Ik : np.ndarray (MK)
+            Direct inflow at each junction (m^3/s)
+        u_o : np.ndarray (o)
+            Orifice control signal. Represents fraction of orifice open (0-1).
+        u_w : np.ndarray (w)
+            Weir control signal. Represents fraction of weir open (0-1).
+        u_p : np.ndarray (p)
+            Pump control signal. Represents fraction of maximum pump flow (0-1).
+        dt : float
+            Time step to advance (s)
+        first_time : bool
+            Set True if this is the first step the model has performed.
+        banded : bool
+            If True, use banded matrix solver.
+        first_iter : bool
+            True if this is the first iteration when iterating towards convergence.
+        num_iter : int
+            Number of iterations to perform when iterating towards convergence.
+        head_tol : float
+            Maximum allowable head tolerance when iterating towards convergence (m).
+        implicit : bool
+            (Deprecated)
+        """
         self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
         self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
+        # Perform fixed-point iteration until convergence
         num_iter -= 1
         if (num_iter > 0):
             H_j_prev = self.states['H_j']
