@@ -33,8 +33,7 @@ def interpolate_sample(x, xp, fp):
 def newton_raphson(f, df, x0, args,
                    max_iter=50, atol=1.48e-8, rtol=0.0):
     """
-    Perform the Newton-Raphson iteration to find the zero of a function over a
-    bounded interval.
+    Perform the Newton-Raphson iteration to find the zero of a function.
 
     Inputs:
     -------
