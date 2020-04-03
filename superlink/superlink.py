@@ -253,6 +253,8 @@ class SuperLink():
     Methods:
     -----------
     step : Advance model to next time step, computing hydraulic states
+    save_state : Save current model state
+    load_state : Load model state
 
     Attributes:
     -----------
@@ -3782,6 +3784,9 @@ class SuperLink():
         return A_1, A_2, b
 
     def save_state(self):
+        """
+        Save current model state to dict stored in self.states.
+        """
         self.states['t'] = copy.copy(self.t)
         self.states['H_j'] = np.copy(self.H_j)
         self.states['_h_Ik'] = np.copy(self._h_Ik)
@@ -3796,6 +3801,14 @@ class SuperLink():
             self.states['_Qp'] = np.copy(self._Qp)
 
     def load_state(self, states={}):
+        """
+        Load model state.
+
+        Inputs:
+        -------
+        states : dict
+            Dict of model states. If empty, load current state stored in self.states dict.
+        """
         # If no states given, load previous states
         if not states:
             states = self.states
@@ -3878,12 +3891,45 @@ class SuperLink():
     def step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True,
              num_iter=1, head_tol=0.0015):
+        """
+        Advance model forward to next time step, computing hydraulic states.
+
+        Inputs:
+        -------
+        H_bc : np.ndarray (M)
+            Boundary stage at each superjunction (m)
+        Q_in : np.ndarray (M)
+            Direct inflow at each superjunction (m^3/s)
+        Q_0Ik : np.ndarray (MK)
+            Direct inflow at each junction (m^3/s)
+        u_o : np.ndarray (o)
+            Orifice control signal. Represents fraction of orifice open (0-1).
+        u_w : np.ndarray (w)
+            Weir control signal. Represents fraction of weir open (0-1).
+        u_p : np.ndarray (p)
+            Pump control signal. Represents fraction of maximum pump flow (0-1).
+        dt : float
+            Time step to advance (s)
+        first_time : bool
+            Set True if this is the first step the model has performed.
+        banded : bool
+            If True, use banded matrix solver.
+        first_iter : bool
+            True if this is the first iteration when iterating towards convergence.
+        num_iter : int
+            Number of iterations to perform when iterating towards convergence.
+        head_tol : float
+            Maximum allowable head tolerance when iterating towards convergence (m).
+        implicit : bool
+            (Deprecated)
+        """
         self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
         self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
+        # Perform fixed-point iteration until convergence
         num_iter -= 1
         if (num_iter > 0):
             H_j_prev = self.states['H_j']
