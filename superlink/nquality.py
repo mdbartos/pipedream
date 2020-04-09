@@ -2,15 +2,66 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
+# TODO: Superjunctions should have a reaction rate term
+# TODO: Use upwind scheme for bulk velocity
+
 class QualityBuilder():
-    def __init__(hydraulics, quality_params):
+    def __init__(hydraulics, superjunction_params, superlink_params):
         self.hydraulics = hydraulics
         self._D_ik = quality_params['D_ik'].values.astype(float)
         self._K_ik = quality_params['K_ik'].values.astype(float)
         self._c_ik = quality_params['c0_ik'].values.astype(float)
-        self.import_hydraulics()
+        # Structural parameters of hydraulic model
+        self.forward_I_i = self.hydraulics.forward_I_i       # Index of link after junction Ik
+        self.backward_I_i = self.hydraulics.backward_I_i     # Index of link before junction Ik
+        self._is_start = self.hydraulics._is_start
+        self._is_end = self.hydraulics._is_end
+        self._kI = self.hydraulics._kI
+        self._ik = self.hydraulics._ik
+        self._I = self.hydraulics._I
+        self._A_SIk = self.hydraulics._A_SIk                 # Surface area of junction Ik
+        self._I_1k = self.hydraulics._I_1k                # Index of first junction in each superlink
+        self._i_1k = self.hydraulics._i_1k                # Index of first link in each superlink
+        self._I_Nk = self.hydraulics._I_Nk           # Index of penultimate junction in each superlink
+        self._i_nk = self.hydraulics._i_nk           # Index of last link in each superlink
+        self.NK = self.hydraulics.NK
+        self.M = self.hydraulics.M
+        self.nk = self.hydraulics.nk
+        self._k = self.hydraulics._k                     # Superlink indices
+        self._J_uk = self.hydraulics._J_uk           # Index of superjunction upstream of superlink k
+        self._J_dk = self.hydraulics._J_dk          # Index of superjunction downstream of superlink k
+        self.n_o = self.hydraulics.n_o              # Number of orifices in system
+        self.n_w = self.hydraulics.n_w              # Number of weirs in system
+        self.n_p = self.hydraulics.n_p              # Number of pumps in system
+        self._sparse = self.hydraulics._sparse        # Use sparse data structures (y/n)
+        self.bandwidth = self.hydraulics.bandwidth
+        # Import instantaneous states of hydraulic model
+        self.import_hydraulic_states()
+        # New states
+        self._alpha_ik = np.zeros(self._ik.size)
+        self._beta_ik = np.zeros(self._ik.size)
+        self._chi_ik = np.zeros(self._ik.size)
+        self._gamma_ik = np.zeros(self._ik.size)
+        self._kappa_Ik = np.zeros(self._I.size)
+        self._lambda_Ik = np.zeros(self._I.size)
+        self._mu_Ik = np.zeros(self._I.size)
+        self._eta_Ik = np.zeros(self._I.size)
+        self._T_ik = np.zeros(self._ik.size)
+        self._U_Ik = np.zeros(self._I.size)
+        self._V_Ik = np.zeros(self._I.size)
+        self._O_ik = np.zeros(self._ik.size)
+        self._X_Ik = np.zeros(self._I.size)
+        self._Y_Ik = np.zeros(self._I.size)
+        self._Z_Ik = np.zeros(self._I.size)
+        self._W_Ik = np.zeros(self._I.size)
+        self._X_uk = np.zeros(NK)
+        self._Y_uk = np.zeros(NK)
+        self._Z_uk = np.zeros(NK)
+        self._U_dk = np.zeros(NK)
+        self._V_dk = np.zeros(NK)
+        self._W_dk = np.zeros(NK)
 
-    def import_hydraulics():
+    def import_hydraulic_states():
         self.H_j_next = self.hydraulics.H_j
         self.h_Ik_next = self.hydraulics.h_Ik
         self.Q_ik_next = self.hydraulics.Q_ik
@@ -187,6 +238,337 @@ class QualityBuilder():
         self._U_dk = _U_dk
         self._V_dk = _V_dk
         self._W_dk = _W_dk
+
+    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, _c_0j=None, u=None, _dt=None,
+                                implicit=True, first_time=False):
+        """
+        Construct sparse matrices A, O, W, P and b.
+        """
+        # Import instance variables
+        _k = self._k                     # Superlink indices
+        _J_uk = self._J_uk               # Index of superjunction upstream of superlink k
+        _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
+        _X_uk = self._X_uk
+        _Y_uk = self._Y_uk
+        _Z_uk = self._Z_uk
+        _U_dk = self._U_dk
+        _V_dk = self._V_dk
+        _W_dk = self._W_dk
+        _F_jj = self._F_jj
+        _A_sj = self._A_sj               # Surface area of superjunction j
+        NK = self.NK
+        n_o = self.n_o                   # Number of orifices in system
+        n_w = self.n_w                   # Number of weirs in system
+        n_p = self.n_p                   # Number of pumps in system
+        A = self.A
+        if n_o:
+            pass
+            # O = self.O
+            # _J_uo = self._J_uo               # Index of superjunction upstream of orifice o
+            # _J_do = self._J_do               # Index of superjunction upstream of orifice o
+            # _alpha_o = self._alpha_o         # Orifice flow coefficient
+            # _beta_o = self._beta_o           # Orifice flow coefficient
+            # _chi_o = self._chi_o             # Orifice flow coefficient
+            # _alpha_uom = self._alpha_uom     # Summation of orifice flow coefficients
+            # _beta_dol = self._beta_dol       # Summation of orifice flow coefficients
+            # _chi_uol = self._chi_uol         # Summation of orifice flow coefficients
+            # _chi_dom = self._chi_dom         # Summation of orifice flow coefficients
+            # _O_diag = self._O_diag           # Diagonal elements of matrix O
+        if n_w:
+            pass
+            # W = self.W
+            # _J_uw = self._J_uw               # Index of superjunction upstream of weir w
+            # _J_dw = self._J_dw               # Index of superjunction downstream of weir w
+            # _alpha_w = self._alpha_w         # Weir flow coefficient
+            # _beta_w = self._beta_w           # Weir flow coefficient
+            # _chi_w = self._chi_w             # Weir flow coefficient
+            # _alpha_uwm = self._alpha_uwm     # Summation of weir flow coefficients
+            # _beta_dwl = self._beta_dwl       # Summation of weir flow coefficients
+            # _chi_uwl = self._chi_uwl         # Summation of weir flow coefficients
+            # _chi_dwm = self._chi_dwm         # Summation of weir flow coefficients
+            # _W_diag = self._W_diag           # Diagonal elements of matrix W
+        if n_p:
+            pass
+            # P = self.P
+            # _J_up = self._J_up               # Index of superjunction upstream of pump p
+            # _J_dp = self._J_dp               # Index of superjunction downstream of pump p
+            # _alpha_p = self._alpha_p         # Pump flow coefficient
+            # _beta_p = self._beta_p           # Pump flow coefficient
+            # _chi_p = self._chi_p             # Pump flow coefficient
+            # _alpha_upm = self._alpha_upm     # Summation of pump flow coefficients
+            # _beta_dpl = self._beta_dpl       # Summation of pump flow coefficients
+            # _chi_upl = self._chi_upl         # Summation of pump flow coefficients
+            # _chi_dpm = self._chi_dpm         # Summation of pump flow coefficients
+            # _P_diag = self._P_diag           # Diagonal elements of matrix P
+        M = self.M                       # Number of superjunctions in system
+        H_j = self.H_j                   # Head at superjunction j
+        bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
+        D = self.D                       # Vector for storing chi coefficients
+        b = self.b                       # Right-hand side vector
+        # If no time step specified, use instance time step
+        if _dt is None:
+            _dt = self._dt
+        # If no boundary head specified, use current superjunction head
+        if H_bc is None:
+            H_bc = self.H_j
+        # If no flow input specified, assume zero external inflow
+        if _Q_0j is None:
+            _Q_0j = 0
+        if _c_0j is None:
+            _c_0j = 0
+        # If no control input signal specified assume zero input
+        if u is None:
+            u = 0
+        # Clear old data
+        _F_jj.fill(0)
+        D.fill(0)
+        numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
+        # Create A matrix
+        numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _X_uk, _U_dk, _Z_uk, _W_dk,
+                          _Q_uk, _Q_dk, _A_sj, _H_j_next, _dt, M, NK)
+        # Create D vector
+        numba_add_at(D, _J_uk, -_Y_uk * _Q_uk)
+        numba_add_at(D, _J_dk, _V_dk * _Q_dk)
+        # Compute control matrix
+        if n_o:
+            pass
+            # _alpha_uo = _alpha_o
+            # _alpha_do = _alpha_o
+            # _beta_uo = _beta_o
+            # _beta_do = _beta_o
+            # _chi_uo = _chi_o
+            # _chi_do = _chi_o
+            # _O_diag.fill(0)
+            # numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
+            # # Set diagonal
+            # numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _alpha_uo,
+            #                         _alpha_do, _beta_uo, _beta_do, M, n_o)
+            # # Set right-hand side
+            # numba_add_at(D, _J_uo, -_chi_uo)
+            # numba_add_at(D, _J_do, _chi_do)
+        if n_w:
+            pass
+            # _alpha_uw = _alpha_w
+            # _alpha_dw = _alpha_w
+            # _beta_uw = _beta_w
+            # _beta_dw = _beta_w
+            # _chi_uw = _chi_w
+            # _chi_dw = _chi_w
+            # _W_diag.fill(0)
+            # numba_clear_off_diagonals(W, bc, _J_uw, _J_dw, n_w)
+            # # Set diagonal
+            # numba_create_OWP_matrix(W, _W_diag, bc, _J_uw, _J_dw, _alpha_uw,
+            #                         _alpha_dw, _beta_uw, _beta_dw, M, n_w)
+            # # Set right-hand side
+            # numba_add_at(D, _J_uw, -_chi_uw)
+            # numba_add_at(D, _J_dw, _chi_dw)
+        if n_p:
+            pass
+            # _alpha_up = _alpha_p
+            # _alpha_dp = _alpha_p
+            # _beta_up = _beta_p
+            # _beta_dp = _beta_p
+            # _chi_up = _chi_p
+            # _chi_dp = _chi_p
+            # _P_diag.fill(0)
+            # numba_clear_off_diagonals(P, bc, _J_up, _J_dp, n_p)
+            # # Set diagonal
+            # numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _alpha_up,
+            #                         _alpha_dp, _beta_up, _beta_dp, M, n_p)
+            # # Set right-hand side
+            # numba_add_at(D, _J_up, -_chi_up)
+            # numba_add_at(D, _J_dp, _chi_dp)
+        b.fill(0)
+        b = (_A_sj * _H_j_prev * _c_j_prev / _dt) + _Q_0j * _c_0j + D
+        # Ensure boundary condition is specified
+        b[bc] = H_bc[bc]
+        # Export instance variables
+        self.D = D
+        self.b = b
+
+    def solve_sparse_matrix(self, u=None, implicit=True):
+        """
+        Solve sparse system Ax = b for superjunction heads at time t + dt.
+        """
+        # Import instance variables
+        A = self.A                    # Superlink/superjunction matrix
+        b = self.b                    # Right-hand side vector
+        B = self.B                    # External control matrix
+        O = self.O                    # Orifice matrix
+        W = self.W                    # Weir matrix
+        P = self.P                    # Pump matrix
+        n_o = self.n_o                # Number of orifices
+        n_w = self.n_w                # Number of weirs
+        n_p = self.n_p                # Number of pumps
+        _sparse = self._sparse        # Use sparse data structures (y/n)
+        # Does the system have control assets?
+        has_control = n_o + n_w + n_p
+        # Get right-hand size
+        if has_control:
+            if implicit:
+                l = A + O + W + P
+                r = b
+            else:
+                # TODO: Broken
+                # l = A
+                # r = b + np.squeeze(B @ u)
+                raise NotImplementedError
+        else:
+            l = A
+            r = b
+        if _sparse:
+            _c_j_next = scipy.sparse.linalg.spsolve(l, r)
+        else:
+            _c_j_next = scipy.linalg.solve(l, r)
+        assert np.isfinite(_c_j_next).all()
+        # H_j_next = np.maximum(H_j_next, _z_inv_j)
+        # H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        # Export instance variables
+        self._c_j = _c_j_next
+
+    def solve_banded_matrix(self, u=None, implicit=True):
+        # Import instance variables
+        A = self.A                    # Superlink/superjunction matrix
+        b = self.b                    # Right-hand side vector
+        B = self.B                    # External control matrix
+        O = self.O                    # Orifice matrix
+        W = self.W                    # Weir matrix
+        P = self.P                    # Pump matrix
+        n_o = self.n_o                # Number of orifices
+        n_w = self.n_w                # Number of weirs
+        n_p = self.n_p                # Number of pumps
+        _sparse = self._sparse        # Use sparse data structures (y/n)
+        bandwidth = self.bandwidth
+        M = self.M
+        # Does the system have control assets?
+        has_control = n_o + n_w + n_p
+        # Get right-hand size
+        if has_control:
+            if implicit:
+                l = A + O + W + P
+                r = b
+            else:
+                raise NotImplementedError
+        else:
+            l = A
+            r = b
+        AB = numba_create_banded(l, bandwidth, M)
+        _c_j_next = scipy.linalg.solve_banded((bandwidth, bandwidth), AB, r,
+                                              check_finite=False, overwrite_ab=True)
+        assert np.isfinite(_c_j_next).all()
+        # Constrain heads based on allowed maximum/minimum depths
+        # H_j_next = np.maximum(H_j_next, _z_inv_j)
+        # H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        # Export instance variables
+        self._c_j = _c_j_next
+
+    def solve_boundary_states(self):
+        """
+        Solve for concentrations at superlink boundaries
+        """
+        _c_j = self._c_j
+        _c_uk = self._c_uk
+        _c_dk = self._c_dk
+        _c_1k = self._c_1k
+        _c_Np1k = self._c_Np1k
+        _J_uk = self._J_uk               # Index of superjunction upstream of superlink k
+        _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
+        _X_uk = self._X_uk
+        _Y_uk = self._Y_uk
+        _Z_uk = self._Z_uk
+        _U_dk = self._U_dk
+        _V_dk = self._V_dk
+        _W_dk = self._W_dk
+        # Set boundary node concentrations
+        _c_1k = _c_j[_J_uk]
+        _c_Np1k = _c_j[_J_dk]
+        # Solve for boundary flow concentrations
+        _c_uk_next = _X_uk * _c_j[_J_uk] + _Z_uk * _c_j[_J_dk] + _Y_uk
+        _c_dk_next = _W_dk * _c_j[_J_uk] + _U_dk * _c_j[_J_dk] + _V_dk
+        # Export instance variables
+        self._c_1k = _c_1k
+        self._c_Np1k = _c_Np1k
+        self._c_uk = _c_uk_next
+        self._c_dk = _c_dk_next
+
+    def solve_internals_backwards(self, subcritical_only=False):
+        """
+        Solve for internal states of each superlink in the backward direction.
+        """
+        # Import instance variables
+        _I_1k = self._I_1k                  # Index of first junction in superlink k
+        _i_1k = self._i_1k                  # Index of first link in superlink k
+        nk = self.nk
+        NK = self.NK
+        _c_Ik = self._c_Ik                  # Depth at junction Ik
+        _c_ik = self._c_ik                  # Flow rate at link ik
+        _D_Ik = self._D_Ik                  # Continuity coefficient
+        _E_Ik = self._E_Ik                  # Continuity coefficient
+        _U_Ik = self._U_Ik                  # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                  # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                  # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                  # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                  # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
+        _c_1k = self._c_1k                  # Depth at upstream end of superlink k
+        _c_Np1k = self._c_Np1k              # Depth at downstream end of superlink k
+        _min_c = 0.
+        _max_c = np.inf
+        # Solve internals
+        numba_solve_internals(_c_Ik, _c_ik, _c_1k, _c_Np1k, _U_Ik, _V_Ik, _W_Ik,
+                              _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
+                              _min_c, _max_c, first_link_backwards=True)
+        # TODO: Temporary
+        assert np.isfinite(_c_Ik).all()
+        assert np.isfinite(_c_ik).all()
+        # Ensure non-negative depths?
+        _c_Ik[_c_Ik < _min_c] = _min_c
+        _c_ik[_c_ik < _min_c] = _min_c
+        # _h_Ik[_h_Ik > junction_max_depth] = junction_max_depth
+        # _h_Ik[_h_Ik > max_depth] = max_depth
+        # Export instance variables
+        self._c_Ik = _c_Ik
+        self._c_ik = _c_ik
+
+    def solve_internals_forwards(self, subcritical_only=False):
+        """
+        Solve for internal states of each superlink in the backward direction.
+        """
+        # Import instance variables
+        _I_1k = self._I_1k                  # Index of first junction in superlink k
+        _i_1k = self._i_1k                  # Index of first link in superlink k
+        nk = self.nk
+        NK = self.NK
+        _c_Ik = self._c_Ik                  # Depth at junction Ik
+        _c_ik = self._c_ik                  # Flow rate at link ik
+        _D_Ik = self._D_Ik                  # Continuity coefficient
+        _E_Ik = self._E_Ik                  # Continuity coefficient
+        _U_Ik = self._U_Ik                  # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                  # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                  # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                  # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                  # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
+        _c_1k = self._c_1k                  # Depth at upstream end of superlink k
+        _c_Np1k = self._c_Np1k              # Depth at downstream end of superlink k
+        _min_c = 0.
+        _max_c = np.inf
+        # Solve internals
+        numba_solve_internals(_c_Ik, _c_ik, _c_1k, _c_Np1k, _U_Ik, _V_Ik, _W_Ik,
+                              _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
+                              _min_c, _max_c, first_link_backwards=False)
+        # TODO: Temporary
+        assert np.isfinite(_c_Ik).all()
+        assert np.isfinite(_c_ik).all()
+        # Ensure non-negative depths?
+        _c_Ik[_c_Ik < _min_c] = _min_c
+        _c_ik[_c_ik < _min_c] = _min_c
+        # _h_Ik[_h_Ik > junction_max_depth] = junction_max_depth
+        # _h_Ik[_h_Ik > max_depth] = max_depth
+        # Export instance variables
+        self._c_Ik = _c_Ik
+        self._c_ik = _c_ik
+
 
 @njit
 def safe_divide(num, den):
@@ -467,4 +849,115 @@ def numba_boundary_coefficients(_X_uk, _Y_uk, _Z_uk, _U_dk, _V_dk, _W_dk,
         _V_dk[k] = V_dk(_eta_Ik[_I_Np1], _kappa_Ik[_I_Np1], _V_Ik[_I_N], _mu_Ik[_I_Np1])
         _W_dk[k] = W_dk(_kappa_Ik[_I_Np1], _W_Ik[_I_N], _mu_Ik[_I_Np1])
     return 1
+
+@njit(fastmath=True)
+def numba_add_at(a, indices, b):
+    n = len(indices)
+    for k in range(n):
+        i = indices[k]
+        a[i] += b[k]
+
+@njit
+def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
+    for k in range(NK):
+        _J_u = _J_uk[k]
+        _J_d = _J_dk[k]
+        _bc_u = bc[_J_u]
+        _bc_d = bc[_J_d]
+        if not _bc_u:
+            A[_J_u, _J_d] = 0.0
+        if not _bc_d:
+            A[_J_d, _J_u] = 0.0
+
+@njit(fastmath=True)
+def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _X_uk, _U_dk, _Z_uk, _W_dk,
+                          _Q_uk, _Q_dk, _A_sj, _H_j_next, _dt, M, NK):
+    numba_add_at(_F_jj, _J_uk, _X_uk * _Q_uk)
+    numba_add_at(_F_jj, _J_dk, -_U_dk * _Q_dk)
+    _F_jj += (_A_sj * _H_j_next / _dt)
+    # Set diagonal of A matrix
+    for i in range(M):
+        if bc[i]:
+            A[i,i] = 1.0
+        else:
+            A[i,i] = _F_jj[i]
+    for k in range(NK):
+        _J_u = _J_uk[k]
+        _J_d = _J_dk[k]
+        _bc_u = bc[_J_u]
+        _bc_d = bc[_J_d]
+        if not _bc_u:
+            A[_J_u, _J_d] += (_Z_uk[k] * _Q_uk[k])
+        if not _bc_d:
+            A[_J_d, _J_u] -= (_W_dk[k] * _Q_dk[k])
+
+@njit
+def numba_create_banded(l, bandwidth, M):
+    AB = np.zeros((2*bandwidth + 1, M))
+    for i in range(M):
+        AB[bandwidth, i] = l[i, i]
+    for n in range(bandwidth):
+        for j in range(M - n - 1):
+            AB[bandwidth - n - 1, -j - 1] = l[-j - 2 - n, -j - 1]
+            AB[bandwidth + n + 1, j] = l[j + n + 1, j]
+    return AB
+
+@njit
+def numba_solve_internals(_c_Ik, _c_ik, _c_1k, _c_Np1k, _U_Ik, _V_Ik, _W_Ik,
+                          _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
+                          min_c, max_c, first_link_backwards=True):
+    for k in range(NK):
+        n = nk[k]
+        i_1 = _i_1k[k]
+        I_1 = _I_1k[k]
+        i_n = i_1 + n - 1
+        I_Np1 = I_1 + n
+        I_N = I_Np1 - 1
+        # Set boundary depths
+        _c_1k = _c_uk[k]
+        _c_Np1k = _c_dk[k]
+        _c_Ik[I_1] = _c_1k
+        _c_Ik[I_Np1] = _c_Np1k
+        # Set max depth
+        # max_depth = max_depth_k[k]
+        # Compute internal depths and flows (except first link flow)
+        for j in range(n - 1):
+            I = I_N - j
+            Ip1 = I + 1
+            i = i_n - j
+            _c_ik[i] = c_i_f(_c_Ik[Ip1], _c_1k, _U_Ik[I], _V_Ik[I], _W_Ik[I])
+            _c_Ik[I] = c_I_b(_c_ik[i], _c_Np1k, _X_Ik[I], _Y_Ik[I], _Z_Ik[I])
+            # if _c_Ik[I] < min_depth:
+            #     _c_Ik[I] = min_depth
+            # if _c_Ik[I] > max_depth:
+            #     _c_Ik[I] = max_depth
+        if first_link_backwards:
+            _c_ik[i_1] = c_i_b(_c_Ik[I_1], _c_Np1k, _X_Ik[I_1], _Y_Ik[I_1],
+                            _Z_Ik[I_1])
+        else:
+            # Not theoretically correct, but seems to be more stable sometimes
+            _c_ik[i_1] = c_i_f(_c_Ik[I_1 + 1], _c_1k, _U_Ik[I_1], _V_Ik[I_1],
+                            _W_Ik[I_1])
+    return 1
+
+@njit
+def c_i_f(c_Ip1k, c_1k, U_Ik, V_Ik, W_Ik):
+    t_0 = U_Ik * c_Ip1k
+    t_1 = V_Ik
+    t_2 = W_Ik * c_1k
+    return t_0 + t_1 + t_2
+
+@njit
+def c_i_b(c_Ik, c_Np1k, X_Ik, Y_Ik, Z_Ik):
+    t_0 = X_Ik * c_Ik
+    t_1 = Y_Ik
+    t_2 = Z_Ik * c_Np1k
+    return t_0 + t_1 + t_2
+
+@njit
+def c_I_b(c_ik, c_Np1k, X_Ik, Y_Ik, Z_Ik):
+    num = c_ik - Y_Ik - Z_Ik * c_Np1k
+    den = X_Ik
+    result = safe_divide(num, den)
+    return result
 
