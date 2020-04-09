@@ -104,14 +104,23 @@ class QualityBuilder():
         # Import instance variables
         _I_1k = self._I_1k                # Index of first junction in each superlink
         _i_1k = self._i_1k                # Index of first link in each superlink
+        _alpha_ik = self._alpha_ik
+        _beta_ik = self._beta_ik
+        _chi_ik = self._chi_ik
+        _gamma_ik = self._gamma_ik
+        _kappa_Ik = self._kappa_Ik
+        _lambda_Ik = self._lambda_Ik
+        _mu_Ik = self._mu_Ik
+        _eta_Ik = self._eta_Ik
         _T_ik = self._T_ik                # Recurrence coefficient T_ik
         _U_Ik = self._U_Ik                # Recurrence coefficient U_Ik
         _V_Ik = self._V_Ik                # Recurrence coefficient V_Ik
         _W_Ik = self._W_Ik                # Recurrence coefficient W_Ik
         NK = self.NK
         nk = self.nk
-        numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
-                                 _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_1k, _i_1k)
+        numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _alpha_ik, _beta_ik, _chi_ik,
+                                 _gamma_ik, _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
+                                 NK, nk, _I_1k, _i_1k)
         # Export instance variables
         self._T_ik = _T_ik
         self._U_Ik = _U_Ik
@@ -125,19 +134,59 @@ class QualityBuilder():
         _I_Nk = self._I_Nk                # Index of penultimate junction in each superlink
         _i_nk = self._i_nk                # Index of last link in each superlink
         _A_ik = self._A_ik                # Flow area in link ik
+        _alpha_ik = self._alpha_ik
+        _beta_ik = self._beta_ik
+        _chi_ik = self._chi_ik
+        _gamma_ik = self._gamma_ik
+        _kappa_Ik = self._kappa_Ik
+        _lambda_Ik = self._lambda_Ik
+        _mu_Ik = self._mu_Ik
+        _eta_Ik = self._eta_Ik
         _O_ik = self._O_ik                # Recurrence coefficient O_ik
         _X_Ik = self._X_Ik                # Recurrence coefficient X_Ik
         _Y_Ik = self._Y_Ik                # Recurrence coefficient Y_Ik
         _Z_Ik = self._Z_Ik                # Recurrence coefficient Z_Ik
         NK = self.NK
         nk = self.nk
-        numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
-                                    _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_Nk, _i_nk)
+        numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _alpha_ik, _beta_ik, _chi_ik,
+                                  _gamma_ik, _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
+                                  NK, nk, _I_Nk, _i_nk)
         # Export instance variables
         self._O_ik = _O_ik
         self._X_Ik = _X_Ik
         self._Y_Ik = _Y_Ik
         self._Z_Ik = _Z_Ik
+
+    def boundary_coefficients(self):
+        _T_ik = self._T_ik                # Recurrence coefficient T_ik
+        _U_Ik = self._U_Ik                # Recurrence coefficient U_Ik
+        _V_Ik = self._V_Ik                # Recurrence coefficient V_Ik
+        _W_Ik = self._W_Ik                # Recurrence coefficient W_Ik
+        _O_ik = self._O_ik                # Recurrence coefficient O_ik
+        _X_Ik = self._X_Ik                # Recurrence coefficient X_Ik
+        _Y_Ik = self._Y_Ik                # Recurrence coefficient Y_Ik
+        _Z_Ik = self._Z_Ik                # Recurrence coefficient Z_Ik
+        _I_1k = self._I_1k                # Index of first junction in each superlink
+        _i_1k = self._i_1k                # Index of first link in each superlink
+        _I_Nk = self._I_Nk                # Index of penultimate junction in each superlink
+        _i_nk = self._i_nk                # Index of last link in each superlink
+        _X_uk = self._X_uk
+        _Y_uk = self._Y_uk
+        _Z_uk = self._Z_uk
+        _U_dk = self._U_dk
+        _V_dk = self._V_dk
+        _W_dk = self._W_dk
+        # Compute boundary coefficients
+        numba_boundary_coefficients(_X_uk, _Y_uk, _Z_uk, _U_dk, _V_dk, _W_dk,
+                                    _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
+                                    NK, _I_1k, _I_Nk)
+        # Export instance variables
+        self._X_uk = _X_uk
+        self._Y_uk = _Y_uk
+        self._Z_uk = _Z_uk
+        self._U_dk = _U_dk
+        self._V_dk = _V_dk
+        self._W_dk = _W_dk
 
 @njit
 def safe_divide(num, den):
@@ -218,8 +267,8 @@ def U_Ik(alpha_ik, kappa_Ik, W_Im1k, T_ik, lambda_Ik, kappa_Ik, U_Im1k):
     return safe_divide(t_0, t_1)
 
 @njit
-def V_Ik(gamma_Ik, T_ik, alpha_ik, eta_Ik, kappa_Ik, V_Im1k, lambda_Ik, U_Im1k):
-    t_0 = safe_divide(gamma_Ik, T_ik)
+def V_Ik(gamma_ik, T_ik, alpha_ik, eta_Ik, kappa_Ik, V_Im1k, lambda_Ik, U_Im1k):
+    t_0 = safe_divide(gamma_ik, T_ik)
     t_1 = - alpha_ik * (eta_Ik + kappa_Ik * V_Im1k)
     # TODO: Note that this denominator is being computed 3 times
     t_2 = T_ik * (lambda_Ik + kappa_Ik * U_Im1k)
@@ -342,8 +391,9 @@ def numba_node_coeffs(Q_ik_next, h_Ik_next, h_Ik_prev, c_Ik_prev,
     return 1
 
 @njit
-def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
-                             _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_1k, _i_1k):
+def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _alpha_ik, _beta_ik, _chi_ik,
+                             _gamma_ik, _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
+                             NK, nk, _I_1k, _i_1k):
     for k in range(NK):
         # Start at junction 1
         _I_1 = _I_1k[k]
@@ -351,25 +401,32 @@ def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
         _I_2 = _I_1 + 1
         _i_2 = _i_1 + 1
         nlinks = nk[k]
-        _T_ik[_i_1] = T_1k()
-        _U_Ik[_I_1] = U_1k()
-        _V_Ik[_I_1] = V_1k()
-        _W_Ik[_I_1] = W_1k()
+        _T_ik[_i_1] = 1.
+        _U_Ik[_I_1] = U_1k(_chi_ik[_i_1], _beta_ik[_i_1])
+        _V_Ik[_I_1] = V_1k(_gamma_ik[_i_1], _beta_ik[_i_1])
+        _W_Ik[_I_1] = W_1k(_alpha_ik[_i_1], _beta_ik[_i_1])
         # Loop from junction 2 -> Nk
         for i in range(nlinks - 1):
             _i_next = _i_2 + i
             _I_next = _I_2 + i
             _Im1_next = _I_next - 1
             _Ip1_next = _I_next + 1
-            _T_ik[_i_next] = T_ik()
-            _U_Ik[_I_next] = U_Ik()
-            _V_Ik[_I_next] = V_Ik()
-            _W_Ik[_I_next] = W_Ik()
+            _T_ik[_i_next] = T_ik(_beta_ik[_i_next], _alpha_ik[_i_next],
+                                  _mu_Ik[_I_next], _lambda_Ik[_I_next], _kappa_Ik[_I_next],
+                                  _U_Ik[_Im1_next])
+            _U_Ik[_I_next] = U_Ik(_alpha_ik[_i_next], _kappa_Ik[_I_next], _W_Ik[_Im1_next],
+                                  _T_ik[_i_next], _lambda_Ik[_I_next], _kappa_Ik[_I_next],
+                                  _U_Ik[_Im1_next])
+            _V_Ik[_I_next] = V_Ik(_gamma_ik[_i_next], _T_ik[_i_next], _alpha_ik[_i_next],
+                                  _eta_Ik[_I_next], _kappa_Ik[_I_next], _V_Ik[_Im1_next],
+                                  _lambda_Ik[_I_next], _U_Ik[_Im1_next])
+            _W_Ik[_I_next] = W_Ik(_chi_ik[_i_next], _T_ik[_i_next])
     return 1
 
 @njit
-def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
-                              _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_Nk, _i_nk):
+def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _alpha_ik, _beta_ik, _chi_ik,
+                              _gamma_ik, _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
+                              NK, nk, _I_Nk, _i_nk):
     for k in range(NK):
         _I_N = _I_Nk[k]
         _i_n = _i_nk[k]
@@ -377,18 +434,37 @@ def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
         _i_nm1 = _i_n - 1
         _I_Np1 = _I_N + 1
         nlinks = nk[k]
-        _O_ik[_i_n] = O_nk()
-        _X_Ik[_I_N] = X_Nk()
-        _Y_Ik[_I_N] = Y_Nk()
-        _Z_Ik[_I_N] = Z_Nk()
+        _O_ik[_i_n] = 1.
+        _X_Ik[_I_N] = X_Nk(_alpha_ik[_i_n], _beta_ik[_i_n])
+        _Y_Ik[_I_N] = Y_Nk(_gamma_ik[_i_n], _beta_ik[_i_n])
+        _Z_Ik[_I_N] = Z_Nk(_chi_ik[_i_n], _beta_ik[_i_n])
         for i in range(nlinks - 1):
             _i_next = _i_nm1 - i
             _I_next = _I_Nm1 - i
             _Ip1_next = _I_next + 1
-            _O_ik[_i_next] = O_ik()
-            _X_Ik[_I_next] = X_Ik()
-            _Y_Ik[_I_next] = Y_Ik()
-            _Z_Ik[_I_next] = Z_Ik()
+            _O_ik[_i_next] = O_ik(_beta_ik[_i_next], _chi_ik[_i_next], _kappa_Ik[_Ip1_next],
+                                  _lambda_Ik[_Ip1_next], _mu_Ik[_Ip1_next], _X_Ik[_Ip1_next])
+            _X_Ik[_I_next] = X_Ik(_alpha_ik[_i_next], _O_ik[_i_next])
+            _Y_Ik[_I_next] = Y_Ik(_gamma_ik[_i_next], _O_ik[_i_next], _chi_ik[_i_next],
+                                  _eta_Ik[_Ip1_next], _mu_Ik[_Ip1_next], _Y_Ik[_Ip1_next],
+                                  _lambda_Ik[_Ip1_next], _X_Ik[_Ip1_next])
+            _Z_Ik[_I_next] = Z_Ik(_chi_ik[_i_next], _mu_Ik[_Ip1_next], _Z_Ik[_Ip1_next],
+                                  _O_ik[_i_next], _lambda_Ik[_Ip1_next], _X_Ik[_Ip1_next])
     return 1
 
+@njit
+def numba_boundary_coefficients(_X_uk, _Y_uk, _Z_uk, _U_dk, _V_dk, _W_dk,
+                                _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
+                                NK, _I_1k, _I_Nk):
+    for k in range(NK):
+        _I_1 = _I_1k[k]
+        _I_N = _I_Nk[k]
+        _I_Np1 = _I_N + 1
+        _X_uk[k] = X_uk(_mu_Ik[_I_1], _X_Ik[_I_1], _lambda_Ik[_I_1], _kappa_Ik[_I_1])
+        _Y_uk[k] = Y_uk(_eta_Ik[_I_1], _mu_Ik[_I_1], _Y_Ik[_I_1], _kappa_Ik[_I_1])
+        _Z_uk[k] = Z_uk(_mu_Ik[_I_1], _Z_Ik[_I_1], _kappa_Ik[_I_1])
+        _U_dk[k] = U_dk(_kappa_Ik[_I_Np1], _U_Ik[_I_N], _lambda_Ik[_I_Np1], _mu_Ik[_I_Np1])
+        _V_dk[k] = V_dk(_eta_Ik[_I_Np1], _kappa_Ik[_I_Np1], _V_Ik[_I_N], _mu_Ik[_I_Np1])
+        _W_dk[k] = W_dk(_kappa_Ik[_I_Np1], _W_Ik[_I_N], _mu_Ik[_I_Np1])
+    return 1
 
