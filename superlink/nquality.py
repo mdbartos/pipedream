@@ -559,7 +559,8 @@ def safe_divide_vec(num, den):
 
 @njit
 def alpha_ik(u_Ik, dx_ik, D_ik):
-    t_0 = - u_Ik / dx_ik
+    # Use upwind scheme
+    t_0 = - np.maximum(u_Ik, 0) / dx_ik
     t_1 = - 2 * D_ik / (dx_ik**2)
     return t_0 + t_1
 
@@ -572,7 +573,8 @@ def beta_ik(dt, D_ik, dx_ik, K_ik):
 
 @njit
 def chi_ik(u_Ip1k, dx_ik, D_ik):
-    t_0 = u_Ip1k / dx_ik
+    # Use upwind scheme
+    t_0 = - np.maximum(-u_Ip1k, 0) / dx_ik
     t_1 = - 2 * D_ik / (dx_ik**2)
     return t_0 + t_1
 
