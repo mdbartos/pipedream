@@ -256,50 +256,27 @@ class QualityBuilder():
         _W_dk = self._W_dk
         _F_jj = self._F_jj
         _A_sj = self._A_sj               # Surface area of superjunction j
+        _K_j = self._K_j
         NK = self.NK
         n_o = self.n_o                   # Number of orifices in system
         n_w = self.n_w                   # Number of weirs in system
         n_p = self.n_p                   # Number of pumps in system
         A = self.A
         if n_o:
-            pass
-            # O = self.O
-            # _J_uo = self._J_uo               # Index of superjunction upstream of orifice o
-            # _J_do = self._J_do               # Index of superjunction upstream of orifice o
-            # _alpha_o = self._alpha_o         # Orifice flow coefficient
-            # _beta_o = self._beta_o           # Orifice flow coefficient
-            # _chi_o = self._chi_o             # Orifice flow coefficient
-            # _alpha_uom = self._alpha_uom     # Summation of orifice flow coefficients
-            # _beta_dol = self._beta_dol       # Summation of orifice flow coefficients
-            # _chi_uol = self._chi_uol         # Summation of orifice flow coefficients
-            # _chi_dom = self._chi_dom         # Summation of orifice flow coefficients
-            # _O_diag = self._O_diag           # Diagonal elements of matrix O
+            O = self.O
+            _J_uo = self._J_uo               # Index of superjunction upstream of orifice o
+            _J_do = self._J_do               # Index of superjunction upstream of orifice o
+            _O_diag = self._O_diag           # Diagonal elements of matrix O
         if n_w:
-            pass
-            # W = self.W
-            # _J_uw = self._J_uw               # Index of superjunction upstream of weir w
-            # _J_dw = self._J_dw               # Index of superjunction downstream of weir w
-            # _alpha_w = self._alpha_w         # Weir flow coefficient
-            # _beta_w = self._beta_w           # Weir flow coefficient
-            # _chi_w = self._chi_w             # Weir flow coefficient
-            # _alpha_uwm = self._alpha_uwm     # Summation of weir flow coefficients
-            # _beta_dwl = self._beta_dwl       # Summation of weir flow coefficients
-            # _chi_uwl = self._chi_uwl         # Summation of weir flow coefficients
-            # _chi_dwm = self._chi_dwm         # Summation of weir flow coefficients
-            # _W_diag = self._W_diag           # Diagonal elements of matrix W
+            W = self.W
+            _J_uw = self._J_uw               # Index of superjunction upstream of weir w
+            _J_dw = self._J_dw               # Index of superjunction downstream of weir w
+            _W_diag = self._W_diag           # Diagonal elements of matrix W
         if n_p:
-            pass
-            # P = self.P
-            # _J_up = self._J_up               # Index of superjunction upstream of pump p
-            # _J_dp = self._J_dp               # Index of superjunction downstream of pump p
-            # _alpha_p = self._alpha_p         # Pump flow coefficient
-            # _beta_p = self._beta_p           # Pump flow coefficient
-            # _chi_p = self._chi_p             # Pump flow coefficient
-            # _alpha_upm = self._alpha_upm     # Summation of pump flow coefficients
-            # _beta_dpl = self._beta_dpl       # Summation of pump flow coefficients
-            # _chi_upl = self._chi_upl         # Summation of pump flow coefficients
-            # _chi_dpm = self._chi_dpm         # Summation of pump flow coefficients
-            # _P_diag = self._P_diag           # Diagonal elements of matrix P
+            P = self.P
+            _J_up = self._J_up               # Index of superjunction upstream of pump p
+            _J_dp = self._J_dp               # Index of superjunction downstream of pump p
+            _P_diag = self._P_diag           # Diagonal elements of matrix P
         M = self.M                       # Number of superjunctions in system
         H_j = self.H_j                   # Head at superjunction j
         bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
@@ -325,59 +302,28 @@ class QualityBuilder():
         numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
         # Create A matrix
         numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _X_uk, _U_dk, _Z_uk, _W_dk,
-                          _Q_uk, _Q_dk, _A_sj, _H_j_next, _dt, M, NK)
+                              _Q_uk, _Q_dk, _A_sj, _H_j_next, _dt, _K_j, M, NK)
         # Create D vector
         numba_add_at(D, _J_uk, -_Y_uk * _Q_uk)
         numba_add_at(D, _J_dk, _V_dk * _Q_dk)
         # Compute control matrix
         if n_o:
-            pass
-            # _alpha_uo = _alpha_o
-            # _alpha_do = _alpha_o
-            # _beta_uo = _beta_o
-            # _beta_do = _beta_o
-            # _chi_uo = _chi_o
-            # _chi_do = _chi_o
-            # _O_diag.fill(0)
-            # numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
-            # # Set diagonal
-            # numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _alpha_uo,
-            #                         _alpha_do, _beta_uo, _beta_do, M, n_o)
-            # # Set right-hand side
-            # numba_add_at(D, _J_uo, -_chi_uo)
-            # numba_add_at(D, _J_do, _chi_do)
+            _omega_o = (_Q_o >= 0).astype(float)
+            _O_diag.fill(0)
+            numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
+            numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _omega_o, _Q_o, M, n_o)
         if n_w:
-            pass
-            # _alpha_uw = _alpha_w
-            # _alpha_dw = _alpha_w
-            # _beta_uw = _beta_w
-            # _beta_dw = _beta_w
-            # _chi_uw = _chi_w
-            # _chi_dw = _chi_w
-            # _W_diag.fill(0)
-            # numba_clear_off_diagonals(W, bc, _J_uw, _J_dw, n_w)
-            # # Set diagonal
-            # numba_create_OWP_matrix(W, _W_diag, bc, _J_uw, _J_dw, _alpha_uw,
-            #                         _alpha_dw, _beta_uw, _beta_dw, M, n_w)
-            # # Set right-hand side
-            # numba_add_at(D, _J_uw, -_chi_uw)
-            # numba_add_at(D, _J_dw, _chi_dw)
+            _omega_w = (_Q_w >= 0).astype(float)
+            _W_diag.fill(0)
+            numba_clear_off_diagonals(W, bc, _J_uw, _J_dw, n_w)
+            numba_create_OWP_matrix(W, _W_diag, bc, _J_uw, _J_dw, _omega_w,
+                                    _Q_w, M, n_w)
         if n_p:
-            pass
-            # _alpha_up = _alpha_p
-            # _alpha_dp = _alpha_p
-            # _beta_up = _beta_p
-            # _beta_dp = _beta_p
-            # _chi_up = _chi_p
-            # _chi_dp = _chi_p
-            # _P_diag.fill(0)
-            # numba_clear_off_diagonals(P, bc, _J_up, _J_dp, n_p)
-            # # Set diagonal
-            # numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _alpha_up,
-            #                         _alpha_dp, _beta_up, _beta_dp, M, n_p)
-            # # Set right-hand side
-            # numba_add_at(D, _J_up, -_chi_up)
-            # numba_add_at(D, _J_dp, _chi_dp)
+            _omega_p = (_Q_p >= 0).astype(float)
+            _P_diag.fill(0)
+            numba_clear_off_diagonals(P, bc, _J_up, _J_dp, n_p)
+            numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _omega_p,
+                                    _Q_p, M, n_p)
         b.fill(0)
         b = (_A_sj * _H_j_prev * _c_j_prev / _dt) + _Q_0j * _c_0j + D
         # Ensure boundary condition is specified
@@ -871,10 +817,10 @@ def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
 
 @njit(fastmath=True)
 def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _X_uk, _U_dk, _Z_uk, _W_dk,
-                          _Q_uk, _Q_dk, _A_sj, _H_j_next, _dt, M, NK):
+                          _Q_uk, _Q_dk, _A_sj, _H_j_next, _dt, _K_j, M, NK):
     numba_add_at(_F_jj, _J_uk, _X_uk * _Q_uk)
     numba_add_at(_F_jj, _J_dk, -_U_dk * _Q_dk)
-    _F_jj += (_A_sj * _H_j_next / _dt)
+    _F_jj += (_A_sj * _H_j_next / _dt) + _K_j
     # Set diagonal of A matrix
     for i in range(M):
         if bc[i]:
@@ -890,6 +836,27 @@ def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _X_uk, _U_dk, _Z_uk, _W_dk
             A[_J_u, _J_d] += (_Z_uk[k] * _Q_uk[k])
         if not _bc_d:
             A[_J_d, _J_u] -= (_W_dk[k] * _Q_dk[k])
+
+@njit(fastmath=True)
+def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _omega_c, _Q_c, M, NC):
+    # Set diagonal
+    numba_add_at(diag, _J_uc, _Q_c * _omega_c)
+    numba_add_at(diag, _J_dc, -_Q_c * (1 - _omega_c))
+    for i in range(M):
+        if bc[i]:
+            X[i,i] = 0.0
+        else:
+            X[i,i] = diag[i]
+    # Set off-diagonal
+    for c in range(NC):
+        _J_u = _J_uc[c]
+        _J_d = _J_dc[c]
+        _bc_u = bc[_J_u]
+        _bc_d = bc[_J_d]
+        if not _bc_u:
+            X[_J_u, _J_d] += (_Q_c[c] * (1 - _omega_uc[c]))
+        if not _bc_d:
+            X[_J_d, _J_u] -= (_Q_c[c] * _omega_c[c])
 
 @njit
 def numba_create_banded(l, bandwidth, M):
