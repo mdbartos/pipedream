@@ -1,18 +1,22 @@
 import numpy as np
 import pandas as pd
 from numba import njit
+import scipy.linalg
+import scipy.sparse
+import scipy.sparse.linalg
 
 # TODO: Superjunctions should have a reaction rate term
 # TODO: Use upwind scheme for bulk velocity
 
 class QualityBuilder():
-    def __init__(hydraulics, superjunction_params, superlink_params,
+    def __init__(self, hydraulics, superjunction_params, superlink_params,
                  junction_params=None, link_params=None):
         self.hydraulics = hydraulics
         self._ki = self.hydraulics._ki
         self._kI = self.hydraulics._kI
         self._K_j = superjunction_params['K'].values.astype(float)
         self._c_j = superjunction_params['c_0'].values.astype(float)
+        self.bc = superjunction_params['bc'].values.astype(bool)
         if junction_params is not None:
             self._K_Ik = junction_params['K'].values.astype(float)
             self._c_Ik = junction_params['c_0'].values.astype(float)
@@ -28,8 +32,8 @@ class QualityBuilder():
             self._K_ik = superlink_params['K'].values[self._ki].astype(float)
             self._c_ik = superlink_params['c_0'].values[self._ki].astype(float)
         # Structural parameters of hydraulic model
-        self.forward_I_i = self.hydraulics.forward_I_i       # Index of link after junction Ik
-        self.backward_I_i = self.hydraulics.backward_I_i     # Index of link before junction Ik
+        self._forward_I_i = self.hydraulics.forward_I_i       # Index of link after junction Ik
+        self._backward_I_i = self.hydraulics.backward_I_i     # Index of link before junction Ik
         self._is_start = self.hydraulics._is_start
         self._is_end = self.hydraulics._is_end
         self._ik = self.hydraulics._ik
@@ -75,44 +79,67 @@ class QualityBuilder():
         self._Y_Ik = np.zeros(self._I.size)
         self._Z_Ik = np.zeros(self._I.size)
         self._W_Ik = np.zeros(self._I.size)
-        self._X_uk = np.zeros(NK)
-        self._Y_uk = np.zeros(NK)
-        self._Z_uk = np.zeros(NK)
-        self._U_dk = np.zeros(NK)
-        self._V_dk = np.zeros(NK)
-        self._W_dk = np.zeros(NK)
+        self._X_uk = np.zeros(self.NK)
+        self._Y_uk = np.zeros(self.NK)
+        self._Z_uk = np.zeros(self.NK)
+        self._U_dk = np.zeros(self.NK)
+        self._V_dk = np.zeros(self.NK)
+        self._W_dk = np.zeros(self.NK)
+        self._F_jj = np.zeros(self.M, dtype=float)
+        self._O_diag = np.zeros(self.M, dtype=float)
+        self._W_diag = np.zeros(self.M, dtype=float)
+        self._P_diag = np.zeros(self.M, dtype=float)
+        self.A = np.zeros((self.M, self.M))
+        self.O = np.zeros((self.M, self.M))
+        self.W = np.zeros((self.M, self.M))
+        self.P = np.zeros((self.M, self.M))
+        self.D = np.zeros(self.M)
+        self.b = np.zeros(self.M)
+        self._c_uk = np.zeros(self.NK)
+        self._c_dk = np.zeros(self.NK)
+        self._c_1k = self._c_j[self._J_uk]
+        self._c_Np1k = self._c_j[self._J_dk]
 
-    def import_hydraulic_states():
-        self.H_j_next = self.hydraulics.H_j
-        self.h_Ik_next = self.hydraulics.h_Ik
-        self.Q_ik_next = self.hydraulics.Q_ik
-        self.Q_uk_next = self.hydraulics.Q_uk
-        self.Q_dk_next = self.hydraulics.Q_dk
-        self.Q_o_next = self.hydraulics.Q_o
-        self.Q_w_next = self.hydraulics.Q_w
-        self.Q_p_next = self.hydraulics.Q_p
-        self.H_j_prev = self.hydraulics['states']['H_j']
-        self.h_Ik_prev = self.hydraulics['states']['h_Ik']
-        self.Q_ik_prev = self.hydraulics['states']['Q_ik']
-        self.Q_uk_prev = self.hydraulics['states']['Q_uk']
-        self.Q_dk_prev = self.hydraulics['states']['Q_dk']
-        self.Q_o_prev = self.hydraulics['states']['Q_o']
-        self.Q_w_prev = self.hydraulics['states']['Q_w']
-        self.Q_p_prev = self.hydraulics['states']['Q_p']
-        # TODO: Don't forget control structures
-        self.u_ik = self.hydraulics.u_ik
-        self.u_Ik = self.hydraulics.u_Ik
-        # TODO
-        self.dx_ik = self.hydraulics._dx_ik
+    # TODO: It might be safer to have these as @properties
+    def import_hydraulic_states(self):
+        self._H_j_next = self.hydraulics.H_j
+        self._h_Ik_next = self.hydraulics.h_Ik
+        self._Q_ik_next = self.hydraulics.Q_ik
+        self._Q_uk_next = self.hydraulics.Q_uk
+        self._Q_dk_next = self.hydraulics.Q_dk
+        self._Q_o_next = self.hydraulics.Q_o
+        self._Q_w_next = self.hydraulics.Q_w
+        self._Q_p_next = self.hydraulics.Q_p
+        self._H_j_prev = self.hydraulics.states['H_j']
+        self._h_Ik_prev = self.hydraulics.states['h_Ik']
+        self._Q_ik_prev = self.hydraulics.states['Q_ik']
+        self._Q_uk_prev = self.hydraulics.states['Q_uk']
+        self._Q_dk_prev = self.hydraulics.states['Q_dk']
+        if self.n_o:
+            self._Q_o_prev = self.hydraulics.states['Q_o']
+        if self.n_w:
+            self._Q_w_prev = self.hydraulics.states['Q_w']
+        if self.n_p:
+            self._Q_p_prev = self.hydraulics.states['Q_p']
+        self._u_ik_next = self.hydraulics._u_ik
+        self._u_Ik_next = self.hydraulics._u_Ik
+        self._u_Ip1k_next = self.hydraulics._u_Ip1k
+        self._dx_ik_next = self.hydraulics._dx_ik
+        self._A_ik_next = self.hydraulics._A_ik
+        self._A_sj = self.hydraulics._A_sj
+
+    @property
+    def _dt(self):
+        return self.hydraulics.t - self.hydraulics.states['t']
 
     def link_coeffs(self, _dt=None, first_iter=True):
         """
         Compute link momentum coefficients: a_ik, b_ik, c_ik and P_ik.
         """
         # Import instance variables
-        _u_Ik = self._u_Ik         # Flow velocity at junction Ik
-        _u_Ip1k = self._u_Ip1k     # Flow velocity at junction I + 1k
-        _dx_ik = self._dx_ik       # Length of link ik
+        _u_Ik_next = self._u_Ik_next         # Flow velocity at junction Ik
+        _u_Ip1k_next = self._u_Ip1k_next     # Flow velocity at junction I + 1k
+        _dx_ik_next = self._dx_ik_next       # Length of link ik
         _D_ik = self._D_ik
         _K_ik = self._K_ik
         _c_ik = self._c_ik
@@ -124,9 +151,9 @@ class QualityBuilder():
         if _dt is None:
             _dt = self._dt
         # Compute link coefficients
-        _alpha_ik = alpha_ik(_u_Ik, _dx_ik, _D_ik)
-        _beta_ik = beta_ik(_dt, _D_ik, _dx_ik, _K_ik)
-        _chi_ik = chi_ik(_u_Ip1k, _dx_ik, _D_ik)
+        _alpha_ik = alpha_ik(_u_Ik_next, _dx_ik_next, _D_ik)
+        _beta_ik = beta_ik(_dt, _D_ik, _dx_ik_next, _K_ik)
+        _chi_ik = chi_ik(_u_Ip1k_next, _dx_ik_next, _D_ik)
         _gamma_ik = gamma_ik(_dt, _c_ik)
         # Export to instance variables
         self._alpha_ik = _alpha_ik
@@ -134,13 +161,13 @@ class QualityBuilder():
         self._chi_ik = _chi_ik
         self._gamma_ik = _gamma_ik
 
-    def node_coeffs(self, _Q_0Ik=None, _c_0_Ik=None, _dt=None, first_iter=True):
+    def node_coeffs(self, _Q_0Ik=None, _c_0Ik=None, _dt=None, first_iter=True):
         """
         Compute nodal continuity coefficients: D_Ik and E_Ik.
         """
         # Import instance variables
-        forward_I_i = self.forward_I_i       # Index of link after junction Ik
-        backward_I_i = self.backward_I_i     # Index of link before junction Ik
+        _forward_I_i = self._forward_I_i       # Index of link after junction Ik
+        _backward_I_i = self._backward_I_i     # Index of link before junction Ik
         _is_start = self._is_start
         _is_end = self._is_end
         _kI = self._kI
@@ -161,14 +188,14 @@ class QualityBuilder():
             _dt = self._dt
         # If no nodal input specified, use zero input
         if _Q_0Ik is None:
-            _Q_0Ik = np.zeros(_h_Ik.size)
+            _Q_0Ik = np.zeros(_h_Ik_next.size)
         if _c_0Ik is None:
-            _c_0Ik = np.zeros(_h_Ik.size)
+            _c_0Ik = np.zeros(_h_Ik_next.size)
         # Compute continuity coefficients
         numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
                           _Q_ik_next, _h_Ik_next, _h_Ik_prev, _c_Ik_prev,
                           _Q_uk_next, _Q_dk_next, _c_0Ik, _Q_0Ik, _A_SIk, _K_Ik,
-                          _forward_I_i, _backward_I_i, _kI, _dt)
+                          _forward_I_i, _backward_I_i, _is_start, _is_end, _kI, _dt)
         # Export instance variables
         self._kappa_Ik = _kappa_Ik
         self._lambda_Ik = _lambda_Ik
@@ -211,7 +238,6 @@ class QualityBuilder():
         """
         _I_Nk = self._I_Nk                # Index of penultimate junction in each superlink
         _i_nk = self._i_nk                # Index of last link in each superlink
-        _A_ik = self._A_ik                # Flow area in link ik
         _alpha_ik = self._alpha_ik
         _beta_ik = self._beta_ik
         _chi_ik = self._chi_ik
@@ -244,10 +270,15 @@ class QualityBuilder():
         _X_Ik = self._X_Ik                # Recurrence coefficient X_Ik
         _Y_Ik = self._Y_Ik                # Recurrence coefficient Y_Ik
         _Z_Ik = self._Z_Ik                # Recurrence coefficient Z_Ik
+        _kappa_Ik = self._kappa_Ik
+        _lambda_Ik = self._lambda_Ik
+        _mu_Ik = self._mu_Ik
+        _eta_Ik = self._eta_Ik
         _I_1k = self._I_1k                # Index of first junction in each superlink
         _i_1k = self._i_1k                # Index of first link in each superlink
         _I_Nk = self._I_Nk                # Index of penultimate junction in each superlink
         _i_nk = self._i_nk                # Index of last link in each superlink
+        NK = self.NK
         _X_uk = self._X_uk
         _Y_uk = self._Y_uk
         _Z_uk = self._Z_uk
@@ -256,8 +287,9 @@ class QualityBuilder():
         _W_dk = self._W_dk
         # Compute boundary coefficients
         numba_boundary_coefficients(_X_uk, _Y_uk, _Z_uk, _U_dk, _V_dk, _W_dk,
-                                    _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
-                                    NK, _I_1k, _I_Nk)
+                                _X_Ik, _Y_Ik, _Z_Ik, _U_Ik, _V_Ik, _W_Ik,
+                                _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
+                                NK, _I_1k, _I_Nk)
         # Export instance variables
         self._X_uk = _X_uk
         self._Y_uk = _Y_uk
@@ -266,7 +298,7 @@ class QualityBuilder():
         self._V_dk = _V_dk
         self._W_dk = _W_dk
 
-    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, _c_0j=None, u=None, _dt=None,
+    def sparse_matrix_equations(self, c_bc=None, _Q_0j=None, _c_0j=None, u=None, _dt=None,
                                 implicit=True, first_time=False):
         """
         Construct sparse matrices A, O, W, P and b.
@@ -283,8 +315,9 @@ class QualityBuilder():
         _W_dk = self._W_dk
         _F_jj = self._F_jj
         _A_sj = self._A_sj               # Surface area of superjunction j
-        _Q_uk = self._Q_uk
-        _Q_dk = self._Q_dk
+        _c_j = self._c_j
+        _Q_uk_next = self._Q_uk_next
+        _Q_dk_next = self._Q_dk_next
         _K_j = self._K_j
         NK = self.NK
         n_o = self.n_o                   # Number of orifices in system
@@ -296,21 +329,22 @@ class QualityBuilder():
             _J_uo = self._J_uo               # Index of superjunction upstream of orifice o
             _J_do = self._J_do               # Index of superjunction upstream of orifice o
             _O_diag = self._O_diag           # Diagonal elements of matrix O
-            _Q_o = self._Q_o
+            _Q_o_next = self._Q_o_next
         if n_w:
             W = self.W
             _J_uw = self._J_uw               # Index of superjunction upstream of weir w
             _J_dw = self._J_dw               # Index of superjunction downstream of weir w
             _W_diag = self._W_diag           # Diagonal elements of matrix W
-            _Q_w = self._Q_w
+            _Q_w_next = self._Q_w_next
         if n_p:
             P = self.P
             _J_up = self._J_up               # Index of superjunction upstream of pump p
             _J_dp = self._J_dp               # Index of superjunction downstream of pump p
             _P_diag = self._P_diag           # Diagonal elements of matrix P
-            _Q_p = self._Q_p
+            _Q_p_next = self._Q_p_next
         M = self.M                       # Number of superjunctions in system
-        H_j = self.H_j                   # Head at superjunction j
+        _H_j_next = self._H_j_next                   # Head at superjunction j
+        _H_j_prev = self._H_j_prev                   # Head at superjunction j
         bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
         D = self.D                       # Vector for storing chi coefficients
         b = self.b                       # Right-hand side vector
@@ -318,8 +352,8 @@ class QualityBuilder():
         if _dt is None:
             _dt = self._dt
         # If no boundary head specified, use current superjunction head
-        if H_bc is None:
-            H_bc = self.H_j
+        if c_bc is None:
+            c_bc = self._c_j
         # If no flow input specified, assume zero external inflow
         if _Q_0j is None:
             _Q_0j = 0
@@ -334,33 +368,33 @@ class QualityBuilder():
         numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
         # Create A matrix
         numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _X_uk, _U_dk, _Z_uk, _W_dk,
-                              _Q_uk, _Q_dk, _A_sj, _H_j_next, _dt, _K_j, M, NK)
+                              _Q_uk_next, _Q_dk_next, _A_sj, _H_j_next, _dt, _K_j, M, NK)
         # Create D vector
-        numba_add_at(D, _J_uk, -_Y_uk * _Q_uk)
-        numba_add_at(D, _J_dk, _V_dk * _Q_dk)
+        numba_add_at(D, _J_uk, -_Y_uk * _Q_uk_next)
+        numba_add_at(D, _J_dk, _V_dk * _Q_dk_next)
         # Compute control matrix
         if n_o:
             _omega_o = (_Q_o >= 0).astype(float)
             _O_diag.fill(0)
             numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
             numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _omega_o,
-                                    _Q_o, M, n_o)
+                                    _Q_o_next, M, n_o)
         if n_w:
             _omega_w = (_Q_w >= 0).astype(float)
             _W_diag.fill(0)
             numba_clear_off_diagonals(W, bc, _J_uw, _J_dw, n_w)
             numba_create_OWP_matrix(W, _W_diag, bc, _J_uw, _J_dw, _omega_w,
-                                    _Q_w, M, n_w)
+                                    _Q_w_next, M, n_w)
         if n_p:
             _omega_p = (_Q_p >= 0).astype(float)
             _P_diag.fill(0)
             numba_clear_off_diagonals(P, bc, _J_up, _J_dp, n_p)
             numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _omega_p,
-                                    _Q_p, M, n_p)
+                                    _Q_p_next, M, n_p)
         b.fill(0)
-        b = (_A_sj * _H_j_prev * _c_j_prev / _dt) + _Q_0j * _c_0j + D
+        b = (_A_sj * _H_j_prev * _c_j / _dt) + _Q_0j * _c_0j + D
         # Ensure boundary condition is specified
-        b[bc] = H_bc[bc]
+        b[bc] = c_bc[bc]
         # Export instance variables
         self.D = D
         self.b = b
@@ -372,7 +406,6 @@ class QualityBuilder():
         # Import instance variables
         A = self.A                    # Superlink/superjunction matrix
         b = self.b                    # Right-hand side vector
-        B = self.B                    # External control matrix
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
         P = self.P                    # Pump matrix
@@ -409,7 +442,6 @@ class QualityBuilder():
         # Import instance variables
         A = self.A                    # Superlink/superjunction matrix
         b = self.b                    # Right-hand side vector
-        B = self.B                    # External control matrix
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
         P = self.P                    # Pump matrix
@@ -448,8 +480,6 @@ class QualityBuilder():
         _c_j = self._c_j
         _c_uk = self._c_uk
         _c_dk = self._c_dk
-        _c_1k = self._c_1k
-        _c_Np1k = self._c_Np1k
         _J_uk = self._J_uk               # Index of superjunction upstream of superlink k
         _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
         _X_uk = self._X_uk
@@ -481,8 +511,6 @@ class QualityBuilder():
         NK = self.NK
         _c_Ik = self._c_Ik                  # Depth at junction Ik
         _c_ik = self._c_ik                  # Flow rate at link ik
-        _D_Ik = self._D_Ik                  # Continuity coefficient
-        _E_Ik = self._E_Ik                  # Continuity coefficient
         _U_Ik = self._U_Ik                  # Forward recurrence coefficient
         _V_Ik = self._V_Ik                  # Forward recurrence coefficient
         _W_Ik = self._W_Ik                  # Forward recurrence coefficient
@@ -624,7 +652,7 @@ def W_1k(alpha_1k, beta_1k):
     return safe_divide(-alpha_1k, beta_1k)
 
 @njit
-def U_Ik(alpha_ik, kappa_Ik, W_Im1k, T_ik, lambda_Ik, kappa_Ik, U_Im1k):
+def U_Ik(alpha_ik, kappa_Ik, W_Im1k, T_ik, lambda_Ik, U_Im1k):
     t_0 = alpha_ik * kappa_Ik * W_Im1k
     t_1 = T_ik * (lambda_Ik + kappa_Ik * U_Im1k)
     return safe_divide(t_0, t_1)
@@ -722,9 +750,10 @@ def W_dk(kappa_Np1k, W_Nk, mu_Np1k):
     return safe_divide(t_0, t_1)
 
 @njit
-def numba_node_coeffs(Q_ik_next, h_Ik_next, h_Ik_prev, c_Ik_prev,
+def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
+                      Q_ik_next, h_Ik_next, h_Ik_prev, c_Ik_prev,
                       Q_uk_next, Q_dk_next, c_0_Ik, Q_0_Ik, A_SIk, K_Ik,
-                      _forward_I_i, _backward_I_i, _kI, dt):
+                      _forward_I_i, _backward_I_i, _is_start, _is_end, _kI, dt):
     N = _kI.size
     for I in range(N):
         if _is_start[I]:
@@ -778,8 +807,7 @@ def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _alpha_ik, _beta_ik, _c
                                   _mu_Ik[_I_next], _lambda_Ik[_I_next], _kappa_Ik[_I_next],
                                   _U_Ik[_Im1_next])
             _U_Ik[_I_next] = U_Ik(_alpha_ik[_i_next], _kappa_Ik[_I_next], _W_Ik[_Im1_next],
-                                  _T_ik[_i_next], _lambda_Ik[_I_next], _kappa_Ik[_I_next],
-                                  _U_Ik[_Im1_next])
+                                  _T_ik[_i_next], _lambda_Ik[_I_next], _U_Ik[_Im1_next])
             _V_Ik[_I_next] = V_Ik(_gamma_ik[_i_next], _T_ik[_i_next], _alpha_ik[_i_next],
                                   _eta_Ik[_I_next], _kappa_Ik[_I_next], _V_Ik[_Im1_next],
                                   _lambda_Ik[_I_next], _U_Ik[_Im1_next])
@@ -817,6 +845,7 @@ def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _alpha_ik, _beta_ik, _
 
 @njit
 def numba_boundary_coefficients(_X_uk, _Y_uk, _Z_uk, _U_dk, _V_dk, _W_dk,
+                                _X_Ik, _Y_Ik, _Z_Ik, _U_Ik, _V_Ik, _W_Ik,
                                 _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
                                 NK, _I_1k, _I_Nk):
     for k in range(NK):
@@ -916,10 +945,10 @@ def numba_solve_internals(_c_Ik, _c_ik, _c_1k, _c_Np1k, _U_Ik, _V_Ik, _W_Ik,
         I_Np1 = I_1 + n
         I_N = I_Np1 - 1
         # Set boundary depths
-        _c_1k = _c_uk[k]
-        _c_Np1k = _c_dk[k]
-        _c_Ik[I_1] = _c_1k
-        _c_Ik[I_Np1] = _c_Np1k
+        _c_1 = _c_1k[k]
+        _c_Np1 = _c_Np1k[k]
+        _c_Ik[I_1] = _c_1
+        _c_Ik[I_Np1] = _c_Np1
         # Set max depth
         # max_depth = max_depth_k[k]
         # Compute internal depths and flows (except first link flow)
@@ -927,18 +956,18 @@ def numba_solve_internals(_c_Ik, _c_ik, _c_1k, _c_Np1k, _U_Ik, _V_Ik, _W_Ik,
             I = I_N - j
             Ip1 = I + 1
             i = i_n - j
-            _c_ik[i] = c_i_f(_c_Ik[Ip1], _c_1k, _U_Ik[I], _V_Ik[I], _W_Ik[I])
-            _c_Ik[I] = c_I_b(_c_ik[i], _c_Np1k, _X_Ik[I], _Y_Ik[I], _Z_Ik[I])
-            # if _c_Ik[I] < min_depth:
-            #     _c_Ik[I] = min_depth
-            # if _c_Ik[I] > max_depth:
-            #     _c_Ik[I] = max_depth
+            _c_ik[i] = c_i_f(_c_Ik[Ip1], _c_1, _U_Ik[I], _V_Ik[I], _W_Ik[I])
+            _c_Ik[I] = c_I_b(_c_ik[i], _c_Np1, _X_Ik[I], _Y_Ik[I], _Z_Ik[I])
+            if _c_Ik[I] < min_c:
+                _c_Ik[I] = min_c
+            # if _c_Ik[I] > max_c:
+            #     _c_Ik[I] = max_c
         if first_link_backwards:
-            _c_ik[i_1] = c_i_b(_c_Ik[I_1], _c_Np1k, _X_Ik[I_1], _Y_Ik[I_1],
+            _c_ik[i_1] = c_i_b(_c_Ik[I_1], _c_Np1, _X_Ik[I_1], _Y_Ik[I_1],
                             _Z_Ik[I_1])
         else:
             # Not theoretically correct, but seems to be more stable sometimes
-            _c_ik[i_1] = c_i_f(_c_Ik[I_1 + 1], _c_1k, _U_Ik[I_1], _V_Ik[I_1],
+            _c_ik[i_1] = c_i_f(_c_Ik[I_1 + 1], _c_1, _U_Ik[I_1], _V_Ik[I_1],
                             _W_Ik[I_1])
     return 1
 
