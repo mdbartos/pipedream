@@ -6,17 +6,32 @@ from numba import njit
 # TODO: Use upwind scheme for bulk velocity
 
 class QualityBuilder():
-    def __init__(hydraulics, superjunction_params, superlink_params):
+    def __init__(hydraulics, superjunction_params, superlink_params,
+                 junction_params=None, link_params=None):
         self.hydraulics = hydraulics
-        self._D_ik = quality_params['D_ik'].values.astype(float)
-        self._K_ik = quality_params['K_ik'].values.astype(float)
-        self._c_ik = quality_params['c0_ik'].values.astype(float)
+        self._ki = self.hydraulics._ki
+        self._kI = self.hydraulics._kI
+        self._K_j = superjunction_params['K'].values.astype(float)
+        self._c_j = superjunction_params['c_0'].values.astype(float)
+        if junction_params is not None:
+            self._K_Ik = junction_params['K'].values.astype(float)
+            self._c_Ik = junction_params['c_0'].values.astype(float)
+        else:
+            self._K_Ik = superlink_params['K'].values[self._kI].astype(float)
+            self._c_Ik = superlink_params['c_0'].values[self._kI].astype(float)
+        if link_params is not None:
+            self._D_ik = link_params['D'].values.astype(float)
+            self._K_ik = link_params['K'].values.astype(float)
+            self._c_ik = link_params['c_0'].values.astype(float)
+        else:
+            self._D_ik = superlink_params['D'].values[self._ki].astype(float)
+            self._K_ik = superlink_params['K'].values[self._ki].astype(float)
+            self._c_ik = superlink_params['c_0'].values[self._ki].astype(float)
         # Structural parameters of hydraulic model
         self.forward_I_i = self.hydraulics.forward_I_i       # Index of link after junction Ik
         self.backward_I_i = self.hydraulics.backward_I_i     # Index of link before junction Ik
         self._is_start = self.hydraulics._is_start
         self._is_end = self.hydraulics._is_end
-        self._kI = self.hydraulics._kI
         self._ik = self.hydraulics._ik
         self._I = self.hydraulics._I
         self._A_SIk = self.hydraulics._A_SIk                 # Surface area of junction Ik
@@ -30,6 +45,12 @@ class QualityBuilder():
         self._k = self.hydraulics._k                     # Superlink indices
         self._J_uk = self.hydraulics._J_uk           # Index of superjunction upstream of superlink k
         self._J_dk = self.hydraulics._J_dk          # Index of superjunction downstream of superlink k
+        self._J_uo = self.hydraulics._J_uo
+        self._J_do = self.hydraulics._J_do
+        self._J_uw = self.hydraulics._J_uw
+        self._J_dw = self.hydraulics._J_dw
+        self._J_up = self.hydraulics._J_up
+        self._J_dp = self.hydraulics._J_dp
         self.n_o = self.hydraulics.n_o              # Number of orifices in system
         self.n_w = self.hydraulics.n_w              # Number of weirs in system
         self.n_p = self.hydraulics.n_p              # Number of pumps in system
@@ -256,6 +277,8 @@ class QualityBuilder():
         _W_dk = self._W_dk
         _F_jj = self._F_jj
         _A_sj = self._A_sj               # Surface area of superjunction j
+        _Q_uk = self._Q_uk
+        _Q_dk = self._Q_dk
         _K_j = self._K_j
         NK = self.NK
         n_o = self.n_o                   # Number of orifices in system
@@ -267,16 +290,19 @@ class QualityBuilder():
             _J_uo = self._J_uo               # Index of superjunction upstream of orifice o
             _J_do = self._J_do               # Index of superjunction upstream of orifice o
             _O_diag = self._O_diag           # Diagonal elements of matrix O
+            _Q_o = self._Q_o
         if n_w:
             W = self.W
             _J_uw = self._J_uw               # Index of superjunction upstream of weir w
             _J_dw = self._J_dw               # Index of superjunction downstream of weir w
             _W_diag = self._W_diag           # Diagonal elements of matrix W
+            _Q_w = self._Q_w
         if n_p:
             P = self.P
             _J_up = self._J_up               # Index of superjunction upstream of pump p
             _J_dp = self._J_dp               # Index of superjunction downstream of pump p
             _P_diag = self._P_diag           # Diagonal elements of matrix P
+            _Q_p = self._Q_p
         M = self.M                       # Number of superjunctions in system
         H_j = self.H_j                   # Head at superjunction j
         bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
@@ -311,7 +337,8 @@ class QualityBuilder():
             _omega_o = (_Q_o >= 0).astype(float)
             _O_diag.fill(0)
             numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
-            numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _omega_o, _Q_o, M, n_o)
+            numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _omega_o,
+                                    _Q_o, M, n_o)
         if n_w:
             _omega_w = (_Q_w >= 0).astype(float)
             _W_diag.fill(0)
