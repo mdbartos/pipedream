@@ -3828,6 +3828,7 @@ class SuperLink():
         if dt is None:
             dt = self._dt
         self._Q_in = Q_in
+        self._Q_0Ik = Q_0Ik
         if not implicit:
             raise NotImplementedError
         self.link_hydraulic_geometry()

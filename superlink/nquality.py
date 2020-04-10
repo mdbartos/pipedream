@@ -99,6 +99,7 @@ class QualityBuilder():
         self._c_dk = np.zeros(self.NK)
         self._c_1k = self._c_j[self._J_uk]
         self._c_Np1k = self._c_j[self._J_dk]
+        self.step(dt=1e-6)
 
     # TODO: It might be safer to have these as @properties
     def import_hydraulic_states(self):
@@ -433,8 +434,7 @@ class QualityBuilder():
         else:
             _c_j_next = scipy.linalg.solve(l, r)
         assert np.isfinite(_c_j_next).all()
-        # H_j_next = np.maximum(H_j_next, _z_inv_j)
-        # H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        _c_j_next = np.maximum(_c_j_next, 0.)
         # Export instance variables
         self._c_j = _c_j_next
 
@@ -467,9 +467,7 @@ class QualityBuilder():
         _c_j_next = scipy.linalg.solve_banded((bandwidth, bandwidth), AB, r,
                                               check_finite=False, overwrite_ab=True)
         assert np.isfinite(_c_j_next).all()
-        # Constrain heads based on allowed maximum/minimum depths
-        # H_j_next = np.maximum(H_j_next, _z_inv_j)
-        # H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        _c_j_next = np.maximum(_c_j_next, 0.)
         # Export instance variables
         self._c_j = _c_j_next
 
@@ -576,6 +574,26 @@ class QualityBuilder():
         self._c_Ik = _c_Ik
         self._c_ik = _c_ik
 
+    def step(self, dt=None, c_bc=None, c_0j=None, Q_0j=None, c_0Ik=None, Q_0Ik=None):
+        if dt is None:
+            dt = self._dt
+        if Q_0j is None:
+            Q_0j = self.hydraulics._Q_in
+        if Q_0Ik is None:
+            Q_0Ik = self.hydraulics._Q_0Ik
+        self.link_coeffs(_dt=dt)
+        self.node_coeffs(_Q_0Ik=Q_0Ik, _c_0Ik=c_0Ik, _dt=dt)
+        self.forward_recurrence()
+        self.backward_recurrence()
+        self.boundary_coefficients()
+        self.sparse_matrix_equations(c_bc=c_bc, _Q_0j=Q_0j,
+                                     _c_0j=c_0j, _dt=dt)
+        if self.hydraulics.banded:
+            self.solve_banded_matrix()
+        else:
+            self.solve_sparse_matrix()
+        self.solve_boundary_states()
+        self.solve_internals_backwards()
 
 @njit
 def safe_divide(num, den):
