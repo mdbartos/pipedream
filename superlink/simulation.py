@@ -131,13 +131,13 @@ class Simulation():
         self.bc = self.model.bc
         # TODO: This needs to be generalized
         self.state_variables = {'H_j' : 'j',
-                                '_h_Ik' : 'Ik',
-                                '_Q_ik' : 'ik',
-                                '_Q_uk' : 'k',
-                                '_Q_dk' : 'k',
-                                '_Qo' : 'o',
-                                '_Qw' : 'w',
-                                '_Qp' : 'p'}
+                                'h_Ik' : 'Ik',
+                                'Q_ik' : 'ik',
+                                'Q_uk' : 'k',
+                                'Q_dk' : 'k',
+                                'Q_o' : 'o',
+                                'Q_w' : 'w',
+                                'Q_p' : 'p'}
         if t_start is None:
             if any_inputs:
                 self.t_start = min(i.index.min() for i in self.inputs if i is not None)

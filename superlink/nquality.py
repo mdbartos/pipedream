@@ -88,11 +88,17 @@ class QualityBuilder():
         self.Q_ik_next = self.hydraulics.Q_ik
         self.Q_uk_next = self.hydraulics.Q_uk
         self.Q_dk_next = self.hydraulics.Q_dk
+        self.Q_o_next = self.hydraulics.Q_o
+        self.Q_w_next = self.hydraulics.Q_w
+        self.Q_p_next = self.hydraulics.Q_p
         self.H_j_prev = self.hydraulics['states']['H_j']
         self.h_Ik_prev = self.hydraulics['states']['h_Ik']
         self.Q_ik_prev = self.hydraulics['states']['Q_ik']
         self.Q_uk_prev = self.hydraulics['states']['Q_uk']
         self.Q_dk_prev = self.hydraulics['states']['Q_dk']
+        self.Q_o_prev = self.hydraulics['states']['Q_o']
+        self.Q_w_prev = self.hydraulics['states']['Q_w']
+        self.Q_p_prev = self.hydraulics['states']['Q_p']
         # TODO: Don't forget control structures
         self.u_ik = self.hydraulics.u_ik
         self.u_Ik = self.hydraulics.u_Ik
