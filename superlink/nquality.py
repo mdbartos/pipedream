@@ -5,9 +5,6 @@ import scipy.linalg
 import scipy.sparse
 import scipy.sparse.linalg
 
-# TODO: Superjunctions should have a reaction rate term
-# TODO: Use upwind scheme for bulk velocity
-
 class QualityBuilder():
     def __init__(self, hydraulics, superjunction_params, superlink_params,
                  junction_params=None, link_params=None):
@@ -61,7 +58,7 @@ class QualityBuilder():
         self._sparse = self.hydraulics._sparse        # Use sparse data structures (y/n)
         self.bandwidth = self.hydraulics.bandwidth
         # Import instantaneous states of hydraulic model
-        self.import_hydraulic_states()
+        # self.import_hydraulic_states()
         # New states
         self._alpha_ik = np.zeros(self._ik.size)
         self._beta_ik = np.zeros(self._ik.size)
@@ -424,7 +421,7 @@ class QualityBuilder():
             numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _omega_p,
                                     _Q_p_next, M, n_p)
         b.fill(0)
-        b = (_A_sj * _H_j_prev * _c_j / _dt) + _Q_0j * _c_0j + D
+        b = (_A_sj * _H_j_prev * _c_j / _dt) + (_Q_0j * _c_0j) + D
         # Ensure boundary condition is specified
         b[bc] = c_bc[bc]
         # Export instance variables
@@ -517,12 +514,11 @@ class QualityBuilder():
         _rho_dk = self._rho_dk
         _tau_dk = self._tau_dk
         _omega_dk = self._omega_dk
-        # Set boundary node concentrations
-        _c_1k = _c_j[_J_uk]
-        _c_Np1k = _c_j[_J_dk]
         # Solve for boundary flow concentrations
         _c_uk_next = _rho_uk * _c_j[_J_uk] + _tau_uk * _c_j[_J_dk] + _omega_uk
         _c_dk_next = _rho_dk * _c_j[_J_uk] + _tau_dk * _c_j[_J_dk] + _omega_dk
+        _c_1k = 2 * _c_uk_next - _c_j[_J_uk]
+        _c_Np1k = 2 * _c_dk_next - _c_j[_J_dk]
         # Export instance variables
         self._c_1k = _c_1k
         self._c_Np1k = _c_Np1k
@@ -606,6 +602,7 @@ class QualityBuilder():
         self._c_ik = _c_ik
 
     def step(self, dt=None, c_bc=None, c_0j=None, Q_0j=None, c_0Ik=None, Q_0Ik=None):
+        self.import_hydraulic_states()
         if dt is None:
             dt = self._dt
         if Q_0j is None:
