@@ -85,6 +85,12 @@ class QualityBuilder():
         self._U_dk = np.zeros(self.NK)
         self._V_dk = np.zeros(self.NK)
         self._W_dk = np.zeros(self.NK)
+        self._rho_uk = np.zeros(self.NK)
+        self._tau_uk = np.zeros(self.NK)
+        self._omega_uk = np.zeros(self.NK)
+        self._rho_dk = np.zeros(self.NK)
+        self._tau_dk = np.zeros(self.NK)
+        self._omega_dk = np.zeros(self.NK)
         self._F_jj = np.zeros(self.M, dtype=float)
         self._O_diag = np.zeros(self.M, dtype=float)
         self._W_diag = np.zeros(self.M, dtype=float)
@@ -292,11 +298,24 @@ class QualityBuilder():
         _U_dk = self._U_dk
         _V_dk = self._V_dk
         _W_dk = self._W_dk
+        _rho_uk = self._rho_uk
+        _tau_uk = self._tau_uk
+        _omega_uk = self._omega_uk
+        _rho_dk = self._rho_dk
+        _tau_dk = self._tau_dk
+        _omega_dk = self._omega_dk
         # Compute boundary coefficients
         numba_boundary_coefficients(_X_uk, _Y_uk, _Z_uk, _U_dk, _V_dk, _W_dk,
-                                _X_Ik, _Y_Ik, _Z_Ik, _U_Ik, _V_Ik, _W_Ik,
-                                _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
-                                NK, _I_1k, _I_Nk)
+                                    _X_Ik, _Y_Ik, _Z_Ik, _U_Ik, _V_Ik, _W_Ik,
+                                    _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
+                                    NK, _I_1k, _I_Nk)
+        _D_k_star = D_k_star(_X_uk, _U_dk, _W_dk, _Z_uk)
+        _rho_uk = rho_uk(_U_dk, _X_uk, _Z_uk, _W_dk, _D_k_star)
+        _tau_uk = tau_uk(_Z_uk, _D_k_star)
+        _omega_uk = omega_uk(_Z_uk, _V_dk, _U_dk, _Y_uk, _D_k_star)
+        _rho_dk = rho_dk(_W_dk, _D_k_star)
+        _tau_dk = tau_dk(_X_uk, _U_dk, _W_dk, _Z_uk, _D_k_star)
+        _omega_dk = omega_dk(_W_dk, _Y_uk, _X_uk, _V_dk, _D_k_star)
         # Export instance variables
         self._X_uk = _X_uk
         self._Y_uk = _Y_uk
@@ -304,6 +323,12 @@ class QualityBuilder():
         self._U_dk = _U_dk
         self._V_dk = _V_dk
         self._W_dk = _W_dk
+        self._rho_uk = _rho_uk
+        self._tau_uk = _tau_uk
+        self._omega_uk = _omega_uk
+        self._rho_dk = _rho_dk
+        self._tau_dk = _tau_dk
+        self._omega_dk = _omega_dk
 
     def sparse_matrix_equations(self, c_bc=None, _Q_0j=None, _c_0j=None, u=None, _dt=None,
                                 implicit=True, first_time=False):
@@ -314,12 +339,12 @@ class QualityBuilder():
         _k = self._k                     # Superlink indices
         _J_uk = self._J_uk               # Index of superjunction upstream of superlink k
         _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
-        _X_uk = self._X_uk
-        _Y_uk = self._Y_uk
-        _Z_uk = self._Z_uk
-        _U_dk = self._U_dk
-        _V_dk = self._V_dk
-        _W_dk = self._W_dk
+        _rho_uk = self._rho_uk
+        _tau_uk = self._tau_uk
+        _omega_uk = self._omega_uk
+        _rho_dk = self._rho_dk
+        _tau_dk = self._tau_dk
+        _omega_dk = self._omega_dk
         _F_jj = self._F_jj
         _A_sj = self._A_sj               # Surface area of superjunction j
         _c_j = self._c_j
@@ -374,11 +399,11 @@ class QualityBuilder():
         D.fill(0)
         numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
         # Create A matrix
-        numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _X_uk, _U_dk, _Z_uk, _W_dk,
+        numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _tau_dk, _tau_uk, _rho_dk,
                               _Q_uk_next, _Q_dk_next, _A_sj, _H_j_next, _dt, _K_j, M, NK)
         # Create D vector
-        numba_add_at(D, _J_uk, -_Y_uk * _Q_uk_next)
-        numba_add_at(D, _J_dk, _V_dk * _Q_dk_next)
+        numba_add_at(D, _J_uk, -_omega_uk * _Q_uk_next)
+        numba_add_at(D, _J_dk, _omega_dk * _Q_dk_next)
         # Compute control matrix
         if n_o:
             _omega_o = (_Q_o >= 0).astype(float)
@@ -486,18 +511,18 @@ class QualityBuilder():
         _c_dk = self._c_dk
         _J_uk = self._J_uk               # Index of superjunction upstream of superlink k
         _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
-        _X_uk = self._X_uk
-        _Y_uk = self._Y_uk
-        _Z_uk = self._Z_uk
-        _U_dk = self._U_dk
-        _V_dk = self._V_dk
-        _W_dk = self._W_dk
+        _rho_uk = self._rho_uk
+        _tau_uk = self._tau_uk
+        _omega_uk = self._omega_uk
+        _rho_dk = self._rho_dk
+        _tau_dk = self._tau_dk
+        _omega_dk = self._omega_dk
         # Set boundary node concentrations
         _c_1k = _c_j[_J_uk]
         _c_Np1k = _c_j[_J_dk]
         # Solve for boundary flow concentrations
-        _c_uk_next = _X_uk * _c_j[_J_uk] + _Z_uk * _c_j[_J_dk] + _Y_uk
-        _c_dk_next = _W_dk * _c_j[_J_uk] + _U_dk * _c_j[_J_dk] + _V_dk
+        _c_uk_next = _rho_uk * _c_j[_J_uk] + _tau_uk * _c_j[_J_dk] + _omega_uk
+        _c_dk_next = _rho_dk * _c_j[_J_uk] + _tau_dk * _c_j[_J_dk] + _omega_dk
         # Export instance variables
         self._c_1k = _c_1k
         self._c_Np1k = _c_Np1k
@@ -779,6 +804,82 @@ def W_dk(kappa_Np1k, W_Nk, mu_Np1k):
     return safe_divide(t_0, t_1)
 
 @njit
+def D_k_star(X_uk, U_dk, W_dk, Z_uk):
+    """
+    Compute superlink boundary condition coefficient 'D_k_star'.
+    """
+    t_0 = (2 * X_uk - 1) * (2 * U_dk - 1)
+    t_1 = 4 * W_dk * Z_uk
+    result = t_0 - t_1
+    return result
+
+@njit
+def rho_uk(U_dk, X_uk, Z_uk, W_dk, D_k_star):
+    """
+    Compute superlink boundary condition coefficient 'alpha' for upstream end
+    of superlink k.
+    """
+    num = (2 * U_dk - 1) * X_uk - 2 * Z_uk * W_dk
+    den = D_k_star
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
+def tau_uk(Z_uk, D_k_star):
+    """
+    Compute superlink boundary condition coefficient 'beta' for upstream end
+    of superlink k.
+    """
+    num = - Z_uk
+    den = D_k_star
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
+def omega_uk(Z_uk, V_dk, U_dk, Y_uk, D_k_star):
+    """
+    Compute superlink boundary condition coefficient 'chi' for upstream end
+    of superlink k.
+    """
+    num = 2 * Z_uk * V_dk - (2 * U_dk - 1) * Y_uk
+    den = D_k_star
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
+def rho_dk(W_dk, D_k_star):
+    """
+    Compute superlink boundary condition coefficient 'alpha' for downstream end
+    of superlink k.
+    """
+    num = - W_dk
+    den = D_k_star
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
+def tau_dk(X_uk, U_dk, W_dk, Z_uk, D_k_star):
+    """
+    Compute superlink boundary condition coefficient 'beta' for downstream end
+    of superlink k.
+    """
+    num = (2 * X_uk - 1) * U_dk - 2 * W_dk * Z_uk
+    den = D_k_star
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
+def omega_dk(W_dk, Y_uk, X_uk, V_dk, D_k_star):
+    """
+    Compute superlink boundary condition coefficient 'chi' for downstream end
+    of superlink k.
+    """
+    num = 2 * W_dk * Y_uk - (2 * X_uk - 1) * V_dk
+    den = D_k_star
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit
 def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
                       Q_ik_next, h_Ik_next, h_Ik_prev, c_Ik_prev, c_ik_prev,
                       Q_uk_next, Q_dk_next, c_0_Ik, Q_0_Ik, A_SIk, K_Ik, B_ik, dx_ik,
@@ -910,10 +1011,10 @@ def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
             A[_J_d, _J_u] = 0.0
 
 @njit(fastmath=True)
-def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _X_uk, _U_dk, _Z_uk, _W_dk,
+def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _tau_dk, _tau_uk, _rho_dk,
                           _Q_uk, _Q_dk, _A_sj, _H_j_next, _dt, _K_j, M, NK):
-    numba_add_at(_F_jj, _J_uk, _X_uk * _Q_uk)
-    numba_add_at(_F_jj, _J_dk, -_U_dk * _Q_dk)
+    numba_add_at(_F_jj, _J_uk, _rho_uk * _Q_uk)
+    numba_add_at(_F_jj, _J_dk, -_tau_dk * _Q_dk)
     _F_jj += (_A_sj * _H_j_next / _dt) + _K_j
     # Set diagonal of A matrix
     for i in range(M):
@@ -927,9 +1028,9 @@ def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _X_uk, _U_dk, _Z_uk, _W_dk
         _bc_u = bc[_J_u]
         _bc_d = bc[_J_d]
         if not _bc_u:
-            A[_J_u, _J_d] += (_Z_uk[k] * _Q_uk[k])
+            A[_J_u, _J_d] += (_tau_uk[k] * _Q_uk[k])
         if not _bc_d:
-            A[_J_d, _J_u] -= (_W_dk[k] * _Q_dk[k])
+            A[_J_d, _J_u] -= (_rho_dk[k] * _Q_dk[k])
 
 @njit(fastmath=True)
 def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _omega_c, _Q_c, M, NC):
