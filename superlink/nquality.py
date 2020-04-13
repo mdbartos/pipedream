@@ -39,6 +39,7 @@ class QualityBuilder():
         self._I_1k = self.hydraulics._I_1k                # Index of first junction in each superlink
         self._i_1k = self.hydraulics._i_1k                # Index of first link in each superlink
         self._I_Nk = self.hydraulics._I_Nk           # Index of penultimate junction in each superlink
+        self._I_Np1k = self.hydraulics._I_Np1k       # Index of ultimate junction in each superlink
         self._i_nk = self.hydraulics._i_nk           # Index of last link in each superlink
         self.NK = self.hydraulics.NK
         self.M = self.hydraulics.M
@@ -98,10 +99,10 @@ class QualityBuilder():
         self.P = np.zeros((self.M, self.M))
         self.D = np.zeros(self.M)
         self.b = np.zeros(self.M)
-        self._c_uk = np.zeros(self.NK)
-        self._c_dk = np.zeros(self.NK)
-        self._c_1k = self._c_j[self._J_uk]
-        self._c_Np1k = self._c_j[self._J_dk]
+        self._c_uk = 0.5 * self._c_j[self._J_uk] + 0.5 * self._c_Ik[self._I_1k]
+        self._c_dk = 0.5 * self._c_j[self._J_dk] + 0.5 * self._c_Ik[self._I_Np1k]
+        self._c_1k = self._c_Ik[self._I_1k]
+        self._c_Np1k = self._c_Ik[self._I_Np1k]
         self.step(dt=1e-6)
 
     # TODO: It might be safer to have these as @properties
@@ -111,19 +112,19 @@ class QualityBuilder():
         self._Q_ik_next = self.hydraulics.Q_ik
         self._Q_uk_next = self.hydraulics.Q_uk
         self._Q_dk_next = self.hydraulics.Q_dk
-        self._Q_o_next = self.hydraulics.Q_o
-        self._Q_w_next = self.hydraulics.Q_w
-        self._Q_p_next = self.hydraulics.Q_p
         self._H_j_prev = self.hydraulics.states['H_j']
         self._h_Ik_prev = self.hydraulics.states['h_Ik']
         self._Q_ik_prev = self.hydraulics.states['Q_ik']
         self._Q_uk_prev = self.hydraulics.states['Q_uk']
         self._Q_dk_prev = self.hydraulics.states['Q_dk']
         if self.n_o:
+            self._Q_o_next = self.hydraulics.Q_o
             self._Q_o_prev = self.hydraulics.states['Q_o']
         if self.n_w:
+            self._Q_w_next = self.hydraulics.Q_w
             self._Q_w_prev = self.hydraulics.states['Q_w']
         if self.n_p:
+            self._Q_p_next = self.hydraulics.Q_p
             self._Q_p_prev = self.hydraulics.states['Q_p']
         self._u_ik_next = self.hydraulics._u_ik
         self._u_Ik_next = self.hydraulics._u_Ik
@@ -188,7 +189,6 @@ class QualityBuilder():
         _lambda_Ik = self._lambda_Ik
         _mu_Ik = self._mu_Ik
         _eta_Ik = self._eta_Ik
-        _dx_ik = self._dx_ik_next
         _c_ik_prev = self._c_ik
         _B_ik_next = self._B_ik_next
         _dx_ik_next = self._dx_ik_next
@@ -396,7 +396,7 @@ class QualityBuilder():
         D.fill(0)
         numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
         # Create A matrix
-        numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _tau_dk, _tau_uk, _rho_dk,
+        numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk, _tau_dk,
                               _Q_uk_next, _Q_dk_next, _A_sj, _H_j_next, _dt, _K_j, M, NK)
         # Create D vector
         numba_add_at(D, _J_uk, -_omega_uk * _Q_uk_next)
@@ -703,22 +703,22 @@ def W_1k(alpha_1k, beta_1k):
     return safe_divide(-alpha_1k, beta_1k)
 
 @njit
-def U_Ik(alpha_ik, kappa_Ik, W_Im1k, T_ik, lambda_Ik, U_Im1k):
-    t_0 = alpha_ik * kappa_Ik * W_Im1k
-    t_1 = T_ik * (lambda_Ik + kappa_Ik * U_Im1k)
-    return safe_divide(t_0, t_1)
+def U_Ik(chi_ik, T_ik):
+    return safe_divide(-chi_ik, T_ik)
 
 @njit
 def V_Ik(gamma_ik, T_ik, alpha_ik, eta_Ik, kappa_Ik, V_Im1k, lambda_Ik, U_Im1k):
     t_0 = safe_divide(gamma_ik, T_ik)
-    t_1 = - alpha_ik * (eta_Ik + kappa_Ik * V_Im1k)
+    t_1 = - alpha_ik * (eta_Ik - kappa_Ik * V_Im1k)
     # TODO: Note that this denominator is being computed 3 times
     t_2 = T_ik * (lambda_Ik + kappa_Ik * U_Im1k)
     return t_0 + safe_divide(t_1, t_2)
 
 @njit
-def W_Ik(chi_ik, T_ik):
-    return safe_divide(-chi_ik, T_ik)
+def W_Ik(alpha_ik, kappa_Ik, W_Im1k, T_ik, lambda_Ik, U_Im1k):
+    t_0 = alpha_ik * kappa_Ik * W_Im1k
+    t_1 = T_ik * (lambda_Ik + kappa_Ik * U_Im1k)
+    return safe_divide(t_0, t_1)
 
 @njit
 def T_ik(beta_ik, alpha_ik, mu_Ik, lambda_Ik, kappa_Ik, U_Im1k):
@@ -934,12 +934,12 @@ def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _alpha_ik, _beta_ik, _c
             _T_ik[_i_next] = T_ik(_beta_ik[_i_next], _alpha_ik[_i_next],
                                   _mu_Ik[_I_next], _lambda_Ik[_I_next], _kappa_Ik[_I_next],
                                   _U_Ik[_Im1_next])
-            _U_Ik[_I_next] = U_Ik(_alpha_ik[_i_next], _kappa_Ik[_I_next], _W_Ik[_Im1_next],
-                                  _T_ik[_i_next], _lambda_Ik[_I_next], _U_Ik[_Im1_next])
+            _U_Ik[_I_next] = U_Ik(_chi_ik[_i_next], _T_ik[_i_next])
             _V_Ik[_I_next] = V_Ik(_gamma_ik[_i_next], _T_ik[_i_next], _alpha_ik[_i_next],
                                   _eta_Ik[_I_next], _kappa_Ik[_I_next], _V_Ik[_Im1_next],
                                   _lambda_Ik[_I_next], _U_Ik[_Im1_next])
-            _W_Ik[_I_next] = W_Ik(_chi_ik[_i_next], _T_ik[_i_next])
+            _W_Ik[_I_next] = W_Ik(_alpha_ik[_i_next], _kappa_Ik[_I_next], _W_Ik[_Im1_next],
+                                  _T_ik[_i_next], _lambda_Ik[_I_next], _U_Ik[_Im1_next])
     return 1
 
 @njit
@@ -1008,7 +1008,7 @@ def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
             A[_J_d, _J_u] = 0.0
 
 @njit(fastmath=True)
-def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _tau_dk, _tau_uk, _rho_dk,
+def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk, _tau_dk,
                           _Q_uk, _Q_dk, _A_sj, _H_j_next, _dt, _K_j, M, NK):
     numba_add_at(_F_jj, _J_uk, _rho_uk * _Q_uk)
     numba_add_at(_F_jj, _J_dk, -_tau_dk * _Q_dk)
