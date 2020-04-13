@@ -752,6 +752,10 @@ class SuperLink():
         return self._z_inv_dk
 
     @property
+    def x_Ik(self):
+        return self._x_Ik
+
+    @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
         M = self.M
         # TODO: Maybe a cleaner way of doing this
@@ -3793,6 +3797,7 @@ class SuperLink():
         self.states['Q_ik'] = np.copy(self.Q_ik)
         self.states['Q_uk'] = np.copy(self.Q_uk)
         self.states['Q_dk'] = np.copy(self.Q_dk)
+        self.states['x_Ik'] = np.copy(self.x_Ik)
         if self.n_o:
             self.states['Q_o'] = np.copy(self.Q_o)
         if self.n_w:

@@ -137,7 +137,8 @@ class Simulation():
                                 'Q_dk' : 'k',
                                 'Q_o' : 'o',
                                 'Q_w' : 'w',
-                                'Q_p' : 'p'}
+                                'Q_p' : 'p',
+                                'x_Ik' : 'Ik'}
         if t_start is None:
             if any_inputs:
                 self.t_start = min(i.index.min() for i in self.inputs if i is not None)
