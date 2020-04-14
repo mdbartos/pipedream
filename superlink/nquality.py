@@ -158,9 +158,11 @@ class QualityBuilder():
         if _dt is None:
             _dt = self._dt
         # Compute link coefficients
-        _alpha_ik = alpha_ik(_u_Ik_next, _dx_ik_next, _D_ik)
-        _beta_ik = beta_ik(_dt, _D_ik, _dx_ik_next, _K_ik)
-        _chi_ik = chi_ik(_u_Ip1k_next, _dx_ik_next, _D_ik)
+        _u_Ik_hat = -np.maximum(_u_Ik_next, 0.)
+        _u_Ip1k_hat = -np.maximum(-_u_Ip1k_next, 0.)
+        _alpha_ik = alpha_ik(_u_Ik_hat, _dx_ik_next, _D_ik)
+        _beta_ik = beta_ik(_dt, _D_ik, _dx_ik_next, _K_ik, _u_Ik_hat, _u_Ip1k_hat)
+        _chi_ik = chi_ik(_u_Ip1k_hat, _dx_ik_next, _D_ik)
         _gamma_ik = gamma_ik(_dt, _c_ik)
         # Export to instance variables
         self._alpha_ik = _alpha_ik
@@ -649,21 +651,23 @@ def safe_divide_vec(num, den):
 @njit
 def alpha_ik(u_Ik, dx_ik, D_ik):
     # Use upwind scheme
-    t_0 = - np.maximum(u_Ik, 0) / dx_ik
+    t_0 = u_Ik / dx_ik
     t_1 = - 2 * D_ik / (dx_ik**2)
     return t_0 + t_1
 
 @njit
-def beta_ik(dt, D_ik, dx_ik, K_ik):
+def beta_ik(dt, D_ik, dx_ik, K_ik, u_Ik, u_Ip1k):
     t_0 = 1 / dt
     t_1 = 4 * D_ik / (dx_ik**2)
     t_2 = - K_ik
-    return t_0 + t_1 + t_2
+    t_3 = - u_Ik / dx_ik
+    t_4 = - u_Ip1k / dx_ik
+    return t_0 + t_1 + t_2 + t_3 + t_4
 
 @njit
 def chi_ik(u_Ip1k, dx_ik, D_ik):
     # Use upwind scheme
-    t_0 = - np.maximum(-u_Ip1k, 0) / dx_ik
+    t_0 = u_Ip1k / dx_ik
     t_1 = - 2 * D_ik / (dx_ik**2)
     return t_0 + t_1
 
