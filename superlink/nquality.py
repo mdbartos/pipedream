@@ -28,6 +28,16 @@ class QualityBuilder():
             self._D_ik = superlink_params['D'].values[self._ki].astype(float)
             self._K_ik = superlink_params['K'].values[self._ki].astype(float)
             self._c_ik = superlink_params['c_0'].values[self._ki].astype(float)
+        self._dx_uk = superlink_params['dx_uk'].values.astype(float)
+        self._dx_dk = superlink_params['dx_dk'].values.astype(float)
+        if 'D_uk' in superlink_params.columns:
+            self._D_uk = superlink_params['D_uk'].values.astype(float)
+        else:
+            self._D_uk = superlink_params['D'].values.astype(float)
+        if 'D_dk' in superlink_params.columns:
+            self._D_dk = superlink_params['D_dk'].values.astype(float)
+        else:
+            self._D_dk = superlink_params['D'].values.astype(float)
         # Structural parameters of hydraulic model
         self._forward_I_i = self.hydraulics.forward_I_i       # Index of link after junction Ik
         self._backward_I_i = self.hydraulics.backward_I_i     # Index of link before junction Ik
@@ -132,6 +142,8 @@ class QualityBuilder():
         self._dx_ik_next = self.hydraulics._dx_ik
         self._A_ik_next = self.hydraulics._A_ik
         self._B_ik_next = self.hydraulics._B_ik
+        self._A_uk_next = self.hydraulics._A_uk
+        self._A_dk_next = self.hydraulics._A_dk
         self._A_sj = self.hydraulics._A_sj
         self._V_sj = self.hydraulics._V_sj
 
@@ -150,6 +162,19 @@ class QualityBuilder():
         _D_ik = self._D_ik
         _K_ik = self._K_ik
         _c_ik = self._c_ik
+        _Q_uk_next = self._Q_uk_next
+        _A_uk_next = self._A_uk_next
+        _Q_dk_next = self._Q_dk_next
+        _A_dk_next = self._A_dk_next
+        _u_ik_next = self._u_ik_next
+        _D_uk = self._D_uk
+        _D_dk = self._D_dk
+        _dx_uk = self._dx_uk
+        _dx_dk = self._dx_dk
+        _i_1k = self._i_1k
+        _i_nk = self._i_nk
+        _c_uk = self._c_uk
+        _c_dk = self._c_dk
         _alpha_ik = self._alpha_ik
         _beta_ik = self._beta_ik
         _chi_ik = self._chi_ik
@@ -164,11 +189,35 @@ class QualityBuilder():
         _beta_ik = beta_ik(_dt, _D_ik, _dx_ik_next, _K_ik, _u_Ik_hat, _u_Ip1k_hat)
         _chi_ik = chi_ik(_u_Ip1k_hat, _dx_ik_next, _D_ik)
         _gamma_ik = gamma_ik(_dt, _c_ik)
+        # Compute link coefficients for boundaries
+        # TODO: This should happen in hydraulic solver
+        _u_1k = (safe_divide_vec(_Q_uk_next, _A_uk_next)
+                 + _u_ik_next[_i_1k]) / 2
+        _u_Np1k = (safe_divide_vec(_Q_dk_next, _A_dk_next)
+                   + _u_ik_next[_i_nk]) / 2
+        _u_1k_hat = -np.maximum(_u_1k, 0.)
+        _u_Np1k_hat = -np.maximum(-_u_Np1k, 0.)
+        _alpha_uk = alpha_ik(0.0, _dx_uk, _D_uk)
+        _beta_uk = beta_ik(_dt, _D_uk, _dx_uk, 0.0, 0.0, _u_1k_hat)
+        _chi_uk = chi_ik(_u_1k_hat, _dx_uk, _D_uk)
+        _gamma_uk = gamma_ik(_dt, _c_uk)
+        _alpha_dk = alpha_ik(_u_Np1k_hat, _dx_dk, _D_dk)
+        _beta_dk = beta_ik(_dt, _D_dk, _dx_dk, 0.0, _u_Np1k_hat, 0.0)
+        _chi_dk = chi_ik(0.0, _dx_dk, _D_dk)
+        _gamma_dk = gamma_ik(_dt, _c_dk)
         # Export to instance variables
         self._alpha_ik = _alpha_ik
         self._beta_ik = _beta_ik
         self._chi_ik = _chi_ik
         self._gamma_ik = _gamma_ik
+        self._alpha_uk = _alpha_uk
+        self._beta_uk = _beta_uk
+        self._chi_uk = _chi_uk
+        self._gamma_uk = _gamma_uk
+        self._alpha_dk = _alpha_dk
+        self._beta_dk = _beta_dk
+        self._chi_dk = _chi_dk
+        self._gamma_dk = _gamma_dk
 
     def node_coeffs(self, _Q_0Ik=None, _c_0Ik=None, _dt=None, first_iter=True):
         """
@@ -300,6 +349,14 @@ class QualityBuilder():
         _U_dk = self._U_dk
         _V_dk = self._V_dk
         _W_dk = self._W_dk
+        _alpha_uk = self._alpha_uk
+        _beta_uk = self._beta_uk
+        _chi_uk = self._chi_uk
+        _gamma_uk = self._gamma_uk
+        _alpha_dk = self._alpha_dk
+        _beta_dk = self._beta_dk
+        _chi_dk = self._chi_dk
+        _gamma_dk = self._gamma_dk
         _rho_uk = self._rho_uk
         _tau_uk = self._tau_uk
         _omega_uk = self._omega_uk
@@ -311,13 +368,23 @@ class QualityBuilder():
                                     _X_Ik, _Y_Ik, _Z_Ik, _U_Ik, _V_Ik, _W_Ik,
                                     _kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik,
                                     NK, _I_1k, _I_Nk)
-        _D_k_star = D_k_star(_X_uk, _U_dk, _W_dk, _Z_uk)
-        _rho_uk = rho_uk(_U_dk, _X_uk, _Z_uk, _W_dk, _D_k_star)
-        _tau_uk = tau_uk(_Z_uk, _D_k_star)
-        _omega_uk = omega_uk(_Z_uk, _V_dk, _U_dk, _Y_uk, _D_k_star)
-        _rho_dk = rho_dk(_W_dk, _D_k_star)
-        _tau_dk = tau_dk(_X_uk, _U_dk, _W_dk, _Z_uk, _D_k_star)
-        _omega_dk = omega_dk(_W_dk, _Y_uk, _X_uk, _V_dk, _D_k_star)
+        # Compute boundary advection/diffusion coefficients
+        _theta_uk = theta_uk(_beta_uk, _chi_uk)
+        _sigma_uk = sigma_uk(_alpha_uk, _chi_uk)
+        _xi_uk = xi_uk(_gamma_uk, _chi_uk)
+        _theta_dk = theta_dk(_beta_dk, _alpha_dk)
+        _sigma_dk = sigma_dk(_chi_dk, _alpha_dk)
+        _xi_dk = xi_dk(_gamma_dk, _alpha_dk)
+        # Compute boundary transport coefficients
+        _D_k_star = D_k_star(_X_uk, _U_dk, _W_dk, _Z_uk, _theta_uk, _theta_dk)
+        _rho_uk = rho_uk(_U_dk, _X_uk, _Z_uk, _W_dk, _theta_dk, _sigma_uk, _D_k_star)
+        _tau_uk = tau_uk(_Z_uk, _sigma_dk, _D_k_star)
+        _omega_uk = omega_uk(_Z_uk, _V_dk, _U_dk, _Y_uk, _X_uk, _W_dk,
+                             _theta_dk, _xi_uk, _xi_dk, _D_k_star)
+        _rho_dk = rho_dk(_W_dk, _sigma_uk, _D_k_star)
+        _tau_dk = tau_dk(_X_uk, _U_dk, _W_dk, _Z_uk, _theta_uk, _sigma_dk, _D_k_star)
+        _omega_dk = omega_dk(_W_dk, _Y_uk, _X_uk, _V_dk, _Z_uk, _U_dk,
+                             _theta_uk, _xi_uk, _xi_dk, _D_k_star)
         # Export instance variables
         self._X_uk = _X_uk
         self._Y_uk = _Y_uk
@@ -325,6 +392,12 @@ class QualityBuilder():
         self._U_dk = _U_dk
         self._V_dk = _V_dk
         self._W_dk = _W_dk
+        self._theta_uk = _theta_uk
+        self._sigma_uk = _sigma_uk
+        self._xi_uk = _xi_uk
+        self._theta_dk = _theta_dk
+        self._sigma_dk = _sigma_dk
+        self._xi_dk = _xi_dk
         self._rho_uk = _rho_uk
         self._tau_uk = _tau_uk
         self._omega_uk = _omega_uk
@@ -813,77 +886,105 @@ def W_dk(kappa_Np1k, W_Nk, mu_Np1k):
     return safe_divide(t_0, t_1)
 
 @njit
-def D_k_star(X_uk, U_dk, W_dk, Z_uk):
+def theta_uk(beta_uk, chi_uk):
+    return safe_divide_vec(-beta_uk, chi_uk)
+
+@njit
+def sigma_uk(alpha_uk, chi_uk):
+    return safe_divide_vec(-alpha_uk, chi_uk)
+
+@njit
+def xi_uk(gamma_uk, chi_uk):
+    return safe_divide_vec(gamma_uk, chi_uk)
+
+@njit
+def theta_dk(beta_dk, alpha_dk):
+    return safe_divide_vec(-beta_dk, alpha_dk)
+
+@njit
+def sigma_dk(chi_dk, alpha_dk):
+    return safe_divide_vec(-chi_dk, alpha_dk)
+
+@njit
+def xi_dk(gamma_dk, alpha_dk):
+    return safe_divide_vec(gamma_dk, alpha_dk)
+
+@njit
+def D_k_star(X_uk, U_dk, W_dk, Z_uk, theta_uk, theta_dk):
     """
     Compute superlink boundary condition coefficient 'D_k_star'.
     """
-    t_0 = (2 * X_uk - 1) * (2 * U_dk - 1)
-    t_1 = 4 * W_dk * Z_uk
+    t_0 = (1 - X_uk * theta_uk) * (1 - U_dk * theta_dk)
+    t_1 = W_dk * Z_uk * theta_uk * theta_dk
     result = t_0 - t_1
     return result
 
 @njit
-def rho_uk(U_dk, X_uk, Z_uk, W_dk, D_k_star):
+def rho_uk(U_dk, X_uk, Z_uk, W_dk, theta_dk, sigma_uk, D_k_star):
     """
     Compute superlink boundary condition coefficient 'alpha' for upstream end
     of superlink k.
     """
-    num = (2 * U_dk - 1) * X_uk - 2 * Z_uk * W_dk
+    num = (1 - U_dk * theta_dk) * X_uk * sigma_uk + Z_uk * theta_dk * W_dk * sigma_uk
     den = D_k_star
     result = safe_divide_vec(num, den)
     return result
 
 @njit
-def tau_uk(Z_uk, D_k_star):
+def tau_uk(Z_uk, sigma_dk, D_k_star):
     """
     Compute superlink boundary condition coefficient 'beta' for upstream end
     of superlink k.
     """
-    num = - Z_uk
+    num = Z_uk * sigma_dk
     den = D_k_star
     result = safe_divide_vec(num, den)
     return result
 
 @njit
-def omega_uk(Z_uk, V_dk, U_dk, Y_uk, D_k_star):
+def omega_uk(Z_uk, V_dk, U_dk, Y_uk, X_uk, W_dk, theta_dk, xi_uk, xi_dk, D_k_star):
     """
     Compute superlink boundary condition coefficient 'chi' for upstream end
     of superlink k.
     """
-    num = 2 * Z_uk * V_dk - (2 * U_dk - 1) * Y_uk
+    t_0 = (1 - U_dk * theta_dk) * (Y_uk + X_uk * xi_uk + Z_uk * xi_dk)
+    t_1 = Z_uk * theta_dk * (V_dk + U_dk * xi_dk + W_dk * xi_uk)
+    num = t_0 + t_1
     den = D_k_star
     result = safe_divide_vec(num, den)
     return result
 
 @njit
-def rho_dk(W_dk, D_k_star):
+def rho_dk(W_dk, sigma_uk, D_k_star):
     """
     Compute superlink boundary condition coefficient 'alpha' for downstream end
     of superlink k.
     """
-    num = - W_dk
+    num = W_dk * sigma_uk
     den = D_k_star
     result = safe_divide_vec(num, den)
     return result
 
 @njit
-def tau_dk(X_uk, U_dk, W_dk, Z_uk, D_k_star):
+def tau_dk(X_uk, U_dk, W_dk, Z_uk, theta_uk, sigma_dk, D_k_star):
     """
     Compute superlink boundary condition coefficient 'beta' for downstream end
     of superlink k.
     """
-    num = (2 * X_uk - 1) * U_dk - 2 * W_dk * Z_uk
+    num = W_dk * theta_uk * Z_uk * sigma_dk + (1 - X_uk * theta_uk) * U_dk * sigma_dk
     den = D_k_star
     result = safe_divide_vec(num, den)
     return result
 
 @njit
-def omega_dk(W_dk, Y_uk, X_uk, V_dk, D_k_star):
+def omega_dk(W_dk, Y_uk, X_uk, V_dk, Z_uk, U_dk, theta_uk, xi_uk, xi_dk, D_k_star):
     """
     Compute superlink boundary condition coefficient 'chi' for downstream end
     of superlink k.
     """
-    num = 2 * W_dk * Y_uk - (2 * X_uk - 1) * V_dk
+    t_0 = W_dk * theta_uk * (Y_uk + X_uk * xi_uk + Z_uk * xi_dk)
+    t_1 = (1 - X_uk * theta_uk) * (V_dk + U_dk * xi_dk + W_dk * xi_uk)
+    num = t_0 + t_1
     den = D_k_star
     result = safe_divide_vec(num, den)
     return result
