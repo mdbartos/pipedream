@@ -752,6 +752,10 @@ class SuperLink():
         return self._z_inv_dk
 
     @property
+    def x_Ik(self):
+        return self._x_Ik
+
+    @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
         M = self.M
         # TODO: Maybe a cleaner way of doing this
@@ -3789,16 +3793,17 @@ class SuperLink():
         """
         self.states['t'] = copy.copy(self.t)
         self.states['H_j'] = np.copy(self.H_j)
-        self.states['_h_Ik'] = np.copy(self._h_Ik)
-        self.states['_Q_ik'] = np.copy(self._Q_ik)
-        self.states['_Q_uk'] = np.copy(self._Q_uk)
-        self.states['_Q_dk'] = np.copy(self._Q_dk)
+        self.states['h_Ik'] = np.copy(self.h_Ik)
+        self.states['Q_ik'] = np.copy(self.Q_ik)
+        self.states['Q_uk'] = np.copy(self.Q_uk)
+        self.states['Q_dk'] = np.copy(self.Q_dk)
+        self.states['x_Ik'] = np.copy(self.x_Ik)
         if self.n_o:
-            self.states['_Qo'] = np.copy(self._Qo)
+            self.states['Q_o'] = np.copy(self.Q_o)
         if self.n_w:
-            self.states['_Qw'] = np.copy(self._Qw)
+            self.states['Q_w'] = np.copy(self.Q_w)
         if self.n_p:
-            self.states['_Qp'] = np.copy(self._Qp)
+            self.states['Q_p'] = np.copy(self.Q_p)
 
     def load_state(self, states={}):
         """
@@ -3828,6 +3833,7 @@ class SuperLink():
         if dt is None:
             dt = self._dt
         self._Q_in = Q_in
+        self._Q_0Ik = Q_0Ik
         if not implicit:
             raise NotImplementedError
         self.link_hydraulic_geometry()
@@ -3934,16 +3940,16 @@ class SuperLink():
         if (num_iter > 0):
             H_j_prev = self.states['H_j']
             H_j_next = np.copy(self.H_j)
-            h_Ik_prev = self.states['_h_Ik']
-            Q_ik_prev = self.states['_Q_ik']
-            Q_uk_prev = self.states['_Q_uk']
-            Q_dk_prev = self.states['_Q_dk']
+            h_Ik_prev = self.states['h_Ik']
+            Q_ik_prev = self.states['Q_ik']
+            Q_uk_prev = self.states['Q_uk']
+            Q_dk_prev = self.states['Q_dk']
             if self.n_o:
-                Q_o_prev = self.states['_Qo']
+                Q_o_prev = self.states['Q_o']
             if self.n_w:
-                Q_w_prev = self.states['_Qw']
+                Q_w_prev = self.states['Q_w']
             if self.n_p:
-                Q_p_prev = self.states['_Qp']
+                Q_p_prev = self.states['Q_p']
             residual = np.abs(H_j_next - H_j_prev)
             if not (residual < head_tol).all():
                 for _ in range(num_iter):
