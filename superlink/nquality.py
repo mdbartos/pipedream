@@ -151,7 +151,7 @@ class QualityBuilder():
     def _dt(self):
         return self.hydraulics.t - self.hydraulics.states['t']
 
-    def link_coeffs(self, _dt=None, first_iter=True):
+    def link_coeffs(self, _dt=None, _u_j_frac=0.0, first_iter=True):
         """
         Compute link momentum coefficients: a_ik, b_ik, c_ik and P_ik.
         """
@@ -197,13 +197,13 @@ class QualityBuilder():
                    + _u_ik_next[_i_nk]) / 2
         _u_1k_hat = -np.maximum(_u_1k, 0.)
         _u_Np1k_hat = -np.maximum(-_u_Np1k, 0.)
-        _alpha_uk = alpha_ik(0.0, _dx_uk, _D_uk)
-        _beta_uk = beta_ik(_dt, _D_uk, _dx_uk, 0.0, 0.0, _u_1k_hat)
+        _alpha_uk = alpha_ik(_u_j_frac * _u_1k_hat, _dx_uk, _D_uk)
+        _beta_uk = beta_ik(_dt, _D_uk, _dx_uk, 0.0, _u_j_frac * _u_1k_hat, _u_1k_hat)
         _chi_uk = chi_ik(_u_1k_hat, _dx_uk, _D_uk)
         _gamma_uk = gamma_ik(_dt, _c_uk)
         _alpha_dk = alpha_ik(_u_Np1k_hat, _dx_dk, _D_dk)
-        _beta_dk = beta_ik(_dt, _D_dk, _dx_dk, 0.0, _u_Np1k_hat, 0.0)
-        _chi_dk = chi_ik(0.0, _dx_dk, _D_dk)
+        _beta_dk = beta_ik(_dt, _D_dk, _dx_dk, 0.0, _u_Np1k_hat, _u_j_frac * _u_Np1k_hat)
+        _chi_dk = chi_ik(_u_j_frac * _u_Np1k_hat, _dx_dk, _D_dk)
         _gamma_dk = gamma_ik(_dt, _c_dk)
         # Export to instance variables
         self._alpha_ik = _alpha_ik
@@ -685,7 +685,7 @@ class QualityBuilder():
         self._c_Ik = _c_Ik
         self._c_ik = _c_ik
 
-    def step(self, dt=None, c_bc=None, c_0j=None, Q_0j=None, c_0Ik=None, Q_0Ik=None):
+    def step(self, dt=None, c_bc=None, c_0j=None, Q_0j=None, c_0Ik=None, Q_0Ik=None, u_j_frac=0.0):
         self.import_hydraulic_states()
         if dt is None:
             dt = self._dt
@@ -693,7 +693,7 @@ class QualityBuilder():
             Q_0j = self.hydraulics._Q_in
         if Q_0Ik is None:
             Q_0Ik = self.hydraulics._Q_0Ik
-        self.link_coeffs(_dt=dt)
+        self.link_coeffs(_dt=dt, _u_j_frac=u_j_frac)
         self.node_coeffs(_Q_0Ik=Q_0Ik, _c_0Ik=c_0Ik, _dt=dt)
         self.forward_recurrence()
         self.backward_recurrence()
