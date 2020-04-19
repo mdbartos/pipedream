@@ -7,7 +7,7 @@ import scipy.sparse.linalg
 
 class QualityBuilder():
     def __init__(self, hydraulics, superjunction_params, superlink_params,
-                 junction_params=None, link_params=None):
+                 junction_params=None, link_params=None, c_min=0.0, c_max=np.inf):
         self.hydraulics = hydraulics
         self._ki = self.hydraulics._ki
         self._kI = self.hydraulics._kI
@@ -113,6 +113,8 @@ class QualityBuilder():
         self._c_dk = 0.5 * self._c_j[self._J_dk] + 0.5 * self._c_Ik[self._I_Np1k]
         self._c_1k = self._c_Ik[self._I_1k]
         self._c_Np1k = self._c_Ik[self._I_Np1k]
+        self._c_min = c_min
+        self._c_max = c_max
         self.step(dt=1e-6)
 
     # TODO: It might be safer to have these as @properties
@@ -173,6 +175,8 @@ class QualityBuilder():
         _dx_dk = self._dx_dk
         _i_1k = self._i_1k
         _i_nk = self._i_nk
+        _I_1k = self._I_1k
+        _I_Np1k = self._I_Np1k
         _c_uk = self._c_uk
         _c_dk = self._c_dk
         _alpha_ik = self._alpha_ik
@@ -183,20 +187,23 @@ class QualityBuilder():
         if _dt is None:
             _dt = self._dt
         # Compute link coefficients
-        _u_Ik_hat = -np.maximum(_u_Ik_next, 0.)
-        _u_Ip1k_hat = -np.maximum(-_u_Ip1k_next, 0.)
-        _alpha_ik = alpha_ik(_u_Ik_hat, _dx_ik_next, _D_ik)
-        _beta_ik = beta_ik(_dt, _D_ik, _dx_ik_next, _K_ik, _u_Ik_hat, _u_Ip1k_hat)
-        _chi_ik = chi_ik(_u_Ip1k_hat, _dx_ik_next, _D_ik)
-        _gamma_ik = gamma_ik(_dt, _c_ik)
-        # Compute link coefficients for boundaries
         # TODO: This should happen in hydraulic solver
         _u_1k = (safe_divide_vec(_Q_uk_next, _A_uk_next)
                  + _u_ik_next[_i_1k]) / 2
         _u_Np1k = (safe_divide_vec(_Q_dk_next, _A_dk_next)
                    + _u_ik_next[_i_nk]) / 2
+        # TODO: Redundant computations
+        _u_Ik_next[np.cumsum(self.nk) - self.nk[0]] = _u_1k
+        _u_Ip1k_next[np.cumsum(self.nk) - 1] = _u_Np1k
+        _u_Ik_hat = -np.maximum(_u_Ik_next, 0.)
+        _u_Ip1k_hat = -np.maximum(-_u_Ip1k_next, 0.)
         _u_1k_hat = -np.maximum(_u_1k, 0.)
         _u_Np1k_hat = -np.maximum(-_u_Np1k, 0.)
+        _alpha_ik = alpha_ik(_u_Ik_hat, _dx_ik_next, _D_ik)
+        _beta_ik = beta_ik(_dt, _D_ik, _dx_ik_next, _K_ik, _u_Ik_hat, _u_Ip1k_hat)
+        _chi_ik = chi_ik(_u_Ip1k_hat, _dx_ik_next, _D_ik)
+        _gamma_ik = gamma_ik(_dt, _c_ik)
+        # Compute link coefficients for boundaries
         _alpha_uk = alpha_ik(_u_j_frac * _u_1k_hat, _dx_uk, _D_uk)
         _beta_uk = beta_ik(_dt, _D_uk, _dx_uk, 0.0, _u_j_frac * _u_1k_hat, _u_1k_hat)
         _chi_uk = chi_ik(_u_1k_hat, _dx_uk, _D_uk)
@@ -521,6 +528,8 @@ class QualityBuilder():
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
         _sparse = self._sparse        # Use sparse data structures (y/n)
+        _c_min = self._c_min
+        _c_max = self._c_max
         # Does the system have control assets?
         has_control = n_o + n_w + n_p
         # Get right-hand size
@@ -541,7 +550,8 @@ class QualityBuilder():
         else:
             _c_j_next = scipy.linalg.solve(l, r)
         assert np.isfinite(_c_j_next).all()
-        _c_j_next = np.maximum(_c_j_next, 0.)
+        _c_j_next = np.maximum(_c_j_next, _c_min)
+        _c_j_next = np.minimum(_c_j_next, _c_max)
         # Export instance variables
         self._c_j = _c_j_next
 
@@ -556,6 +566,8 @@ class QualityBuilder():
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
         _sparse = self._sparse        # Use sparse data structures (y/n)
+        _c_min = self._c_min
+        _c_max = self._c_max
         bandwidth = self.bandwidth
         M = self.M
         # Does the system have control assets?
@@ -574,7 +586,8 @@ class QualityBuilder():
         _c_j_next = scipy.linalg.solve_banded((bandwidth, bandwidth), AB, r,
                                               check_finite=False, overwrite_ab=True)
         assert np.isfinite(_c_j_next).all()
-        _c_j_next = np.maximum(_c_j_next, 0.)
+        _c_j_next = np.maximum(_c_j_next, _c_min)
+        _c_j_next = np.minimum(_c_j_next, _c_max)
         # Export instance variables
         self._c_j = _c_j_next
 
@@ -593,16 +606,22 @@ class QualityBuilder():
         _rho_dk = self._rho_dk
         _tau_dk = self._tau_dk
         _omega_dk = self._omega_dk
+        _c_min = self._c_min
+        _c_max = self._c_max
         # Solve for boundary flow concentrations
         _c_uk_next = _rho_uk * _c_j[_J_uk] + _tau_uk * _c_j[_J_dk] + _omega_uk
         _c_dk_next = _rho_dk * _c_j[_J_uk] + _tau_dk * _c_j[_J_dk] + _omega_dk
         _c_1k = 2 * _c_uk_next - _c_j[_J_uk]
         _c_Np1k = 2 * _c_dk_next - _c_j[_J_dk]
         # Enforce non-negative concentration
-        _c_uk_next = np.maximum(_c_uk_next, 0.)
-        _c_dk_next = np.maximum(_c_dk_next, 0.)
-        _c_1k = np.maximum(_c_1k, 0.)
-        _c_Np1k = np.maximum(_c_Np1k, 0.)
+        _c_uk_next = np.maximum(_c_uk_next, _c_min)
+        _c_dk_next = np.maximum(_c_dk_next, _c_min)
+        _c_1k = np.maximum(_c_1k, _c_min)
+        _c_Np1k = np.maximum(_c_Np1k, _c_min)
+        _c_uk_next = np.minimum(_c_uk_next, _c_max)
+        _c_dk_next = np.minimum(_c_dk_next, _c_max)
+        _c_1k = np.minimum(_c_1k, _c_max)
+        _c_Np1k = np.minimum(_c_Np1k, _c_max)
         # Export instance variables
         self._c_1k = _c_1k
         self._c_Np1k = _c_Np1k
@@ -628,20 +647,20 @@ class QualityBuilder():
         _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
         _c_1k = self._c_1k                  # Depth at upstream end of superlink k
         _c_Np1k = self._c_Np1k              # Depth at downstream end of superlink k
-        _min_c = 0.
-        _max_c = np.inf
+        _c_min = self._c_min
+        _c_max = self._c_max
         # Solve internals
         numba_solve_internals(_c_Ik, _c_ik, _c_1k, _c_Np1k, _U_Ik, _V_Ik, _W_Ik,
                               _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
-                              _min_c, _max_c, first_link_backwards=True)
+                              _c_min, _c_max, first_link_backwards=True)
         # TODO: Temporary
         assert np.isfinite(_c_Ik).all()
         assert np.isfinite(_c_ik).all()
         # Ensure non-negative depths?
-        _c_Ik[_c_Ik < _min_c] = _min_c
-        _c_ik[_c_ik < _min_c] = _min_c
-        # _h_Ik[_h_Ik > junction_max_depth] = junction_max_depth
-        # _h_Ik[_h_Ik > max_depth] = max_depth
+        _c_Ik[_c_Ik < _c_min] = _c_min
+        _c_ik[_c_ik < _c_min] = _c_min
+        _c_Ik[_c_Ik > _c_max] = _c_max
+        _c_ik[_c_ik > _c_max] = _c_max
         # Export instance variables
         self._c_Ik = _c_Ik
         self._c_ik = _c_ik
@@ -657,8 +676,6 @@ class QualityBuilder():
         NK = self.NK
         _c_Ik = self._c_Ik                  # Depth at junction Ik
         _c_ik = self._c_ik                  # Flow rate at link ik
-        _D_Ik = self._D_Ik                  # Continuity coefficient
-        _E_Ik = self._E_Ik                  # Continuity coefficient
         _U_Ik = self._U_Ik                  # Forward recurrence coefficient
         _V_Ik = self._V_Ik                  # Forward recurrence coefficient
         _W_Ik = self._W_Ik                  # Forward recurrence coefficient
@@ -667,23 +684,48 @@ class QualityBuilder():
         _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
         _c_1k = self._c_1k                  # Depth at upstream end of superlink k
         _c_Np1k = self._c_Np1k              # Depth at downstream end of superlink k
-        _min_c = 0.
-        _max_c = np.inf
+        _c_min = self._c_min
+        _c_max = self._c_max
         # Solve internals
         numba_solve_internals(_c_Ik, _c_ik, _c_1k, _c_Np1k, _U_Ik, _V_Ik, _W_Ik,
                               _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
-                              _min_c, _max_c, first_link_backwards=False)
+                              _c_min, _c_max, first_link_backwards=False)
         # TODO: Temporary
         assert np.isfinite(_c_Ik).all()
         assert np.isfinite(_c_ik).all()
         # Ensure non-negative depths?
-        _c_Ik[_c_Ik < _min_c] = _min_c
-        _c_ik[_c_ik < _min_c] = _min_c
-        # _h_Ik[_h_Ik > junction_max_depth] = junction_max_depth
-        # _h_Ik[_h_Ik > max_depth] = max_depth
+        _c_Ik[_c_Ik < _c_min] = _c_min
+        _c_ik[_c_ik < _c_min] = _c_min
+        _c_Ik[_c_Ik > _c_max] = _c_max
+        _c_ik[_c_ik > _c_max] = _c_max
         # Export instance variables
         self._c_Ik = _c_Ik
         self._c_ik = _c_ik
+
+    def link_concentrations_from_recurrence(self):
+        # Import instance variables
+        nk = self.nk
+        _is_end = self._is_end
+        _is_start = self._is_start
+        _c_Ik = self._c_Ik
+        _U_Ik = self._U_Ik
+        _V_Ik = self._V_Ik
+        _W_Ik = self._W_Ik
+        _X_Ik = self._X_Ik
+        _Y_Ik = self._Y_Ik
+        _Z_Ik = self._Z_Ik
+        _I_1k = self._I_1k
+        _I_Np1k = self._I_Np1k
+        _c_1k = _c_Ik[_I_1k]
+        _c_Np1k = _c_Ik[_I_Np1k]
+        # Compute internal flow estimates in both directions
+        c_ik_b = c_i_b(_X_Ik[~_is_end], _c_Ik[~_is_end],
+                       _Y_Ik[~_is_end], _Z_Ik[~_is_end],
+                       np.repeat(_c_Np1k, nk))
+        c_ik_f = c_i_f(_U_Ik[~_is_end], _c_Ik[~_is_start],
+                       _V_Ik[~_is_end], _W_Ik[~_is_end],
+                       np.repeat(_c_1k, nk))
+        return c_ik_b, c_ik_f
 
     def step(self, dt=None, c_bc=None, c_0j=None, Q_0j=None, c_0Ik=None, Q_0Ik=None, u_j_frac=0.0):
         self.import_hydraulic_states()
@@ -1207,8 +1249,12 @@ def numba_solve_internals(_c_Ik, _c_ik, _c_1k, _c_Np1k, _U_Ik, _V_Ik, _W_Ik,
             _c_Ik[I] = c_I_b(_c_ik[i], _c_Np1, _X_Ik[I], _Y_Ik[I], _Z_Ik[I])
             if _c_Ik[I] < min_c:
                 _c_Ik[I] = min_c
-            # if _c_Ik[I] > max_c:
-            #     _c_Ik[I] = max_c
+            if _c_Ik[I] > max_c:
+                _c_Ik[I] = max_c
+            if _c_ik[i] < min_c:
+                _c_ik[i] = min_c
+            if _c_ik[i] > max_c:
+                _c_ik[i] = max_c
         if first_link_backwards:
             _c_ik[i_1] = c_i_b(_c_Ik[I_1], _c_Np1, _X_Ik[I_1], _Y_Ik[I_1],
                             _Z_Ik[I_1])
