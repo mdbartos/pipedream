@@ -331,6 +331,12 @@ class SuperLink():
             self.permutations = np.arange(len(superjunctions))
             self.banded = False
         # TODO: What about id?
+        if not 'map_x' in self.superjunctions.columns:
+            self.superjunctions['map_x'] = 0.
+        if not 'map_y' in self.superjunctions.columns:
+            self.superjunctions['map_y'] = 0.
+        self._map_x_j = self.superjunctions['map_x'].values.astype(float)
+        self._map_y_j = self.superjunctions['map_y'].values.astype(float)
         if 'name' in self.superjunctions.columns:
             self.superjunction_names = self.superjunctions['name'].values
         else:

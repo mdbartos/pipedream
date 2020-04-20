@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib
 import matplotlib.cm as cm
 import matplotlib.patches as patches
+from matplotlib import collections as mc
+import mpl_toolkits.mplot3d.art3d as art3d
 
 # TODO: vmin and vmax for superlinks/superjunctions inconsistent
 
@@ -112,3 +114,95 @@ def plot_profile(self, js, ax, width=1, sl_facecolor='c', sj_facecolor='c',
     else:
         ax.set_ylim(*ylim)
     return im
+
+def plot_network_2d(self, ax, superjunction_kwargs={}, junction_kwargs={},
+                    link_kwargs={}):
+    _map_x_j = self._map_x_j
+    _map_y_j = self._map_y_j
+    _x_Ik = self._x_Ik
+    _dx_k = self._dx_k
+    _kI = self._kI
+    _J_uk = self._J_uk
+    _J_dk = self._J_dk
+    _Ik = self._Ik
+    _Ip1k = self._Ip1k
+    frac_pos = _x_Ik / _dx_k[_kI]
+    _map_x_Ik = frac_pos * (_map_x_j[_J_dk] - _map_x_j[_J_uk])[_kI] + _map_x_j[_J_uk][_kI]
+    _map_y_Ik = frac_pos * (_map_y_j[_J_dk] - _map_y_j[_J_uk])[_kI] + _map_y_j[_J_uk][_kI]
+    lines = np.dstack([np.column_stack([_map_x_Ik[_Ik], _map_x_Ik[_Ip1k]]),
+                       np.column_stack([_map_y_Ik[_Ik], _map_y_Ik[_Ip1k]])])
+    sc_Ik = ax.scatter(_map_x_Ik, _map_y_Ik, **junction_kwargs)
+    lc_ik = mc.LineCollection(lines, **link_kwargs)
+    sc_j = ax.scatter(_map_x_j, _map_y_j, **superjunction_kwargs)
+    ax.add_collection(lc_ik)
+    return sc_j, sc_Ik, lc_ik
+
+def plot_network_3d(self, ax, superjunction_signal=None, junction_signal=None,
+                    superjunction_stems=True, junction_stems=True,
+                    border=True, fill=True, base_line_kwargs={}, superjunction_stem_kwargs={},
+                    junction_stem_kwargs={}, border_kwargs={}, fill_kwargs={}):
+    _map_x_j = self._map_x_j
+    _map_y_j = self._map_y_j
+    _x_Ik = self._x_Ik
+    _dx_k = self._dx_k
+    _kI = self._kI
+    _J_uk = self._J_uk
+    _J_dk = self._J_dk
+    _Ik = self._Ik
+    _Ip1k = self._Ip1k
+    _z_inv_Ik = self._z_inv_Ik
+    frac_pos = _x_Ik / _dx_k[_kI]
+    _z_inv_j = self._z_inv_j
+    if superjunction_signal is None:
+        superjunction_signal = self.H_j - _z_inv_j
+    if junction_signal is None:
+        junction_signal = self.h_Ik
+    _map_x_Ik = frac_pos * (_map_x_j[_J_dk] - _map_x_j[_J_uk])[_kI] + _map_x_j[_J_uk][_kI]
+    _map_y_Ik = frac_pos * (_map_y_j[_J_dk] - _map_y_j[_J_uk])[_kI] + _map_y_j[_J_uk][_kI]
+    collections = []
+    base = np.dstack([np.column_stack([_map_x_Ik[_Ik], _map_x_Ik[_Ip1k]]),
+                    np.column_stack([_map_y_Ik[_Ik], _map_y_Ik[_Ip1k]]),
+                    np.column_stack([_z_inv_Ik[_Ik], _z_inv_Ik[_Ip1k]])])
+    lc_z = art3d.Line3DCollection(base, **base_line_kwargs)
+    ax.add_collection3d(lc_z)
+    collections.append(lc_z)
+    if superjunction_stems:
+        stems = np.dstack([np.column_stack([_map_x_j, _map_x_j]),
+                           np.column_stack([_map_y_j, _map_y_j]),
+                           np.column_stack([_z_inv_j, _z_inv_j + superjunction_signal])])
+        st_j = art3d.Line3DCollection(stems, **superjunction_stem_kwargs)
+        ax.add_collection3d(st_j)
+        collections.append(st_j)
+    if junction_stems:
+        stems = np.dstack([np.column_stack([_map_x_Ik, _map_x_Ik]),
+                        np.column_stack([_map_y_Ik, _map_y_Ik]),
+                        np.column_stack([_z_inv_Ik, _z_inv_Ik + junction_signal])])
+        st_h = art3d.Line3DCollection(stems, **junction_stem_kwargs)
+        ax.add_collection3d(st_h)
+        collections.append(st_h)
+    if border:
+        border_lines = np.dstack([np.column_stack([_map_x_Ik[_Ik], _map_x_Ik[_Ip1k]]),
+                                np.column_stack([_map_y_Ik[_Ik], _map_y_Ik[_Ip1k]]),
+                                np.column_stack([_z_inv_Ik[_Ik] + junction_signal[_Ik],
+                                                _z_inv_Ik[_Ip1k] + junction_signal[_Ip1k]])])
+        lc_h = art3d.Line3DCollection(border_lines, **border_kwargs)
+        ax.add_collection3d(lc_h)
+        collections.append(lc_h)
+    if fill:
+        poly = np.dstack([np.column_stack([_map_x_Ik[_Ik], _map_x_Ik[_Ik],
+                                        _map_x_Ik[_Ip1k], _map_x_Ik[_Ip1k]]),
+                        np.column_stack([_map_y_Ik[_Ik], _map_y_Ik[_Ik],
+                                        _map_y_Ik[_Ip1k], _map_y_Ik[_Ip1k]]),
+                        np.column_stack([_z_inv_Ik[_Ik], _z_inv_Ik[_Ik] + junction_signal[_Ik],
+                                         _z_inv_Ik[_Ip1k] + junction_signal[_Ip1k],
+                                         _z_inv_Ik[_Ip1k]])])
+        poly_h = art3d.Poly3DCollection(poly, **fill_kwargs)
+        ax.add_collection3d(poly_h)
+        collections.append(poly_h)
+    ax.set_xlim3d(_map_x_j.min(), _map_x_j.max())
+    ax.set_ylim3d(_map_y_j.min(), _map_y_j.max())
+    ax.set_zlim3d(min((_z_inv_Ik + junction_signal).min(),
+                      (_z_inv_j + superjunction_signal).min()),
+                  max((_z_inv_Ik + junction_signal).max(),
+                      (_z_inv_j + superjunction_signal).max()))
+    return collections
