@@ -4,76 +4,59 @@ import matplotlib.cm as cm
 import matplotlib.patches as patches
 from matplotlib import collections as mc
 import mpl_toolkits.mplot3d.art3d as art3d
+from matplotlib.collections import PolyCollection
 
 # TODO: vmin and vmax for superlinks/superjunctions inconsistent
 
-def _plot_superlink_profile(self, k, ax, x_offset=0, facecolor='c',
-                            cmap=cm.Blues_r, zorder=0, vrange=None, im=[]):
-    _Ik = np.flatnonzero(self._kI == k)
-    _ik = np.flatnonzero(self._ki == k)
-    nk = _ik.size
-    x = self.x_Ik[_Ik] + x_offset
-    h = self.h_Ik[_Ik]
-    z = self._z_inv_Ik[_Ik]
-    if isinstance(facecolor, np.ndarray):
-        if vrange is None:
-            vmin, vmax = facecolor.min(), facecolor.max()
-        else:
-            vmin, vmax = vrange
-        norm = matplotlib.colors.Normalize(vmin=vmin,
-                                           vmax=vmax, clip=True)
-        mapper = cm.ScalarMappable(norm=norm, cmap=cmap)
-        c = facecolor[_ik]
-    else:
-        mapper = None
-    pj = ax.plot(x, z, c='0.25', alpha=0.75)
+# def _plot_superlink_profile(self, k, ax, x_offset=0, im=[], superlink_kwargs={}):
+#     _Ik = np.flatnonzero(self._kI == k)
+#     _ik = np.flatnonzero(self._ki == k)
+#     nk = _ik.size
+#     x = self.x_Ik[_Ik] + x_offset
+#     h = self.h_Ik[_Ik]
+#     z = self._z_inv_Ik[_Ik]
+#     pj = ax.plot(x, z, c='0.25', alpha=0.75)
+#     # im.append(pj)
+#     for j in range(nk):
+#         xj = [x[j], x[j], x[j+1], x[j+1]]
+#         yj = [z[j], z[j] + h[j], z[j+1] + h[j+1], z[j+1]]
+#         pj = patches.Polygon(xy=list(zip(xj,yj)), **superlink_kwargs)
+#         ax.add_patch(pj)
+#         im.append(pj)
+
+def _plot_superlink_profile(self, k, ax, x_offset=0, im=[], superlink_kwargs={}):
+    _I = self._kI == k
+    _Ik = self._Ik[(self._kI == k)[self._Ik]]
+    _Ip1k = self._Ip1k[(self._kI == k)[self._Ip1k]]
+    _x_Ik = self.x_Ik[_Ik] + x_offset
+    _x_Ip1k = self.x_Ik[_Ip1k] + x_offset
+    _h_Ik = self.h_Ik[_Ik]
+    _h_Ip1k = self.h_Ik[_Ip1k]
+    _z_Ik = self._z_inv_Ik[_Ik]
+    _z_Ip1k = self._z_inv_Ik[_Ip1k]
+    _z = self._z_inv_Ik[_I]
+    _x = self._x_Ik[_I] + x_offset
+    pj = ax.plot(_x, _z, c='0.25', alpha=0.75)
     # im.append(pj)
-    for j in range(nk):
-        xj = [x[j], x[j], x[j+1], x[j+1]]
-        yj = [z[j], z[j] + h[j], z[j+1] + h[j+1], z[j+1]]
-        if mapper is None:
-            pj = ax.add_patch(patches.Polygon(xy=list(zip(xj,yj)), linewidth=1,
-                                            color=facecolor, zorder=zorder))
-            im.append(pj)
-        else:
-            pj = ax.add_patch(patches.Polygon(xy=list(zip(xj,yj)), linewidth=1,
-                                            color=mapper.to_rgba(c[j]),
-                                              zorder=zorder))
-            im.append(pj)
+    poly = np.dstack([np.column_stack([_x_Ik, _x_Ik, _x_Ip1k, _x_Ip1k]),
+                      np.column_stack([_z_Ik, _z_Ik + _h_Ik,
+                                       _z_Ip1k + _h_Ip1k, _z_Ip1k])])
+    pj = PolyCollection(poly, **superlink_kwargs)
+    ax.add_collection(pj)
+    im.append(pj)
 
-
-def _plot_superjunction_profile(self, j, ax, x_offset=0, x_width=1, facecolor='c',
-                                cmap=cm.Blues_r, zorder=1, vrange=None, im=[]):
+def _plot_superjunction_profile(self, j, ax, x_offset=0, x_width=1, im=[],
+                                superjunction_kwargs={}):
     x = [x_offset, x_offset + x_width]
     H = self.H_j[j]
     z = self._z_inv_j[j]
     xj = [x[0], x[0], x[1], x[1]]
     yj = [z, H, H, z]
-    if isinstance(facecolor, np.ndarray):
-        if vrange is None:
-            vmin, vmax = facecolor.min(), facecolor.max()
-        else:
-            vmin, vmax = vrange
-        norm = matplotlib.colors.Normalize(vmin=vmin,
-                                           vmax=vmax, clip=True)
-        mapper = cm.ScalarMappable(norm=norm, cmap=cmap)
-        c = facecolor[j]
-    else:
-        mapper = None
-    if mapper is None:
-        pj = ax.add_patch(patches.Polygon(xy=list(zip(xj,yj)), linewidth=1,
-                                        facecolor=facecolor, edgecolor='0.25',
-                                        zorder=zorder))
-        im.append(pj)
-    else:
-        pj = ax.add_patch(patches.Polygon(xy=list(zip(xj,yj)), linewidth=1,
-                                        facecolor=mapper.to_rgba(c), edgecolor='0.25',
-                                        zorder=zorder))
-        im.append(pj)
+    pj = patches.Polygon(xy=list(zip(xj,yj)), **superjunction_kwargs)
+    ax.add_patch(pj)
+    im.append(pj)
 
-def plot_profile(self, js, ax, width=1, sl_facecolor='c', sj_facecolor='c',
-                 sl_cmap=cm.Blues_r, sj_cmap=cm.Blues_r, sl_vrange=None,
-                 sj_vrange=None, zorder=1, ylim=None, xlim=None):
+def plot_profile(self, js, ax, width=1, superlink_kwargs={}, superjunction_kwargs={}):
     # Create mapping dict from superjunction pair to superlink
     jk = {}
     for k in range(self.NK):
@@ -88,11 +71,11 @@ def plot_profile(self, js, ax, width=1, sl_facecolor='c', sj_facecolor='c',
         j0, j1 = key
         k = jk[key]
         _plot_superjunction_profile(self, j0, ax=ax, x_offset=x_offset,
-                                    x_width=width, facecolor=sj_facecolor,
-                                    cmap=sj_cmap, zorder=zorder+1, vrange=sj_vrange, im=im)
+                                    x_width=width, im=im,
+                                    superjunction_kwargs=superjunction_kwargs)
         x_offset += width
-        _plot_superlink_profile(self, k, ax=ax, x_offset=x_offset, facecolor=sl_facecolor,
-                                cmap=sl_cmap, zorder=zorder, vrange=sl_vrange, im=im)
+        _plot_superlink_profile(self, k, ax=ax, x_offset=x_offset, im=im,
+                                superlink_kwargs=superlink_kwargs)
         x_offset += self._dx_k[k]
         zmin = self._z_inv_Ik[self._kI == k].min()
         hmax = (self._z_inv_Ik[self._kI == k]
@@ -100,23 +83,18 @@ def plot_profile(self, js, ax, width=1, sl_facecolor='c', sj_facecolor='c',
         y_min = min(y_min, self._z_inv_j[j0], self._z_inv_j[j1], zmin)
         y_max = max(y_max, self.H_j[j0], self.H_j[j1], hmax)
     _plot_superjunction_profile(self, j1, ax=ax, x_offset=x_offset,
-                                x_width=width, facecolor=sj_facecolor,
-                                cmap=sj_cmap, zorder=zorder+1, vrange=sj_vrange, im=im)
+                                x_width=width, im=im,
+                                superjunction_kwargs=superjunction_kwargs)
     x_offset += width
-    if xlim is None:
-        ax.set_xlim(0 - 0.02 * x_offset,
-                    x_offset + 0.02 * x_offset)
-    else:
-        ax.set_xlim(*xlim)
-    if ylim is None:
-        ax.set_ylim(y_min - 0.02 * (y_max - y_min),
-                    y_max + 0.02 * (y_max - y_min))
-    else:
-        ax.set_ylim(*ylim)
+    ax.set_xlim(0 - 0.02 * x_offset,
+                x_offset + 0.02 * x_offset)
+    ax.set_ylim(y_min - 0.02 * (y_max - y_min),
+                y_max + 0.02 * (y_max - y_min))
     return im
 
 def plot_network_2d(self, ax, superjunction_kwargs={}, junction_kwargs={},
-                    link_kwargs={}):
+                    link_kwargs={}, orifice_kwargs={}, weir_kwargs={}, pump_kwargs={}):
+    collections = []
     _map_x_j = self._map_x_j
     _map_y_j = self._map_y_j
     _x_Ik = self._x_Ik
@@ -134,13 +112,39 @@ def plot_network_2d(self, ax, superjunction_kwargs={}, junction_kwargs={},
     sc_Ik = ax.scatter(_map_x_Ik, _map_y_Ik, **junction_kwargs)
     lc_ik = mc.LineCollection(lines, **link_kwargs)
     sc_j = ax.scatter(_map_x_j, _map_y_j, **superjunction_kwargs)
+    collections.extend([sc_Ik, lc_ik, sc_j])
     ax.add_collection(lc_ik)
-    return sc_j, sc_Ik, lc_ik
+    if self.n_o:
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        lines = np.dstack([np.column_stack([_map_x_j[_J_uo], _map_x_j[_J_do]]),
+                           np.column_stack([_map_y_j[_J_uo], _map_y_j[_J_do]])])
+        lc_o = mc.LineCollection(lines, **orifice_kwargs)
+        ax.add_collection(lc_o)
+        collections.append(lc_o)
+    if self.n_w:
+        _J_uw = self._J_uw
+        _J_dw = self._J_dw
+        lines = np.dstack([np.column_stack([_map_x_j[_J_uw], _map_x_j[_J_dw]]),
+                           np.column_stack([_map_y_j[_J_uw], _map_y_j[_J_dw]])])
+        lc_w = mc.LineCollection(lines, **weir_kwargs)
+        ax.add_collection(lc_w)
+        collections.append(lc_w)
+    if self.n_p:
+        _J_up = self._J_up
+        _J_dp = self._J_dp
+        lines = np.dstack([np.column_stack([_map_x_j[_J_up], _map_x_j[_J_dp]]),
+                           np.column_stack([_map_y_j[_J_up], _map_y_j[_J_dp]])])
+        lc_p = mc.LineCollection(lines, **pump_kwargs)
+        ax.add_collection(lc_p)
+        collections.append(lc_p)
+    return collections
 
 def plot_network_3d(self, ax, superjunction_signal=None, junction_signal=None,
                     superjunction_stems=True, junction_stems=True,
                     border=True, fill=True, base_line_kwargs={}, superjunction_stem_kwargs={},
-                    junction_stem_kwargs={}, border_kwargs={}, fill_kwargs={}):
+                    junction_stem_kwargs={}, border_kwargs={}, fill_kwargs={},
+                    orifice_kwargs={}, weir_kwargs={}, pump_kwargs={}):
     _map_x_j = self._map_x_j
     _map_y_j = self._map_y_j
     _x_Ik = self._x_Ik
@@ -166,6 +170,33 @@ def plot_network_3d(self, ax, superjunction_signal=None, junction_signal=None,
     lc_z = art3d.Line3DCollection(base, **base_line_kwargs)
     ax.add_collection3d(lc_z)
     collections.append(lc_z)
+    if self.n_o:
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        lines = np.dstack([np.column_stack([_map_x_j[_J_uo], _map_x_j[_J_do]]),
+                           np.column_stack([_map_y_j[_J_uo], _map_y_j[_J_do]]),
+                           np.column_stack([_z_inv_j[_J_uo], _z_inv_j[_J_do]])])
+        lc_o = art3d.Line3DCollection(lines, **orifice_kwargs)
+        ax.add_collection3d(lc_o)
+        collections.append(lc_o)
+    if self.n_w:
+        _J_uw = self._J_uw
+        _J_dw = self._J_dw
+        lines = np.dstack([np.column_stack([_map_x_j[_J_uw], _map_x_j[_J_dw]]),
+                           np.column_stack([_map_y_j[_J_uw], _map_y_j[_J_dw]]),
+                           np.column_stack([_z_inv_j[_J_uw], _z_inv_j[_J_dw]])])
+        lc_w = art3d.Line3DCollection(lines, **weir_kwargs)
+        ax.add_collection3d(lc_w)
+        collections.append(lc_w)
+    if self.n_p:
+        _J_up = self._J_up
+        _J_dp = self._J_dp
+        lines = np.dstack([np.column_stack([_map_x_j[_J_up], _map_x_j[_J_dp]]),
+                           np.column_stack([_map_y_j[_J_up], _map_y_j[_J_dp]]),
+                           np.column_stack([_z_inv_j[_J_up], _z_inv_j[_J_dp]])])
+        lc_p = art3d.Line3DCollection(lines, **pump_kwargs)
+        ax.add_collection3d(lc_p)
+        collections.append(lc_p)
     if superjunction_stems:
         stems = np.dstack([np.column_stack([_map_x_j, _map_x_j]),
                            np.column_stack([_map_y_j, _map_y_j]),
