@@ -697,69 +697,137 @@ class SuperLink():
     def h_Ik(self):
         return self._h_Ik
 
+    @h_Ik.setter
+    def h_Ik(self, value):
+        self._h_Ik = np.asarray(value)
+
     @property
     def Q_ik(self):
         return self._Q_ik
+
+    @Q_ik.setter
+    def Q_ik(self, value):
+        self._Q_ik = np.asarray(value)
 
     @property
     def Q_uk(self):
         return self._Q_uk
 
+    @Q_uk.setter
+    def Q_uk(self, value):
+        self._Q_uk = np.asarray(value)
+
     @property
     def Q_dk(self):
         return self._Q_dk
+
+    @Q_dk.setter
+    def Q_dk(self, value):
+        self._Q_dk = np.asarray(value)
 
     @property
     def Q_o(self):
         return self._Qo
 
+    @Q_o.setter
+    def Q_o(self, value):
+        self._Qo = np.asarray(value)
+
     @property
     def Q_w(self):
         return self._Qw
+
+    @Q_w.setter
+    def Q_w(self, value):
+        self._Qw = np.asarray(value)
 
     @property
     def Q_p(self):
         return self._Qp
 
+    @Q_p.setter
+    def Q_p(self, value):
+        self._Qp = np.asarray(value)
+
     @property
     def A_ik(self):
         return self._A_ik
+
+    @A_ik.setter
+    def A_ik(self, value):
+        self._A_ik = np.asarray(value)
 
     @property
     def Pe_ik(self):
         return self._Pe_ik
 
+    @Pe_ik.setter
+    def Pe_ik(self, value):
+        self._Pe_ik = np.asarray(value)
+
     @property
     def R_ik(self):
         return self._R_ik
+
+    @R_ik.setter
+    def R_ik(self, value):
+        self._R_ik = np.asarray(value)
 
     @property
     def B_ik(self):
         return self._B_ik
 
+    @B_ik.setter
+    def B_ik(self, value):
+        self._B_ik = np.asarray(value)
+
     @property
     def A_sj(self):
         return self._A_sj
+
+    @A_sj.setter
+    def A_sj(self, value):
+        self._A_sj = np.asarray(value)
 
     @property
     def V_sj(self):
         return self._V_sj
 
+    @V_sj.setter
+    def V_sj(self, value):
+        self._V_sj = np.asarray(value)
+
     @property
     def z_inv_j(self):
         return self._z_inv_j
+
+    @z_inv_j.setter
+    def z_inv_j(self, value):
+        self._z_inv_j = np.asarray(value)
 
     @property
     def z_inv_uk(self):
         return self._z_inv_uk
 
+    @z_inv_uk.setter
+    def z_inv_uk(self, value):
+        self._z_inv_uk = np.asarray(value)
+
     @property
     def z_inv_dk(self):
         return self._z_inv_dk
 
+    @z_inv_dk.setter
+    def z_inv_dk(self, value):
+        self._z_inv_dk = np.asarray(value)
+
     @property
     def x_Ik(self):
         return self._x_Ik
+
+    @x_Ik.setter
+    def x_Ik(self, value):
+        self._x_Ik = np.asarray(value)
 
     @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
@@ -3831,6 +3899,23 @@ class SuperLink():
         self.downstream_hydraulic_geometry()
         self.compute_storage_areas()
         self.node_velocities()
+
+    def spinup(self, n_steps=100, dt=10, Q_in=None, Q_0Ik=None, reposition_junctions=True,
+               reset_counters=True, **kwargs):
+        """
+        Spin up solver for a given number of steps to avoid running a completely dry model.
+        """
+        if Q_in is None:
+            Q_in = 1e-6 * np.ones(self.M)
+        if Q_0Ik is None:
+            Q_0Ik = 1e-6 * np.ones(self._I.size)
+        for _ in range(n_steps):
+            self.step(dt=dt, Q_in=Q_in, Q_0Ik=Q_0Ik, **kwargs)
+            if reposition_junctions:
+                self.reposition_junctions()
+        if reset_counters:
+            self.t = 0.
+            self.iter_count = 0
 
     def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
