@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib
 import matplotlib.cm as cm
 import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 from matplotlib import collections as mc
 import mpl_toolkits.mplot3d.art3d as art3d
 from matplotlib.collections import PolyCollection
@@ -52,11 +53,14 @@ def _plot_superjunction_profile(self, j, ax, x_offset=0, x_width=1, im=[],
     z = self._z_inv_j[j]
     xj = [x[0], x[0], x[1], x[1]]
     yj = [z, H, H, z]
+    pj = ax.plot(x, [z, z], c='0.25', alpha=0.75)
     pj = patches.Polygon(xy=list(zip(xj,yj)), **superjunction_kwargs)
     ax.add_patch(pj)
     im.append(pj)
 
-def plot_profile(self, js, ax, width=1, superlink_kwargs={}, superjunction_kwargs={}):
+def plot_profile(self, js, ax=None, width=1, superlink_kwargs={}, superjunction_kwargs={}):
+    if ax is None:
+        fig, ax = plt.subplots()
     # Create mapping dict from superjunction pair to superlink
     jk = {}
     for k in range(self.NK):
@@ -69,19 +73,20 @@ def plot_profile(self, js, ax, width=1, superlink_kwargs={}, superjunction_kwarg
     im = []
     for key in key_list:
         j0, j1 = key
-        k = jk[key]
         _plot_superjunction_profile(self, j0, ax=ax, x_offset=x_offset,
                                     x_width=width, im=im,
                                     superjunction_kwargs=superjunction_kwargs)
         x_offset += width
-        _plot_superlink_profile(self, k, ax=ax, x_offset=x_offset, im=im,
-                                superlink_kwargs=superlink_kwargs)
-        x_offset += self._dx_k[k]
-        zmin = self._z_inv_Ik[self._kI == k].min()
-        hmax = (self._z_inv_Ik[self._kI == k]
-                + self._h_Ik[self._kI == k]).max()
-        y_min = min(y_min, self._z_inv_j[j0], self._z_inv_j[j1], zmin)
-        y_max = max(y_max, self.H_j[j0], self.H_j[j1], hmax)
+        if key in jk:
+            k = jk[key]
+            _plot_superlink_profile(self, k, ax=ax, x_offset=x_offset, im=im,
+                                    superlink_kwargs=superlink_kwargs)
+            x_offset += self._dx_k[k]
+            zmin = self._z_inv_Ik[self._kI == k].min()
+            hmax = (self._z_inv_Ik[self._kI == k]
+                    + self._h_Ik[self._kI == k]).max()
+            y_min = min(y_min, self._z_inv_j[j0], self._z_inv_j[j1], zmin)
+            y_max = max(y_max, self.H_j[j0], self.H_j[j1], hmax)
     _plot_superjunction_profile(self, j1, ax=ax, x_offset=x_offset,
                                 x_width=width, im=im,
                                 superjunction_kwargs=superjunction_kwargs)
@@ -92,8 +97,10 @@ def plot_profile(self, js, ax, width=1, superlink_kwargs={}, superjunction_kwarg
                 y_max + 0.02 * (y_max - y_min))
     return im
 
-def plot_network_2d(self, ax, superjunction_kwargs={}, junction_kwargs={},
+def plot_network_2d(self, ax=None, superjunction_kwargs={}, junction_kwargs={},
                     link_kwargs={}, orifice_kwargs={}, weir_kwargs={}, pump_kwargs={}):
+    if ax is None:
+        fig, ax = plt.subplots()
     collections = []
     _map_x_j = self._map_x_j
     _map_y_j = self._map_y_j
@@ -140,11 +147,14 @@ def plot_network_2d(self, ax, superjunction_kwargs={}, junction_kwargs={},
         collections.append(lc_p)
     return collections
 
-def plot_network_3d(self, ax, superjunction_signal=None, junction_signal=None,
+def plot_network_3d(self, ax=None, superjunction_signal=None, junction_signal=None,
                     superjunction_stems=True, junction_stems=True,
                     border=True, fill=True, base_line_kwargs={}, superjunction_stem_kwargs={},
                     junction_stem_kwargs={}, border_kwargs={}, fill_kwargs={},
                     orifice_kwargs={}, weir_kwargs={}, pump_kwargs={}):
+    if ax is None:
+        fig = plt.figure(figsize=(6,6))
+        ax = fig.add_subplot(1, 1, 1, projection='3d')
     _map_x_j = self._map_x_j
     _map_y_j = self._map_y_j
     _x_Ik = self._x_Ik

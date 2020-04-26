@@ -150,6 +150,46 @@ class QualityBuilder():
         self._V_sj = self.hydraulics._V_sj
 
     @property
+    def c_j(self):
+        return self._c_j
+
+    @c_j.setter
+    def c_j(self, value):
+        self._c_j = np.asarray(value)
+
+    @property
+    def c_Ik(self):
+        return self._c_Ik
+
+    @c_Ik.setter
+    def c_Ik(self, value):
+        self._c_Ik = np.asarray(value)
+
+    @property
+    def c_ik(self):
+        return self._c_ik
+
+    @c_ik.setter
+    def c_ik(self, value):
+        self._c_ik = np.asarray(value)
+
+    @property
+    def c_uk(self):
+        return self._c_uk
+
+    @c_uk.setter
+    def c_uk(self, value):
+        self._c_uk = np.asarray(value)
+
+    @property
+    def c_dk(self):
+        return self._c_dk
+
+    @c_dk.setter
+    def c_dk(self, value):
+        self._c_dk = np.asarray(value)
+
+    @property
     def _dt(self):
         return self.hydraulics.t - self.hydraulics.states['t']
 
