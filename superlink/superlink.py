@@ -7,6 +7,7 @@ import scipy.sparse
 import scipy.sparse.linalg
 import superlink.geometry
 import superlink.storage
+import superlink.visualization
 
 class SuperLink():
     """
@@ -331,6 +332,12 @@ class SuperLink():
             self.permutations = np.arange(len(superjunctions))
             self.banded = False
         # TODO: What about id?
+        if not 'map_x' in self.superjunctions.columns:
+            self.superjunctions['map_x'] = 0.
+        if not 'map_y' in self.superjunctions.columns:
+            self.superjunctions['map_y'] = 0.
+        self._map_x_j = self.superjunctions['map_x'].values.astype(float)
+        self._map_y_j = self.superjunctions['map_y'].values.astype(float)
         if 'name' in self.superjunctions.columns:
             self.superjunction_names = self.superjunctions['name'].values
         else:
@@ -350,6 +357,8 @@ class SuperLink():
             generate_elems = False
             self.links = links
             self.junctions = junctions
+        self.NIk = self.junctions.shape[0]
+        self.Nik = self.links.shape[0]
         self.transects = transects
         self.storages = storages
         self._dt = dt
@@ -691,69 +700,137 @@ class SuperLink():
     def h_Ik(self):
         return self._h_Ik
 
+    @h_Ik.setter
+    def h_Ik(self, value):
+        self._h_Ik = np.asarray(value)
+
     @property
     def Q_ik(self):
         return self._Q_ik
+
+    @Q_ik.setter
+    def Q_ik(self, value):
+        self._Q_ik = np.asarray(value)
 
     @property
     def Q_uk(self):
         return self._Q_uk
 
+    @Q_uk.setter
+    def Q_uk(self, value):
+        self._Q_uk = np.asarray(value)
+
     @property
     def Q_dk(self):
         return self._Q_dk
+
+    @Q_dk.setter
+    def Q_dk(self, value):
+        self._Q_dk = np.asarray(value)
 
     @property
     def Q_o(self):
         return self._Qo
 
+    @Q_o.setter
+    def Q_o(self, value):
+        self._Qo = np.asarray(value)
+
     @property
     def Q_w(self):
         return self._Qw
+
+    @Q_w.setter
+    def Q_w(self, value):
+        self._Qw = np.asarray(value)
 
     @property
     def Q_p(self):
         return self._Qp
 
+    @Q_p.setter
+    def Q_p(self, value):
+        self._Qp = np.asarray(value)
+
     @property
     def A_ik(self):
         return self._A_ik
+
+    @A_ik.setter
+    def A_ik(self, value):
+        self._A_ik = np.asarray(value)
 
     @property
     def Pe_ik(self):
         return self._Pe_ik
 
+    @Pe_ik.setter
+    def Pe_ik(self, value):
+        self._Pe_ik = np.asarray(value)
+
     @property
     def R_ik(self):
         return self._R_ik
+
+    @R_ik.setter
+    def R_ik(self, value):
+        self._R_ik = np.asarray(value)
 
     @property
     def B_ik(self):
         return self._B_ik
 
+    @B_ik.setter
+    def B_ik(self, value):
+        self._B_ik = np.asarray(value)
+
     @property
     def A_sj(self):
         return self._A_sj
+
+    @A_sj.setter
+    def A_sj(self, value):
+        self._A_sj = np.asarray(value)
 
     @property
     def V_sj(self):
         return self._V_sj
 
+    @V_sj.setter
+    def V_sj(self, value):
+        self._V_sj = np.asarray(value)
+
     @property
     def z_inv_j(self):
         return self._z_inv_j
+
+    @z_inv_j.setter
+    def z_inv_j(self, value):
+        self._z_inv_j = np.asarray(value)
 
     @property
     def z_inv_uk(self):
         return self._z_inv_uk
 
+    @z_inv_uk.setter
+    def z_inv_uk(self, value):
+        self._z_inv_uk = np.asarray(value)
+
     @property
     def z_inv_dk(self):
         return self._z_inv_dk
 
+    @z_inv_dk.setter
+    def z_inv_dk(self, value):
+        self._z_inv_dk = np.asarray(value)
+
     @property
     def x_Ik(self):
         return self._x_Ik
+
+    @x_Ik.setter
+    def x_Ik(self, value):
+        self._x_Ik = np.asarray(value)
 
     @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
@@ -3787,6 +3864,34 @@ class SuperLink():
         A_2 = np.diag(np.where(~bc, _A_sj / _dt, 0))
         return A_1, A_2, b
 
+    def state_space_system(self, _dt=None):
+        A = self.A                    # Superlink/superjunction matrix
+        O = self.O                    # Orifice matrix
+        W = self.W                    # Weir matrix
+        P = self.P                    # Pump matrix
+        D = self.D
+        M = self.M                    # Number of superjunctions in system
+        H_j_next = self.H_j                # Head at superjunction j
+        H_j_prev = self.states['H_j']
+        _A_sj = self._A_sj            # Surface area of superjunction j
+        bc = self.bc                  # Superjunction j has a fixed boundary condition (y/n)
+        n_o = self.n_o                # Number of orifices
+        n_w = self.n_w                # Number of weirs
+        n_p = self.n_p                # Number of pumps
+        Q_in = self._Q_in
+        # If no time step specified, use instance time step
+        if _dt is None:
+            _dt = self._dt
+        has_control = n_o + n_w + n_p
+        # Get A_1
+        if has_control:
+            A_1 = A + O + W + P
+        else:
+            A_1 = A
+        # Get A_2
+        A_2 = np.diag(np.where(~bc, _A_sj / _dt, 0))
+        return A_1, A_2, D, H_j_next, H_j_prev, Q_in
+
     def save_state(self):
         """
         Save current model state to dict stored in self.states.
@@ -3825,6 +3930,66 @@ class SuperLink():
         self.downstream_hydraulic_geometry()
         self.compute_storage_areas()
         self.node_velocities()
+
+    def spinup(self, n_steps=100, dt=10, Q_in=None, Q_0Ik=None, reposition_junctions=True,
+               reset_counters=True, **kwargs):
+        """
+        Spin up solver for a given number of steps to avoid running a completely dry model.
+        """
+        if Q_in is None:
+            Q_in = 1e-6 * np.ones(self.M)
+        if Q_0Ik is None:
+            Q_0Ik = 1e-6 * np.ones(self._I.size)
+        for _ in range(n_steps):
+            self.step(dt=dt, Q_in=Q_in, Q_0Ik=Q_0Ik, **kwargs)
+            if reposition_junctions:
+                self.reposition_junctions()
+        if reset_counters:
+            self.t = 0.
+            self.iter_count = 0
+
+    def plot_profile(self, js, ax=None, width=1, superlink_kwargs={},
+                     superjunction_kwargs={}):
+        return (superlink
+                .visualization
+                .plot_profile(self, js=js, ax=ax, width=width,
+                              superlink_kwargs=superlink_kwargs,
+                              superjunction_kwargs=superjunction_kwargs))
+
+    def plot_network_2d(self, ax=None, superjunction_kwargs={}, junction_kwargs={},
+                    link_kwargs={}, orifice_kwargs={}, weir_kwargs={}, pump_kwargs={}):
+        return (superlink
+                .visualization
+                .plot_network_2d(self, ax=ax,
+                                 superjunction_kwargs=superjunction_kwargs,
+                                 junction_kwargs=junction_kwargs,
+                                 link_kwargs=link_kwargs,
+                                 orifice_kwargs=orifice_kwargs,
+                                 weir_kwargs=weir_kwargs,
+                                 pump_kwargs=pump_kwargs))
+
+    def plot_network_3d(self, ax=None, superjunction_signal=None, junction_signal=None,
+                        superjunction_stems=True, junction_stems=True,
+                        border=True, fill=True, base_line_kwargs={}, superjunction_stem_kwargs={},
+                        junction_stem_kwargs={}, border_kwargs={}, fill_kwargs={},
+                        orifice_kwargs={}, weir_kwargs={}, pump_kwargs={}):
+        return (superlink
+                .visualization
+                .plot_network_3d(self, ax=ax,
+                                 superjunction_signal=superjunction_signal,
+                                 junction_signal=junction_signal,
+                                 superjunction_stems=superjunction_stems,
+                                 junction_stems=junction_stems,
+                                 border=border,
+                                 fill=fill,
+                                 base_line_kwargs=base_line_kwargs,
+                                 superjunction_stem_kwargs=superjunction_stem_kwargs,
+                                 junction_stem_kwargs=junction_stem_kwargs,
+                                 border_kwargs=border_kwargs,
+                                 fill_kwargs=fill_kwargs,
+                                 orifice_kwargs=orifice_kwargs,
+                                 weir_kwargs=weir_kwargs,
+                                 pump_kwargs=pump_kwargs))
 
     def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):

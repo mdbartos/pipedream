@@ -83,7 +83,7 @@ class Simulation():
     """
     def __init__(self, model, Q_in=None, H_bc=None, Q_Ik=None, t_start=None,
                  t_end=None, dt=None, max_iter=None, min_dt=1, max_dt=200,
-                 tol=0.01, min_rel_change=0.5, max_rel_change=1.5, safety_factor=0.9,
+                 tol=0.01, min_rel_change=1e-10, max_rel_change=1e10, safety_factor=0.9,
                  Qcov=None, Rcov=None, C=None, H=None):
         self.model = model
         if Q_in is not None:
@@ -280,6 +280,7 @@ class Simulation():
         """
         # Import current and ending time
         t = self.t
+        t_start = self.t_start
         t_end = self.t_end
         # Use checkpoints to avoid slowing down program with printing
         if use_checkpoints:
@@ -297,7 +298,7 @@ class Simulation():
         if t > t_end:
             t = t_end
         bar_len = 50
-        progress_ratio = float(t) / float(t_end)
+        progress_ratio = float(t - t_start) / float(t_end - t_start)
         progress_len = int(round(bar_len * progress_ratio))
         pct_finished = round(100.0 * progress_ratio, 1)
         bar = '=' * progress_len + '-' * (bar_len - progress_len)

@@ -24,6 +24,7 @@ class nGreenAmpt(GreenAmpt):
         | Ks      | float | m/s  | Saturated hydraulic conductivity                     |
         | theta_s | float | -    | Saturated soil moisture content                      |
         | theta_i | float | -    | Initial soil moisture content                        |
+        | A_s     | float | m^2  | Surface area of soil element                         |
         |---------+-------+------+------------------------------------------------------|
 
     Methods:
@@ -196,6 +197,7 @@ class nGreenAmpt(GreenAmpt):
             self.unsaturated_case_2(dt, ia, unsat_case_2)
         if numba_any(unsat_case_3):
             self.unsaturated_case_3(dt, ia, unsat_case_3)
+        self.compute_runoff(i)
         self.iter_count += 1
 
 @njit

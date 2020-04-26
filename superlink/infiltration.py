@@ -21,6 +21,7 @@ class GreenAmpt():
         | Ks      | float | m/s  | Saturated hydraulic conductivity                     |
         | theta_s | float | -    | Saturated soil moisture content                      |
         | theta_i | float | -    | Initial soil moisture content                        |
+        | A_s     | float | m^2  | Surface area of soil element                         |
         |---------+-------+------+------------------------------------------------------|
 
     Methods:
@@ -37,7 +38,7 @@ class GreenAmpt():
     """
     def __init__(self, soil_params):
         self.N = len(soil_params)
-        for field in ('psi_f', 'Ks', 'theta_s', 'theta_i'):
+        for field in ('psi_f', 'Ks', 'theta_s', 'theta_i', 'A_s'):
             if field in soil_params.columns:
                 setattr(self, field, soil_params[field].values.astype(float))
             else:
@@ -361,6 +362,11 @@ class GreenAmpt():
         zero = (psi_s * theta_d / (psi_s * theta_d + F_2)) - 1
         return zero
 
+    def compute_runoff(self, i):
+        f = self.f
+        A_s = self.A_s
+        self.Q = np.maximum((i - f), 0.) * A_s
+
     def step(self, dt, i):
         """
         Advance model forward in time, computing infiltration rate and cumulative
@@ -389,6 +395,7 @@ class GreenAmpt():
             self.unsaturated_case_2(dt, ia, unsat_case_2)
         if unsat_case_3.any():
             self.unsaturated_case_3(dt, ia, unsat_case_3)
+        self.compute_runoff(i)
         self.iter_count += 1
 
 
