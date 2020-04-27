@@ -129,6 +129,44 @@ def Circular_B_ik(h_Ik, h_Ip1k, g1, pslot=0.001):
         B = pslot * d
     return B
 
+@njit
+def Circular_dA_dh_ik(h_ik, g1):
+    d = g1
+    y = h_ik
+    if y < 0:
+        y = 0
+    if y == 0:
+        return 0
+    num = - d * (np.cos( 2 * np.arccos(1 - 2 * y / d)) - 1)
+    den = 4 * np.sqrt(y * (d - y) / d**2)
+    dA = num / den
+    return dA
+
+@njit
+def Circular_dPe_dh_ik(h_ik, g1):
+    d = g1
+    y = h_ik
+    if y < 0:
+        y = 0
+    if y == 0:
+        return 0
+    num = 1
+    den = np.sqrt(y * (d - y) / d**2)
+    dPe = num / den
+    return dPe
+
+@njit
+def Circular_dB_dh_ik(h_ik, g1):
+    d = g1
+    y = h_ik
+    if y < 0:
+        y = 0
+    if y == 0:
+        return 0
+    num = d - 2 * y
+    den = d * np.sqrt(y * (d - y) / d**2)
+    dB = num / den
+    return dB
 
 @njit
 def Rect_Closed_A_ik(h_Ik, h_Ip1k, g1, g2):
@@ -231,6 +269,32 @@ def Rect_Closed_B_ik(h_Ik, h_Ip1k, g1, g2, pslot=0.001):
         B = pslot * b
     return B
 
+@njit
+def Rect_Closed_dA_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    b = g2
+    y = h_ik
+    if y > y_max:
+        dA = 0.
+    else:
+        dA = b
+    return dA
+
+@njit
+def Rect_Closed_dPe_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    b = g2
+    y = h_ik
+    dPe = 2.
+    return dPe
+
+@njit
+def Rect_Closed_dB_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    b = g2
+    y = h_ik
+    dB = 0.
+    return dB
 
 @njit
 def Rect_Open_A_ik(h_Ik, h_Ip1k, g1, g2):
@@ -322,6 +386,33 @@ def Rect_Open_B_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     b = g2
     return b
+
+@njit
+def Rect_Open_dA_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    b = g2
+    y = h_ik
+    if y > y_max:
+        dA = 0.
+    else:
+        dA = b
+    return dA
+
+@njit
+def Rect_Open_dPe_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    b = g2
+    y = h_ik
+    dPe = 2.
+    return dPe
+
+@njit
+def Rect_Open_dB_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    b = g2
+    y = h_ik
+    dB = 0.
+    return dB
 
 
 @njit
@@ -422,6 +513,30 @@ def Triangular_B_ik(h_Ik, h_Ip1k, g1, g2):
     else:
         B = 2 * m * y_max
     return B
+
+@njit
+def Triangular_dA_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    m = g2
+    y = h_ik
+    dA = 2 * m * y
+    return dA
+
+@njit
+def Triangular_dPe_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    m = g2
+    y = h_ik
+    dPe = 2 * np.sqrt(1 + m**2)
+    return dPe
+
+@njit
+def Triangular_dB_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    m = g2
+    y = h_ik
+    dB = 2 * m
+    return dB
 
 
 @njit
@@ -531,6 +646,33 @@ def Trapezoidal_B_ik(h_Ik, h_Ip1k, g1, g2, g3):
     else:
         B = b + 2 * m * y_max
     return B
+
+@njit
+def Trapezoidal_dA_dh_ik(h_ik, g1, g2, g3):
+    y_max = g1
+    b = g2
+    m = g3
+    y = h_ik
+    dA = b + 2 * m * y
+    return dA
+
+@njit
+def Trapezoidal_dPe_dh_ik(h_ik, g1, g2, g3):
+    y_max = g1
+    b = g2
+    m = g3
+    y = h_ik
+    dPe = 2 * np.sqrt(1 + m**2)
+    return dPe
+
+@njit
+def Trapezoidal_dB_dh_ik(h_ik, g1, g2, g3):
+    y_max = g1
+    b = g2
+    m = g3
+    y = h_ik
+    dB = 2 * m
+    return dB
 
 @njit
 def Parabolic_A_ik(h_Ik, h_Ip1k, g1, g2):
@@ -791,4 +933,28 @@ def Wide_B_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     b = g2
     return b
+
+@njit
+def Wide_dA_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    b = g2
+    y = h_ik
+    dA = b
+    return dA
+
+@njit
+def Wide_dPe_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    b = g2
+    y = h_ik
+    dPe = 0.
+    return dPe
+
+@njit
+def Wide_dB_dh_ik(h_ik, g1, g2):
+    y_max = g1
+    b = g2
+    y = h_ik
+    dB = 0.
+    return dB
 
