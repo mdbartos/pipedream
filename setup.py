@@ -2,13 +2,13 @@
 
 from setuptools import setup
 
-setup(name='superlink',
+setup(name='pipedream-solver',
       version='0.1',
-      description='Implementation of superlink hydraulic solver',
+      description='Interactive hydrodynamic solver for sewer/stormwater networks',
       author='Matt Bartos',
       author_email='mdbartos@umich.edu',
-      url='http://open-storm.org',
-      packages=["superlink"],
+      url='https://mattbartos.com',
+      packages=["pipedream_solver"],
       install_requires=[
           'numpy',
           'pandas',

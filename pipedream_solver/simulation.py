@@ -11,9 +11,9 @@ try:
 except:
     _HAS_NUMBA = False
 if _HAS_NUMBA:
-    from superlink.nutils import interpolate_sample, _kalman_semi_implicit
+    from pipedream_solver.nutils import interpolate_sample, _kalman_semi_implicit
 else:
-    from superlink.utils import interpolate_sample, _kalman_semi_implicit
+    from pipedream_solver.utils import interpolate_sample, _kalman_semi_implicit
 
 eps = np.finfo(float).eps
 
@@ -23,7 +23,7 @@ class Simulation():
 
     Inputs:
     -------
-    model : superlink.Superlink instance
+    model : pipedream_solver.Superlink instance
         Hydraulic model to simulate
     Q_in : pd.DataFrame (T x M)
         Flow input at each superjunction (m^3/s)
@@ -71,7 +71,7 @@ class Simulation():
 
     Attributes:
     -----------
-    states : superlink.simulation.States instance
+    states : pipedream_solver.simulation.States instance
         Class containing a collection of model states, including:
             H_j  - Superjunction heads (meters)
             Q_ik - Link flows (m^3/s)

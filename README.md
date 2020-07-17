@@ -1,11 +1,6 @@
-# superlink
-🚰 Implementation of the SUPERLINK hydraulic solver by [Ji (1998).](https://ascelibrary.org/doi/10.1061/%28ASCE%290733-9429%281998%29124%3A3%28307%29)
+# pipedream
 
-```
-Ji, Z. (1998). General Hydrodynamic Model for Sewer/Channel Network Systems.
-Journal of Hydraulic Engineering, 124(3), 307–315.
-doi: 10.1061/(asce)0733-9429(1998)124:3(307)
-```
+An interactive hydrodynamic solver for sewer/stormwater networks.
 
 # A Minimal Example
 
@@ -16,8 +11,8 @@ doi: 10.1061/(asce)0733-9429(1998)124:3(307)
 ```python
 # Import modules
 import pandas as pd
-from superlink.hydraulics import SuperLink
-from superlink.simulation import Simulation
+from pipedream_solver.hydraulics import SuperLink
+from pipedream_solver.simulation import Simulation
 
 # Specify data path
 input_path = '../data/six_pipes'
@@ -62,3 +57,14 @@ with Simulation(superlink, Q_in=Q_in, H_bc=H_bc) as simulation:
 See plotting code [here](https://github.com/mdbartos/superlink/blob/master/test/six_pipe_test.ipynb).
 
 ![Superlink Example](https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/superlink_test.png)
+
+# Acknowledgments
+
+🚰 Hydraulic solver based on the SUPERLINK scheme proposed by Zhong Ji [Ji (1998).](https://ascelibrary.org/doi/10.1061/%28ASCE%290733-9429%281998%29124%3A3%28307%29)
+
+```
+Ji, Z. (1998). General Hydrodynamic Model for Sewer/Channel Network Systems.
+Journal of Hydraulic Engineering, 124(3), 307–315.
+doi: 10.1061/(asce)0733-9429(1998)124:3(307)
+```
+

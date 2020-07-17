@@ -6,14 +6,14 @@ import scipy.integrate
 import scipy.sparse
 import scipy.sparse.linalg
 from numba import njit, prange
-import superlink.geometry
-import superlink.ngeometry
-import superlink.storage
-from superlink.superlink import SuperLink
+import pipedream_solver.geometry
+import pipedream_solver.ngeometry
+import pipedream_solver.storage
+from pipedream_solver.superlink import SuperLink
 
-class NumbaLink(SuperLink):
+class nSuperLink(SuperLink):
     """
-    SUPERLINK hydraulic solver, as described in:
+    Numba implementation of SUPERLINK hydraulic solver, as described in:
 
     Ji, Z. (1998). General Hydrodynamic Model for Sewer/Channel Network Systems.
     Journal of Hydraulic Engineering, 124(3), 307–315.
@@ -1520,7 +1520,7 @@ def handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik, _g1_ik, 
         _ik_g = _ellipse_ix
         _Ik_g = _Ik[_ik_g]
         _Ip1k_g = _Ip1k[_ik_g]
-        _Pe_ik[_ik_g] = superlink.geometry.Elliptical.Pe_ik(_h_Ik[_Ik_g],
+        _Pe_ik[_ik_g] = pipedream_solver.geometry.Elliptical.Pe_ik(_h_Ik[_Ik_g],
                                                             _h_Ik[_Ip1k_g],
                                                             _g1_ik[_ik_g],
                                                             _g2_ik[_ik_g])
@@ -1541,45 +1541,45 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
         g3_i = _g3_ik[i]
         if geom_code:
             if geom_code == 1:
-                _A_ik[i] = superlink.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
-                _Pe_ik[i] = superlink.ngeometry.Circular_Pe_ik(h_I, h_Ip1, g1_i)
-                _R_ik[i] = superlink.ngeometry.Circular_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = superlink.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
+                _A_ik[i] = pipedream_solver.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Circular_Pe_ik(h_I, h_Ip1, g1_i)
+                _R_ik[i] = pipedream_solver.ngeometry.Circular_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
             elif geom_code == 2:
-                _A_ik[i] = superlink.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _Pe_ik[i] = superlink.ngeometry.Rect_Closed_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
-                _R_ik[i] = superlink.ngeometry.Rect_Closed_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = superlink.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_ik[i] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Rect_Closed_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = pipedream_solver.ngeometry.Rect_Closed_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 3:
-                _A_ik[i] = superlink.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _Pe_ik[i] = superlink.ngeometry.Rect_Open_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
-                _R_ik[i] = superlink.ngeometry.Rect_Open_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = superlink.ngeometry.Rect_Open_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_ik[i] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Rect_Open_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = pipedream_solver.ngeometry.Rect_Open_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = pipedream_solver.ngeometry.Rect_Open_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 4:
-                _A_ik[i] = superlink.ngeometry.Triangular_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _Pe_ik[i] = superlink.ngeometry.Triangular_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
-                _R_ik[i] = superlink.ngeometry.Triangular_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = superlink.ngeometry.Triangular_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_ik[i] = pipedream_solver.ngeometry.Triangular_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Triangular_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = pipedream_solver.ngeometry.Triangular_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = pipedream_solver.ngeometry.Triangular_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 5:
-                _A_ik[i] = superlink.ngeometry.Trapezoidal_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
-                _Pe_ik[i] = superlink.ngeometry.Trapezoidal_Pe_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
-                _R_ik[i] = superlink.ngeometry.Trapezoidal_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = superlink.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _A_ik[i] = pipedream_solver.ngeometry.Trapezoidal_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Trapezoidal_Pe_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _R_ik[i] = pipedream_solver.ngeometry.Trapezoidal_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = pipedream_solver.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
             elif geom_code == 6:
-                _A_ik[i] = superlink.ngeometry.Parabolic_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _Pe_ik[i] = superlink.ngeometry.Parabolic_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
-                _R_ik[i] = superlink.ngeometry.Parabolic_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = superlink.ngeometry.Parabolic_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_ik[i] = pipedream_solver.ngeometry.Parabolic_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Parabolic_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = pipedream_solver.ngeometry.Parabolic_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = pipedream_solver.ngeometry.Parabolic_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 7:
                 # NOTE: Assumes that perimeter has already been calculated
-                _A_ik[i] = superlink.ngeometry.Elliptical_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _R_ik[i] = superlink.ngeometry.Elliptical_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = superlink.ngeometry.Elliptical_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_ik[i] = pipedream_solver.ngeometry.Elliptical_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = pipedream_solver.ngeometry.Elliptical_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = pipedream_solver.ngeometry.Elliptical_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 8:
-                _A_ik[i] = superlink.ngeometry.Wide_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _Pe_ik[i] = superlink.ngeometry.Wide_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
-                _R_ik[i] = superlink.ngeometry.Wide_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = superlink.ngeometry.Wide_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_ik[i] = pipedream_solver.ngeometry.Wide_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Wide_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = pipedream_solver.ngeometry.Wide_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = pipedream_solver.ngeometry.Wide_B_ik(h_I, h_Ip1, g1_i, g2_i)
     return 1
 
 @njit
@@ -1600,29 +1600,29 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         g3_i = _g3_ik[i]
         if geom_code:
             if geom_code == 1:
-                _A_bk[k] = superlink.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
-                _B_bk[k] = superlink.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
             elif geom_code == 2:
-                _A_bk[k] = superlink.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _B_bk[k] = superlink.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 3:
-                _A_bk[k] = superlink.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _B_bk[k] = superlink.ngeometry.Rect_Open_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Rect_Open_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 4:
-                _A_bk[k] = superlink.ngeometry.Triangular_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _B_bk[k] = superlink.ngeometry.Triangular_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Triangular_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Triangular_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 5:
-                _A_bk[k] = superlink.ngeometry.Trapezoidal_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
-                _B_bk[k] = superlink.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Trapezoidal_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
             elif geom_code == 6:
-                _A_bk[k] = superlink.ngeometry.Parabolic_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _B_bk[k] = superlink.ngeometry.Parabolic_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Parabolic_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Parabolic_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 7:
-                _A_bk[k] = superlink.ngeometry.Elliptical_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _B_bk[k] = superlink.ngeometry.Elliptical_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Elliptical_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Elliptical_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 8:
-                _A_bk[k] = superlink.ngeometry.Wide_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _B_bk[k] = superlink.ngeometry.Wide_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Wide_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Wide_B_ik(h_I, h_Ip1, g1_i, g2_i)
     return 1
 
 @njit
@@ -1636,21 +1636,21 @@ def numba_orifice_geometry(_Ao, h_eo, u_o, _g1_o, _g2_o, _g3_o, _geom_codes_o, n
         h_e = h_eo[i]
         if geom_code:
             if geom_code == 1:
-                _Ao[i] = superlink.ngeometry.Circular_A_ik(h_e, h_e, g1 * u)
+                _Ao[i] = pipedream_solver.ngeometry.Circular_A_ik(h_e, h_e, g1 * u)
             elif geom_code == 2:
-                _Ao[i] = superlink.ngeometry.Rect_Closed_A_ik(h_e, h_e, g1 * u, g2)
+                _Ao[i] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_e, h_e, g1 * u, g2)
             elif geom_code == 3:
-                _Ao[i] = superlink.ngeometry.Rect_Open_A_ik(h_e, h_e, g1 * u, g2)
+                _Ao[i] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_e, h_e, g1 * u, g2)
             elif geom_code == 4:
-                _Ao[i] = superlink.ngeometry.Triangular_A_ik(h_e, h_e, g1 * u, g2)
+                _Ao[i] = pipedream_solver.ngeometry.Triangular_A_ik(h_e, h_e, g1 * u, g2)
             elif geom_code == 5:
-                _Ao[i] = superlink.ngeometry.Trapezoidal_A_ik(h_e, h_e, g1 * u, g2, g3)
+                _Ao[i] = pipedream_solver.ngeometry.Trapezoidal_A_ik(h_e, h_e, g1 * u, g2, g3)
             elif geom_code == 6:
-                _Ao[i] = superlink.ngeometry.Parabolic_A_ik(h_e, h_e, g1 * u, g2)
+                _Ao[i] = pipedream_solver.ngeometry.Parabolic_A_ik(h_e, h_e, g1 * u, g2)
             elif geom_code == 7:
-                _Ao[i] = superlink.ngeometry.Elliptical_A_ik(h_e, h_e, g1 * u, g2)
+                _Ao[i] = pipedream_solver.ngeometry.Elliptical_A_ik(h_e, h_e, g1 * u, g2)
             elif geom_code == 8:
-                _Ao[i] = superlink.ngeometry.Wide_A_ik(h_e, h_e, g1 * u, g2)
+                _Ao[i] = pipedream_solver.ngeometry.Wide_A_ik(h_e, h_e, g1 * u, g2)
     return 1
 
 @njit

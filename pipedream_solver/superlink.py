@@ -5,9 +5,9 @@ import scipy.linalg
 import scipy.optimize
 import scipy.sparse
 import scipy.sparse.linalg
-import superlink.geometry
-import superlink.storage
-import superlink.visualization
+import pipedream_solver.geometry
+import pipedream_solver.storage
+import pipedream_solver.visualization
 
 class SuperLink():
     """
@@ -1605,7 +1605,7 @@ class SuperLink():
         _transect_ik = self._transect_ik    # Transect associated with link ik
         _link_start = self._link_start      # Link is first link in superlink k
         _link_end = self._link_end          # Link is last link in superlink k
-        _geom_numbers = superlink.geometry.geom_code
+        _geom_numbers = pipedream_solver.geometry.geom_code
         nk = self.nk
         n_o = self.n_o
         # Set attributes
@@ -1642,7 +1642,7 @@ class SuperLink():
             _uk_transect_indices = _transect_indices[_link_start[_transect_indices]]
             _dk_transect_indices = _transect_indices[_link_end[_transect_indices]]
             for transect_name, transect in transects.items():
-                _transect_factory[transect_name] = superlink.geometry.Irregular(**transect)
+                _transect_factory[transect_name] = pipedream_solver.geometry.Irregular(**transect)
         # Create array of geom codes
         # TODO: Should have a variable that gives total number of links instead of summing
         _geom_codes = np.zeros(nk.sum(), dtype=int)
@@ -1650,7 +1650,7 @@ class SuperLink():
             _geom_codes[indices] = _geom_numbers[geom]
         # NOTE: Handle case for elliptical geometry
         _ellipse_ix = np.flatnonzero(_geom_codes ==
-                                     superlink.geometry.geom_code['elliptical'])
+                                     pipedream_solver.geometry.geom_code['elliptical'])
         # Handle orifices
         if n_o:
             _unique_geom_o = set(_shape_o.str.lower().unique())
@@ -1699,7 +1699,7 @@ class SuperLink():
             _storage_indices = pd.Series(_tabular_storages.index, _tabular_storages.values)
             for table_name, table in storages.items():
                 if table_name in _storage_indices:
-                    _storage_factory[table_name] = superlink.storage.Tabular(**table)
+                    _storage_factory[table_name] = pipedream_solver.storage.Tabular(**table)
         # Export instance variables
         self._storage_indices = _storage_indices
         self._storage_factory = _storage_factory
@@ -1733,7 +1733,7 @@ class SuperLink():
             _ik_g = indices
             _Ik_g = _Ik[_ik_g]
             _Ip1k_g = _Ip1k[_ik_g]
-            generator = getattr(superlink.geometry, Geom)
+            generator = getattr(pipedream_solver.geometry, Geom)
             _g1_g = _g1_ik[_ik_g]
             _g2_g = _g2_ik[_ik_g]
             _g3_g = _g3_ik[_ik_g]
@@ -1792,7 +1792,7 @@ class SuperLink():
             _ik_g = indices
             _ki_g = _ki[_ik_g]
             _Ik_g = _Ik[_ik_g]
-            generator = getattr(superlink.geometry, Geom)
+            generator = getattr(pipedream_solver.geometry, Geom)
             _g1_g = _g1_ik[_ik_g]
             _g2_g = _g2_ik[_ik_g]
             _g3_g = _g3_ik[_ik_g]
@@ -1851,7 +1851,7 @@ class SuperLink():
             _ik_g = indices
             _ki_g = _ki[_ik_g]
             _Ip1k_g = _Ip1k[_ik_g]
-            generator = getattr(superlink.geometry, Geom)
+            generator = getattr(pipedream_solver.geometry, Geom)
             _g1_g = _g1_ik[_ik_g]
             _g2_g = _g2_ik[_ik_g]
             _g3_g = _g3_ik[_ik_g]
@@ -1909,7 +1909,7 @@ class SuperLink():
         for geom, indices in _geom_factory_o.items():
             Geom = geom.title()
             _o_g = indices
-            generator = getattr(superlink.geometry, Geom)
+            generator = getattr(pipedream_solver.geometry, Geom)
             _g1_g = _g1_o[_o_g] * u[_o_g]
             _g2_g = _g2_o[_o_g]
             _g3_g = _g3_o[_o_g]
@@ -1937,7 +1937,7 @@ class SuperLink():
         # Compute storage areas
         _h_j = np.maximum(H_j - _z_inv_j, min_depth)
         if _functional.any():
-            generator = getattr(superlink.storage, 'Functional')
+            generator = getattr(pipedream_solver.storage, 'Functional')
             _A_sj[_functional] = generator.A_sj(_h_j[_functional],
                                                 _storage_a[_functional],
                                                 _storage_b[_functional],
@@ -1968,7 +1968,7 @@ class SuperLink():
         # Compute storage areas
         _h_j = np.maximum(H_j - _z_inv_j, min_depth)
         if _functional.any():
-            generator = getattr(superlink.storage, 'Functional')
+            generator = getattr(pipedream_solver.storage, 'Functional')
             _V_sj[_functional] = generator.V_sj(_h_j[_functional],
                                                 _storage_a[_functional],
                                                 _storage_b[_functional],
@@ -3625,13 +3625,13 @@ class SuperLink():
     def _critical_depth(self, h, Q, d):
         # TODO: This will always be circular
         _h = np.array([h])
-        return np.asscalar(np.log((Q**2) * superlink.geometry.Circular.B_ik(_h, _h, d)
-                      / (9.81 * superlink.geometry.Circular.A_ik(_h, _h, d)**3)))
+        return np.asscalar(np.log((Q**2) * pipedream_solver.geometry.Circular.B_ik(_h, _h, d)
+                      / (9.81 * pipedream_solver.geometry.Circular.A_ik(_h, _h, d)**3)))
 
     def _normal_depth(self, h, Q, d, n, S_o):
         # TODO: This will always be circular
-        return Q - (S_o**(1/2) * superlink.geometry.Circular.A_ik(h, h, d)**(5/3)
-                    / superlink.geometry.Circular.Pe_ik(h, h, d)**(2/3) / n)
+        return Q - (S_o**(1/2) * pipedream_solver.geometry.Circular.A_ik(h, h, d)**(5/3)
+                    / pipedream_solver.geometry.Circular.Pe_ik(h, h, d)**(2/3) / n)
 
     def reposition_junctions(self, reposition=None):
         """

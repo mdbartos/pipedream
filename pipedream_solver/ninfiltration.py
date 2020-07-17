@@ -1,6 +1,6 @@
 import numpy as np
-from superlink.nutils import newton_raphson, bounded_newton_raphson, numba_any
-from superlink.infiltration import GreenAmpt
+from pipedream_solver.nutils import newton_raphson, bounded_newton_raphson, numba_any
+from pipedream_solver.infiltration import GreenAmpt
 from numba import njit
 import scipy.optimize
 
