@@ -3950,7 +3950,7 @@ class SuperLink():
 
     def plot_profile(self, js, ax=None, width=1, superlink_kwargs={},
                      superjunction_kwargs={}):
-        return (superlink
+        return (pipedream_solver
                 .visualization
                 .plot_profile(self, js=js, ax=ax, width=width,
                               superlink_kwargs=superlink_kwargs,
@@ -3958,7 +3958,7 @@ class SuperLink():
 
     def plot_network_2d(self, ax=None, superjunction_kwargs={}, junction_kwargs={},
                     link_kwargs={}, orifice_kwargs={}, weir_kwargs={}, pump_kwargs={}):
-        return (superlink
+        return (pipedream_solver
                 .visualization
                 .plot_network_2d(self, ax=ax,
                                  superjunction_kwargs=superjunction_kwargs,
@@ -3973,7 +3973,7 @@ class SuperLink():
                         border=True, fill=True, base_line_kwargs={}, superjunction_stem_kwargs={},
                         junction_stem_kwargs={}, border_kwargs={}, fill_kwargs={},
                         orifice_kwargs={}, weir_kwargs={}, pump_kwargs={}):
-        return (superlink
+        return (pipedream_solver
                 .visualization
                 .plot_network_3d(self, ax=ax,
                                  superjunction_signal=superjunction_signal,
