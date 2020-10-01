@@ -9,11 +9,11 @@ from pipedream_solver.infiltration import GreenAmpt
 from pipedream_solver.ninfiltration import nGreenAmpt
 from pipedream_solver.nquality import QualityBuilder
 
-hillslope_superjunctions = pd.read_csv('data/hillslope_superjunctions.csv')
-hillslope_superlinks = pd.read_csv('data/hillslope_superlinks.csv')
-hillslope_soil_params = pd.read_csv('data/hillslope_soil_params.csv')
-hillslope_superlink_wq_params = pd.read_csv('data/hillslope_superlink_wq_params.csv')
-hillslope_superjunction_wq_params = pd.read_csv('data/hillslope_superjunction_wq_params.csv')
+hillslope_superjunctions = pd.read_csv('data/hillslope/hillslope_superjunctions.csv')
+hillslope_superlinks = pd.read_csv('data/hillslope/hillslope_superlinks.csv')
+hillslope_soil_params = pd.read_csv('data/hillslope/hillslope_soil_params.csv')
+hillslope_superlink_wq_params = pd.read_csv('data/hillslope/hillslope_superlink_wq_params.csv')
+hillslope_superjunction_wq_params = pd.read_csv('data/hillslope/hillslope_superjunction_wq_params.csv')
 njunctions_fixed = 24
 
 hillslope_superlink_model = SuperLink(hillslope_superlinks,
