@@ -1,3 +1,6 @@
+# The simulation context manager
+
+This tutorial shows how to use the simulation context manager to handle model forcing data and record simulation outputs.
 
 ## Import modules
 
@@ -142,7 +145,7 @@ plt.tight_layout()
 ```
 
 
-![png](output_11_0.png)
+![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/simulation-context/simulation-context-4.png)
 
 
 ## Run simulation using context manager

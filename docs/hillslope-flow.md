@@ -1,3 +1,6 @@
+# Flow on a hillslope
+
+This tutorial demonstrates how to use the *pipedream* solver to simulate the flow of water on a simple hillslope.
 
 ## Import modules
 
