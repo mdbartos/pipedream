@@ -217,7 +217,7 @@ _ = model.plot_profile([0, 1], width=100)
 ```
 
 
-![png](output_20_0.png)
+![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/hillslope-flow/hillslope-flow-1.png)
 
 
 ## Run model
@@ -240,7 +240,7 @@ _ = model.plot_profile([0, 1], width=100)
 ```
 
 
-![png](output_25_0.png)
+![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/hillslope-flow/hillslope-flow-1.png)
 
 
 #### Progress forward in time for 3 hours with no rain
@@ -259,5 +259,5 @@ _ = model.plot_profile([0, 1], width=100)
 ```
 
 
-![png](output_29_0.png)
+![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/hillslope-flow/hillslope-flow-2.png)
 
