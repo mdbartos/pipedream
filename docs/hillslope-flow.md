@@ -217,7 +217,7 @@ _ = model.plot_profile([0, 1], width=100)
 ```
 
 
-![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/hillslope-flow/hillslope-flow-1.png)
+![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/hillslope-flow/hillslope-flow-0.png)
 
 
 ## Run model
