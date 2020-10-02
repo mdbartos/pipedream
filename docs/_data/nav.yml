@@ -3,3 +3,5 @@ toc:
     subfolderitems:
       - page: Flow on hillslope
         url: /pipedream/hillslope-flow.html
+      - page: Simulation context manager 
+        url: /pipedream/simulation-context.html
