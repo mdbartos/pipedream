@@ -95,6 +95,8 @@ def plot_profile(self, js, ax=None, width=1, superlink_kwargs={}, superjunction_
                 x_offset + 0.02 * x_offset)
     ax.set_ylim(y_min - 0.02 * (y_max - y_min),
                 y_max + 0.02 * (y_max - y_min))
+    ax.set_ylabel('Elevation (m)')
+    ax.set_xlabel('Horizontal coordinate (m)')
     return im
 
 def plot_network_2d(self, ax=None, superjunction_kwargs={}, junction_kwargs={},

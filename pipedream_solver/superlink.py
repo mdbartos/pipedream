@@ -229,9 +229,9 @@ class SuperLink():
         increase solver speed. Superjunctions are permuted using the Reverse
         Cuthill-McKee algorithm.
 
-    njunctions_fixed: int
-        If junctions/links are not provided, this gives the number of fixed internal
-        junctions that will be generated inside each superlink.
+    internal_links: int
+        If junctions/links are not provided, this gives the number of internal
+        links that will be generated inside each superlink.
 
     sparse: bool
         (Deprecated)
@@ -285,7 +285,7 @@ class SuperLink():
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False, auto_permute=False,
-                 end_length=None, end_method='b', njunctions_fixed=4):
+                 end_length=None, end_method='b', internal_links=4):
         # Copy input tables to prevent modification
         superjunctions = copy.deepcopy(superjunctions)
         superlinks = copy.deepcopy(superlinks)
@@ -350,7 +350,7 @@ class SuperLink():
         if (links is None) or (junctions is None):
             generate_elems = True
             # self._configure_internals(end_length=end_length)
-            self._configure_internals_variable(njunctions_fixed=njunctions_fixed)
+            self._configure_internals_variable(njunctions_fixed=internal_links)
             links = self.links
             junctions = self.junctions
         else:

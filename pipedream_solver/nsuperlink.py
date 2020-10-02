@@ -231,9 +231,9 @@ class nSuperLink(SuperLink):
         increase solver speed. Superjunctions are permuted using the Reverse
         Cuthill-McKee algorithm.
 
-    njunctions_fixed: int
-        If junctions/links are not provided, this gives the number of fixed internal
-        junctions that will be generated inside each superlink.
+    internal_links: int
+        If junctions/links are not provided, this gives the number of internal
+        links that will be generated inside each superlink.
 
     sparse: bool
         (Deprecated)
@@ -287,13 +287,13 @@ class nSuperLink(SuperLink):
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False, auto_permute=False,
-                 end_length=None, end_method='b', njunctions_fixed=4):
+                 end_length=None, end_method='b', internal_links=4):
         super().__init__(superlinks, superjunctions,
                          links, junctions, transects, storages,
                          orifices, weirs, pumps, dt, sparse,
                          min_depth, method, inertial_damping,
                          bc_method, exit_hydraulics, auto_permute,
-                         end_length, end_method, njunctions_fixed)
+                         end_length, end_method, internal_links)
 
     def configure_storages(self):
         """
