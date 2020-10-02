@@ -15,15 +15,15 @@ hillslope_soil_params = pd.read_csv('data/hillslope/hillslope_soil_params.csv')
 hillslope_superlink_wq_params = pd.read_csv('data/hillslope/hillslope_superlink_wq_params.csv')
 hillslope_superjunction_wq_params = pd.read_csv('data/hillslope/hillslope_superjunction_wq_params.csv')
 
-njunctions_fixed = 24
+internal_links = 24
 
 hillslope_superlink_model = SuperLink(hillslope_superlinks,
                                       hillslope_superjunctions,
-                                      njunctions_fixed=njunctions_fixed)
+                                      internal_links=internal_links)
 
 hillslope_nsuperlink_model = nSuperLink(hillslope_superlinks,
                                        hillslope_superjunctions,
-                                       njunctions_fixed=njunctions_fixed)
+                                       internal_links=internal_links)
 
 hillslope_greenampt_model = GreenAmpt(hillslope_soil_params)
 hillslope_ngreenampt_model = nGreenAmpt(hillslope_soil_params)
@@ -37,7 +37,7 @@ initial_nsuperlink_states = copy.deepcopy(hillslope_nsuperlink_model.states)
 def test_superlink_step():
     hillslope_superlink_model = SuperLink(hillslope_superlinks,
                                         hillslope_superjunctions,
-                                        njunctions_fixed=4)
+                                        internal_links=4)
     dt = 10
     Q_in = 1e-2 * np.asarray([1., 0.])
     Q_0Ik = 1e-3 * np.ones(hillslope_superlink_model.NIk)
@@ -104,7 +104,7 @@ def test_orifice():
         'C' : 0.67}
     orifices = pd.DataFrame(orifices, index=[0])
     hydraulic_model = SuperLink(superlinks, superjunctions, orifices=orifices,
-                                njunctions_fixed=njunctions_fixed)
+                                internal_links=internal_links)
     dt = 10
     Q_in = 1e-2 * np.asarray([0., 0., 0.])
     Q_0Ik = 1e-3 * np.ones(hydraulic_model.NIk)
@@ -132,7 +132,7 @@ def test_norifice():
         'C' : 0.67}
     orifices = pd.DataFrame(orifices, index=[0])
     hydraulic_model = nSuperLink(superlinks, superjunctions, orifices=orifices,
-                                njunctions_fixed=njunctions_fixed)
+                                internal_links=internal_links)
     dt = 10
     Q_in = 1e-2 * np.asarray([0., 0., 0.])
     Q_0Ik = 1e-3 * np.ones(hydraulic_model.NIk)
@@ -162,7 +162,7 @@ def test_weir():
     }
     weirs = pd.DataFrame(weirs, index=[0])
     hydraulic_model = SuperLink(superlinks, superjunctions, weirs=weirs,
-                                njunctions_fixed=njunctions_fixed)
+                                internal_links=internal_links)
     dt = 10
     Q_in = 1e-2 * np.asarray([0., 0., 0.])
     Q_0Ik = 1e-3 * np.ones(hydraulic_model.NIk)
@@ -192,7 +192,7 @@ def test_nweir():
     }
     weirs = pd.DataFrame(weirs, index=[0])
     hydraulic_model = nSuperLink(superlinks, superjunctions, weirs=weirs,
-                                njunctions_fixed=njunctions_fixed)
+                                internal_links=internal_links)
     dt = 10
     Q_in = 1e-2 * np.asarray([0., 0., 0.])
     Q_0Ik = 1e-3 * np.ones(hydraulic_model.NIk)
@@ -221,7 +221,7 @@ def test_pump():
     }
     pumps = pd.DataFrame(pumps, index=[0])
     hydraulic_model = SuperLink(superlinks, superjunctions, pumps=pumps,
-                                njunctions_fixed=njunctions_fixed)
+                                internal_links=internal_links)
     dt = 10
     Q_in = 1e-2 * np.asarray([0., 0., 0.])
     Q_0Ik = 1e-3 * np.ones(hydraulic_model.NIk)
@@ -250,7 +250,7 @@ def test_npump():
     }
     pumps = pd.DataFrame(pumps, index=[0])
     hydraulic_model = nSuperLink(superlinks, superjunctions, pumps=pumps,
-                                 njunctions_fixed=njunctions_fixed)
+                                 internal_links=internal_links)
     dt = 10
     Q_in = 1e-2 * np.asarray([0., 0., 0.])
     Q_0Ik = 1e-3 * np.ones(hydraulic_model.NIk)
