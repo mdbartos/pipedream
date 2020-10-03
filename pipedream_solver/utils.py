@@ -1,6 +1,6 @@
 import numpy as np
 
-def interpolate_sample(x, xp, fp):
+def interpolate_sample(x, xp, fp, method=1):
     """
     Interpolate a sample `fp` over domain `xp` at point `x`.
 
@@ -12,6 +12,8 @@ def interpolate_sample(x, xp, fp):
         The x-coordinates of the data points
     fp: np.ndarray (float)
         The y-coordinates of the data points
+    method: int [0 or 1]
+        Use nearest neighbor (0) or linear (1) interpolation.
     """
     n = xp.shape[0]
     m = fp.shape[1]
@@ -23,8 +25,14 @@ def interpolate_sample(x, xp, fp):
     else:
         dx_0 = x - xp[ix - 1]
         dx_1 = xp[ix] - x
-        frac = dx_0 / (dx_0 + dx_1)
-        result = (1 - frac) * fp[ix - 1] + (frac) * fp[ix]
+        if method == 1:
+            frac = dx_0 / (dx_0 + dx_1)
+            result = (1 - frac) * fp[ix - 1] + (frac) * fp[ix]
+        elif method == 0:
+            if abs(dx_0) <= abs(dx_1):
+                result = fp[ix - 1]
+            else:
+                result = fp[ix]
     return result
 
 def bounded_newton_raphson(f, df, x0, x_lb, x_ub, args,

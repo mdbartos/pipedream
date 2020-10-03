@@ -211,14 +211,6 @@ plt.xlabel('Time (s)')
 plt.ylabel('Head (m)')
 ```
 
-
-
-
-    Text(0, 0.5, 'Head (m)')
-
-
-
-
 ![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/simulation-context/simulation-context-1.png)
 
 
@@ -236,14 +228,6 @@ plt.xlabel('Time (s)')
 plt.ylabel('Flow (cms)')
 ```
 
-
-
-
-    Text(0, 0.5, 'Flow (cms)')
-
-
-
-
 ![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/simulation-context/simulation-context-2.png)
 
 
@@ -260,14 +244,6 @@ plt.title('Depth in internal junctions')
 plt.xlabel('Time (s)')
 plt.ylabel('Depth (m)')
 ```
-
-
-
-
-    Text(0, 0.5, 'Depth (m)')
-
-
-
 
 ![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/simulation-context/simulation-context-3.png)
 

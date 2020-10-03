@@ -59,6 +59,8 @@ class Simulation():
         Signal-input matrix for Kalman Filter
     H : np.ndarray (b x M)
         Observation matrix for Kalman Filter
+    interpolation_method : `linear` or `nearest`
+        Interpolation method to use for sampling input forcings
 
     Methods:
     --------
@@ -84,7 +86,7 @@ class Simulation():
     def __init__(self, model, Q_in=None, H_bc=None, Q_Ik=None, t_start=None,
                  t_end=None, dt=None, max_iter=None, min_dt=1, max_dt=200,
                  tol=0.01, min_rel_change=1e-10, max_rel_change=1e10, safety_factor=0.9,
-                 Qcov=None, Rcov=None, C=None, H=None):
+                 Qcov=None, Rcov=None, C=None, H=None, interpolation_method='linear'):
         self.model = model
         if Q_in is not None:
             self.Q_in = Q_in.copy(deep=True)
@@ -109,6 +111,13 @@ class Simulation():
             dt = model._dt
         self.dt = dt
         self.max_iter = max_iter
+        # Sample interpolation method
+        if interpolation_method.lower() == 'linear':
+            self.interpolation = 1
+        elif interpolation_method.lower() == 'nearest':
+            self.interpolation = 0
+        else:
+            raise ValueError('Argument `interpolation_method` must be one of `linear` or `nearest`.')
         # Adaptive step size handling
         self.err = None
         self.min_dt = min_dt
@@ -555,12 +564,14 @@ class Simulation():
         # Specify current timestamps
         t_next = self.t + dt
         # Import inputs
+        interpolation_method = self.interpolation
         if not 'Q_in' in kwargs:
             Q_in = self.Q_in
             # Get superjunction runoff input
             if Q_in is not None:
                 Q_in_index, Q_in_values = Q_in.index.values, Q_in.values
-                Q_in_next = interpolate_sample(t_next, Q_in_index, Q_in_values)
+                Q_in_next = interpolate_sample(t_next, Q_in_index, Q_in_values,
+                                               interpolation_method)
             else:
                 Q_in_next = None
         else:
@@ -570,7 +581,8 @@ class Simulation():
             # Get head boundary conditions
             if H_bc is not None:
                 H_bc_index, H_bc_values = H_bc.index.values, H_bc.values
-                H_bc_next = interpolate_sample(t_next, H_bc_index, H_bc_values)
+                H_bc_next = interpolate_sample(t_next, H_bc_index, H_bc_values,
+                                               interpolation_method)
             else:
                 H_bc_next = None
         else:
@@ -580,7 +592,8 @@ class Simulation():
             # Get junction runoff input
             if Q_Ik is not None:
                 Q_Ik_index, Q_Ik_values = Q_Ik.index.values, Q_Ik.values
-                Q_Ik_next = interpolate_sample(t_next, Q_Ik_index, Q_Ik_values)
+                Q_Ik_next = interpolate_sample(t_next, Q_Ik_index, Q_Ik_values,
+                                               interpolation_method)
             else:
                 Q_Ik_next = None
         else:
@@ -591,6 +604,9 @@ class Simulation():
         else:
             banded = kwargs.pop('banded')
         # Step model forward with stepsize dt
+        self.Q_in_next = Q_in_next
+        self.H_bc_next = H_bc_next
+        self.Q_Ik_next = Q_Ik_next
         self.model.step(Q_in=Q_in_next, H_bc=H_bc_next, Q_0Ik=Q_Ik_next, dt=dt, banded=banded,
                         **kwargs)
 
