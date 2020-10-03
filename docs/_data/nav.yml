@@ -7,3 +7,7 @@ toc:
         url: /pipedream/simulation-context.html
       - page: Contaminant transport on hillslope
         url: /pipedream/hillslope-transport.html
+  - title: Reference
+    subfolderitems:
+      - page: Model inputs
+        url: /pipedream/model-inputs.html
