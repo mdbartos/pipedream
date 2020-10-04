@@ -114,72 +114,45 @@ The hydraulic model is advanced forward in time using the `SuperLink.step` metho
 
 ### Model dimensions
 
-<b>`M`</b>: int
-> Number of superjunctions (M).
-
-<b>`NK`</b>: int
-> Number of superlinks (NK).
-
-<b>`NIk`</b>: int
-> Number of junctions (NIk).
-
-<b>`Nik`</b>: int
-> Number of junctions (Nik).
+|----------|------|-------------|
+| Attribute | Type | Description |
+|----------|------|-------------|
+| `M`       | int  | Number of superjunctions (M) |
+| `NK`      | int  | Number of superlinks (NK) |
+| `NIk`     | int  | Number of junctions (NIK) |
+| `Nik`     | int  | Number of links (NIK) |
+|----------|------|-------------|
 
 ### Model states
 
-<b>`t`</b>: float
-> Current time (s)
-
-<b>`H_j`</b>: np.ndarray (M)
-> Superjunction heads (m)
-
-<b>`h_Ik`</b>: np.ndarray (NIk)
-> Junction depths (m)
-
-<b>`Q_ik`</b>: np.ndarray (Nik)
-> Link flows (m^3/s)
-
-<b>`Q_uk`</b>: np.ndarray (NK)
-> Flows into upstream ends of superlinks (m^3/s)
-
-<b>`Q_dk`</b>: np.ndarray (NK)
-> Flows into downstream ends of superlinks (m^3/s)
-
-<b>`Q_o`</b>: np.ndarray (NO)
-> Orifice flows (m^3/s)
-
-<b>`Q_w`</b>: np.ndarray (NW)
-> Weir flows (m^3/s)
-
-<b>`Q_p`</b>: np.ndarray (NP)
-> Pump flows (m^3/s)
-
-<b>`A_ik`</b>: np.ndarray (Nik)
-> Cross-sectional area of flow in links (m^2)
-
-<b>`Pe_ik`</b>: np.ndarray (Nik)
-> Wetted perimeter in links (m)
-
-<b>`R_ik`</b>: np.ndarray (Nik)
-> Hydraulic radius in links (m)
-
-<b>`B_ik`</b>: np.ndarray (Nik)
-> Top width of flow in links (m)
-
-<b>`A_sj`</b>: np.ndarray (M)
-> Superjunction surface areas (m^2)
-
-<b>`V_sj`</b>: np.ndarray (M)
-> Superjunction stored volumes (m^3)
+|----------|------|-------------|
+| Attribute | Type | Description |
+|----------|------|-------------|
+| `t`       | float | Current time (s) |
+| `H_j`     | np.ndarray (M) | Superjunction heads (m) |
+| `h_Ik`    | np.ndarray (NIk) | Junction depths (m) |
+| `Q_ik`    | np.ndarray (Nik) | Link flows (m^3/s) |
+| `Q_uk`    | np.ndarray (NK)  | Flows into upstream ends of superlinks (m^3/s) |
+| `Q_dk`    | np.ndarray (NK)  | Flows out of downstream ends of superlinks (m^3/s) |
+| `Q_o`     | np.ndarray (NO)  | Orifice flows (m^3/s) |
+| `Q_w`     | np.ndarray (NW)  | Weir flows (m^3/s) |
+| `Q_p`     | np.ndarray (NP)  | Pump flows (m^3/s) |
+| `A_ik`    | np.ndarray (Nik) | Cross-sectional area of flow in links (m^2) |
+| `Pe_ik`   | np.ndarray (Nik) | Wetted perimeter in links (m) |
+| `R_ik`    | np.ndarray (Nik) | Hydraulic radius in links (m) |
+| `B_ik`    | np.ndarray (Nik) | Top width of flow in links (m) |
+| `A_sj`    | np.ndarray (M) | Superjunction surface area (m^2) |
+| `V_sj`    | np.ndarray (M) | Superjunction stored volumes (m^3) |
+|----------|------|-------------|
 
 ### Model indexing
 
-<b>`_ki`</b>: np.ndarray (Nik)
-> Array indicating the index of the superlink that each link belongs to.
-
-<b>`_kI`</b>: np.ndarray (NIk)
-> Array indicating the index of the superlink that each junction belongs to.
+|----------|------|-------------|
+| Attribute | Type | Description |
+|----------|------|-------------|
+| `_ki`  | np.ndarray (Nik) | Array indicating the index of the superlink that each link belongs to |
+| `_kI`  | np.ndarray (Nik) | Array indicating the index of the superlink that each junction belongs to |
+|----------|------|-------------|
 
 ### Other attributes
 
