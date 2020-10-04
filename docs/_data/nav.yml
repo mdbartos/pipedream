@@ -13,5 +13,7 @@ toc:
         url: /pipedream/hillslope-transport.html
   - title: Reference
     subfolderitems:
+      - page: Hydraulic solver API reference
+        url: /pipedream/hydraulic-solver-api.html
       - page: Model inputs
         url: /pipedream/model-inputs.html
