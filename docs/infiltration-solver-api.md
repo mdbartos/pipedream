@@ -67,8 +67,3 @@ The hydraulic model is advanced forward in time using the `SuperLink.step` metho
 | `is_saturated` | np.ndarray (N) | Indicates whether soil element is currently saturated (`True`/`False`) |
 |----------|------|-------------|
 
-<!-- z_inv_j  : Superjunction invert elevation (m) -->
-<!-- z_inv_uk : Offset of superlink upstream invert above superjunction (m) -->
-<!-- z_inv_dk : Offset of superlink downstream invert above superjunction (m) -->
-
-## Methods of the `SuperLink` model

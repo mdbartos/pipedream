@@ -17,5 +17,7 @@ toc:
         url: /pipedream/hydraulic-solver-api.html
       - page: Infiltration solver API reference
         url: /pipedream/infiltration-solver-api.html
+      - page: Water quality solver API reference
+        url: /pipedream/water-quality-solver-api.html
       - page: Model inputs
         url: /pipedream/model-inputs.html

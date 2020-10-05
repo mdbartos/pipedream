@@ -318,7 +318,7 @@ If internal links and junctions are not provided separately, the following field
 |---------|-------|-------|------------------------------------------------------------------------|
 | K       | float | 1/s   | First order reaction constant in internal links/junctions              |
 | D       | float | m^2/s | Diffusion constant in internal links/junctions                         |
-| c_0     | float | g/m^3 | Initial contaminant concentration in internal links/junctions          |
+| c_0     | float | */m^3 | Initial contaminant concentration in internal links/junctions          |
 |---------|-------|-------|------------------------------------------------------------------------|
 
 ---
@@ -334,7 +334,7 @@ The following fields are required:
 | Field | Type  | Unit  | Description                                               |
 |-------|-------|-------|-----------------------------------------------------------|
 | K     | float | 1/s   | First order reaction constant in superjunction            |
-| c_0   | float | g/m^3 | Initial contaminant concentration in superjunction        |
+| c_0   | float | */m^3  | Initial contaminant concentration in superjunction        |
 | bc    | bool  | -     | Indicates contaminant boundary condition at superjunction |
 |-------|-------|-------|-----------------------------------------------------------|
 
@@ -352,7 +352,7 @@ The following fields are required:
 |-------|-------|-------|-------------------------------------------|
 | K     | float | 1/s   | First order reaction constant in link     |
 | D     | float | m^2/s | Diffusion constant in link                |
-| c_0   | float | g/m^3 | Initial contaminant concentration in link |
+| c_0   | float | */m^3  | Initial contaminant concentration in link |
 |-------|-------|-------|-------------------------------------------|
 
 ---
@@ -369,6 +369,6 @@ The following fields are required:
 |-------|-------|-------|-----------------------------------------------|
 | K     | float | 1/s   | First order reaction constant in junction     |
 | D     | float | m^2/s | Diffusion constant in junction                |
-| c_0   | float | g/m^3 | Initial contaminant concentration in junction |
+| c_0   | float | */m^3  | Initial contaminant concentration in junction |
 |-------|-------|-------|-----------------------------------------------|
 
