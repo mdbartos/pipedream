@@ -263,9 +263,11 @@ Takes the following structure:
 
 ## Infiltration solver model inputs
 
-- [Soil Parameters](#soil-params)
+- [Soil Parameters](#soil-parameters)
 
 ---
+
+### Soil parameters
 
 <b>`soil_params`</b>: pd.DataFrame
 > Table containing soil parameters for all catchments.
@@ -293,6 +295,8 @@ The following fields are required.
 
 ---
 
+### Superlink parameters
+
 <b>`superlink_params`</b>: pd.DataFrame
 > Table containing superlink water quality parameters.
 
@@ -319,6 +323,8 @@ If internal links and junctions are not provided separately, the following field
 
 ---
 
+### Superjunction parameters
+
 <b>`superjunction_params`</b>: pd.DataFrame
 > Table containing superjunction water quality parameters.
 
@@ -334,6 +340,8 @@ The following fields are required:
 
 ---
 
+### Link parameters
+
 <b>`link_params`</b>: pd.DataFrame (optional)
 > Table containing link water quality parameters.
 
@@ -348,6 +356,8 @@ The following fields are required:
 |-------|-------|-------|-------------------------------------------|
 
 ---
+
+### Junction parameters
 
 <b>`junction_params`</b>: pd.DataFrame (optional)
 > Table containing junction water quality parameters.

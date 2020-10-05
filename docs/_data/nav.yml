@@ -15,5 +15,7 @@ toc:
     subfolderitems:
       - page: Hydraulic solver API reference
         url: /pipedream/hydraulic-solver-api.html
+      - page: Infiltration solver API reference
+        url: /pipedream/infiltration-solver-api.html
       - page: Model inputs
         url: /pipedream/model-inputs.html
