@@ -21,3 +21,5 @@ toc:
         url: /pipedream/water-quality-solver-api.html
       - page: Model inputs
         url: /pipedream/model-inputs.html
+      - page: Hydraulic geometry reference
+        url: /pipedream/geometry-reference.html
