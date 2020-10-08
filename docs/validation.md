@@ -11,10 +11,6 @@ from pipedream_solver.simulation import Simulation
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-%matplotlib inline
-
-plt.rcParams['figure.figsize'] = (10, 5)
 ```
 
 ## Read input data
