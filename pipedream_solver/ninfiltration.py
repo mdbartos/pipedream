@@ -198,7 +198,9 @@ class nGreenAmpt(GreenAmpt):
         if numba_any(unsat_case_3):
             self.unsaturated_case_3(dt, ia, unsat_case_3)
         self.compute_runoff(i)
+        self.compute_ponding_depth(i)
         self.iter_count += 1
+        self.t += dt
 
 @njit
 def run_green_ampt_newton(F_2, x0, F_1, dt, Ks, theta_d, psi_f, ia, max_iter=50,

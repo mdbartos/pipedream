@@ -65,6 +65,7 @@ class GreenAmpt():
         self.T = np.zeros(self.N, dtype=float)
         self.is_saturated = np.zeros(self.N, dtype=bool)
         self.iter_count = 0
+        self.t = 0
 
     @classmethod
     def _s2(cls, theta_i, theta_s, theta_r, Ks, psi_b, lambda_o):
@@ -367,6 +368,11 @@ class GreenAmpt():
         A_s = self.A_s
         self.Q = np.maximum((i - f), 0.) * A_s
 
+    def compute_ponding_depth(self, i):
+        f = self.f
+        self.d += (i - f)
+        self.d = np.maximum(self.d, 0.)
+
     def step(self, dt, i):
         """
         Advance model forward in time, computing infiltration rate and cumulative
@@ -396,6 +402,8 @@ class GreenAmpt():
         if unsat_case_3.any():
             self.unsaturated_case_3(dt, ia, unsat_case_3)
         self.compute_runoff(i)
+        self.compute_ponding_depth(i)
         self.iter_count += 1
+        self.t += dt
 
 
