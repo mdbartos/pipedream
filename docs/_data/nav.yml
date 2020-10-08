@@ -13,6 +13,8 @@ toc:
         url: /pipedream/hillslope-transport.html
       - page: Uncoupled overland flow
         url: /pipedream/uncoupled-overland-flow.html
+      - page: Coupled overland flow
+        url: /pipedream/coupled-overland-flow.html
       - page: Validation with real-world network
         url: /pipedream/validation.html
   - title: Reference
