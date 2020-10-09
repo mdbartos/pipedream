@@ -19,14 +19,14 @@ Within the hydraulic solver, a staggered-grid discretization scheme is used, in 
 
 ### Control volume for continuity equation
 
-![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/model-structure/model-structure-1.png)
+<img src="https://pipedream-solver.s3.us-east-2.amazonaws.com/img/model-structure/model-structure-1.png" width=600>
 
 
 > Note that the left and right edges of the continuity control volume coincide with the midpoints of the upstream and downstream links, respectively.
 
 ### Control volume for momentum equation
 
-![png](https://pipedream-solver.s3.us-east-2.amazonaws.com/img/model-structure/model-structure-2.png)
+<img src="https://pipedream-solver.s3.us-east-2.amazonaws.com/img/model-structure/model-structure-2.png" width=600>
 
 > Note that the left and right edges of the momentum control volume coincide with the edges of the upstream and downstream junctions, respectively.
 
