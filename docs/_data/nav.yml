@@ -3,6 +3,8 @@ toc:
     subfolderitems:
       - page: Governing equations
         url: /pipedream/governing-equations.html
+      - page: Model structure
+        url: /pipedream/model-structure.html
   - title: Examples
     subfolderitems:
       - page: Flow on hillslope
