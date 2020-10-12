@@ -3,7 +3,11 @@
 
 An interactive hydrodynamic solver for sewer/stormwater networks.
 
-# A Minimal Example
+## Documentation
+
+Read the docs [here 📖](https://mdbartos.github.io/pipedream/).
+
+## A Minimal Example
 
 <img src="https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/example_network_ji.png" width="700">
 
@@ -59,7 +63,7 @@ See plotting code [here](https://github.com/mdbartos/superlink/blob/master/test/
 
 ![Superlink Example](https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/superlink_test.png)
 
-# Acknowledgments
+## Acknowledgments
 
 Hydraulic solver based on the SUPERLINK scheme proposed by [Zhong Ji (1998).](https://ascelibrary.org/doi/10.1061/%28ASCE%290733-9429%281998%29124%3A3%28307%29)
 
