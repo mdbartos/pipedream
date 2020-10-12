@@ -3,6 +3,21 @@
 
 An interactive hydrodynamic solver for sewer/stormwater networks.
 
+## About
+
+*Pipedream* is a physically-based sewer/stormwater model designed for real-time applications. The *pipedream* toolkit consists of four major components:
+
+- A *hydraulic solver* based on the 1D Saint-Venant equations.
+- An *infiltration solver* based on the Green-Ampt formulation.
+- A *water quality solver* based on the 1D advection-reaction-diffusion equation (experimental).
+- An *interactive simulation manager* that facilitates real-time data assimilation and control.
+
+Example use-cases for *pipedream* include:
+- Real-time detection and forecasting of urban flooding.
+- Implementation of real-time control strategies for combined sewer overflows.
+- Stormwater asset management and detection of maintenance emergencies.
+- Data-driven water quality assessment.
+
 ## Documentation
 
 Read the docs [here 📖](https://mdbartos.github.io/pipedream/).
@@ -94,4 +109,3 @@ Ji, Z. (1998). General Hydrodynamic Model for Sewer/Channel Network Systems.
 Journal of Hydraulic Engineering, 124(3), 307–315.
 doi: 10.1061/(asce)0733-9429(1998)124:3(307)
 ```
-
