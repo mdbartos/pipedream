@@ -7,6 +7,26 @@ An interactive hydrodynamic solver for sewer/stormwater networks.
 
 Read the docs [here 📖](https://mdbartos.github.io/pipedream/).
 
+## Installation
+
+Use `pip` to install `pipedream-solver` via pypi:
+
+```shell
+$ pip install pipedream-solver
+```
+
+Currently, only Python 3 is supported.
+
+### Dependencies
+
+The following dependencies are required to install and use `pipedream-solver`:
+
+- [numpy](http://www.numpy.org/)
+- [pandas](https://pandas.pydata.org/)
+- [scipy](https://www.scipy.org/)
+- [numba](https://numba.pydata.org/)
+- [matplotlib](https://matplotlib.org/)
+
 ## A Minimal Example
 
 <img src="https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/example_network_ji.png" width="700">
