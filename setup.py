@@ -13,6 +13,7 @@ setup(name='pipedream-solver',
           'numpy',
           'pandas',
           'scipy',
-          'numba'
+          'numba',
+          'matplotlib'
       ]
      )
