@@ -19,13 +19,15 @@ Currently, only Python 3 is supported.
 
 ### Dependencies
 
-The following dependencies are required to install and use `pipedream-solver`:
+The following dependencies are required to install and use the *pipedream* toolkit:
 
-- [numpy](http://www.numpy.org/)
-- [pandas](https://pandas.pydata.org/)
-- [scipy](https://www.scipy.org/)
-- [numba](https://numba.pydata.org/)
-- [matplotlib](https://matplotlib.org/)
+- [numpy](http://www.numpy.org/) (>= 1.18)
+- [pandas](https://pandas.pydata.org/) (>= 0.25)
+- [scipy](https://www.scipy.org/) (>= 1.5)
+- [numba](https://numba.pydata.org/) (>= 0.40)
+- [matplotlib](https://matplotlib.org/) (>= 3.0)
+
+Listed version numbers have been tested and are known to work (this does not necessarily preclude older versions).
 
 ## A Minimal Example
 
