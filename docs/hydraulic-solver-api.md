@@ -10,71 +10,24 @@ A hydraulic model is instantiated using the `pipedream_solver.hydraulics.SuperLi
 
 The `SuperLink` class is initialized with the following parameters:
 
-<b>`superlinks`</b>: pd.DataFrame
-> Table containing all superlinks in the network along with their attributes.
-
-> See [model inputs: superlinks](/pipedream/model-inputs.html#superlinks) for specification.
-
-<b>`superjunctions`</b>: pd.DataFrame
-> Table containing all superjunctions in the network along with their attributes.
-
-> See [model inputs: superjunctions](/pipedream/model-inputs.html#superjunctions) for specification.
-
-<b>`links`</b>: pd.DataFrame (optional)
-> Table containing all links in the network along with their attributes.
-
-> See [model inputs: links](/pipedream/model-inputs.html#links) for specification.
-
-<b>`junctions`</b>: pd.DataFrame (optional)
-> Table containing all junctions in the network along with their attributes.
-
-> See [model inputs: junctions](/pipedream/model-inputs.html#junctions) for specification.
-
-<b>`transects`</b>: dict (optional)
-> Dictionary describing nonfunctional channel cross-sectional geometries.
-
-> See [model inputs: transects](/pipedream/model-inputs.html#transects) for specification.
-
-<b>`storages`</b>: dict (optional)
-> Dictionary describing tabular storages for superjunctions.
-
-> See [model inputs: storages](/pipedream/model-inputs.html#storages) for specification.
-
-<b>`orifices`</b>: pd.DataFrame (optional)
-> Table containing orifice control structures, and their attributes.
-
-> See [model inputs: orifices](/pipedream/model-inputs.html#orifices) for specification.
-
-<b>`weirs`</b>: pd.DataFrame (optional)
-> Table containing weir control structures, and their attributes.
-
-> See [model inputs: weirs](/pipedream/model-inputs.html#weirs) for specification.
-
-<b>`pumps`</b>: pd.DataFrame (optional)
-> Table containing pump control structures and their attributes.
-
-> See [model inputs: pumps](/pipedream/model-inputs.html#pumps) for specification.
-
-<b>`dt`</b>: float
-> Default timestep of model (in seconds). Defaults to 60 seconds.
-
-<b>`min_depth`</b>: float
-> Minimum depth allowed at junctions and superjunctions (in meters). Defaults to 1e-5 m.
-
-<b>`method`</b>: str
-> Method for computing internal states in superlinks. Must be one of the following:
-
-- `b`   : Backwards (default)
-- `f`   : Forwards
-- `lsq` : Least-squares
-
-> Defaults to `b`.
-
-<b>`auto_permute`</b>: bool
->If `True`, permute the superjunctions to enable use of a banded matrix solver and increase solver speed. Superjunctions are permuted using the Reverse Cuthill-McKee algorithm. Defaults to `False`.
-
-<b>`internal_links`</b>: int
->If junctions/links are not provided, this gives the number of internal links that will be generated inside each superlink. Defaults to `4`.
+|------------------|--------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Attribute        | Type         | Description                                                                                                                                                                                          |
+|------------------|--------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `superlinks`     | pd.DataFrame | Table containing all superlinks in the network along with their attributes. See [model inputs: superlinks](/pipedream/model-inputs.html#superlinks) for specification.                               |
+| `superjunctions` | pd.DataFrame | Table containing all superjunctions in the network along with their attributes. See [model inputs: superjunctions](/pipedream/model-inputs.html#superjunctions) for specification.                   |
+| `links`          | pd.DataFrame | Table containing all links in the network along with their attributes. See [model inputs: links](/pipedream/model-inputs.html#links) for specification.                                              |
+| `junctions`      | pd.DataFrame | Table containing all junctions in the network along with their attributes. See [model inputs: junctions](/pipedream/model-inputs.html#junctions) for specification.                                  |
+| `transects`      | dict         | Dictionary describing nonfunctional channel cross-sectional geometries. See [model inputs: transects](/pipedream/model-inputs.html#transects) for specification.                                     |
+| `storages`       | dict         | Dictionary describing tabular storages for superjunctions. See [model inputs: storages](/pipedream/model-inputs.html#storages) for specification.                                                    |
+| `orifices`       | pd.DataFrame | Table containing orifice control structures, and their attributes. See [model inputs: orifices](/pipedream/model-inputs.html#orifices) for specification.                                            |
+| `weirs`          | pd.DataFrame | Table containing weir control structures, and their attributes. See [model inputs: weirs](/pipedream/model-inputs.html#weirs) for specification.                                                     |
+| `pumps`          | pd.DataFrame | Table containing pump control structures, and their attributes. See [model inputs: pumps](/pipedream/model-inputs.html#pumps) for specification.                                                     |
+| `dt`             | float        | Default timestep of model (in seconds). Defaults to 60 seconds.                                                                                                                                      |
+| `min_depth`      | float        | Minimum depth allowed at junctions and superjunctions (in meters). Defaults to 1e-5 m.                                                                                                               |
+| `method`         | str          | Method for computing internal states in superlinks. Must be one of the following: <br><br>- `b` : Backwards (default) <br>- `f` : Forwards<br>- `lsq` : Least-squares<br><br> Defaults to `b`.                          |
+| `auto_permute`   | bool         | If `True`, permute the superjunctions to enable use of a banded matrix solver and increase solver speed. Superjunctions are permuted using the Reverse Cuthill-McKee algorithm. Defaults to `False`. |
+| `internal_links` | int          | If junctions/links are not provided, this gives the number of internal links that will be generated inside each superlink. Defaults to `4`.                                                          |
+|------------------|--------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 
 ## Running the `SuperLink` model with `step`
 

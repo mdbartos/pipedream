@@ -10,11 +10,11 @@ An infiltration/runoff model is instantiated using the `pipedream_solver.hydrolo
 
 The `GreenAmpt` class is initialized with the following parameters:
 
-<b>`soil_params`</b>: pd.DataFrame
-> Table containing soil parameters for each computational element.
-
-> See [model inputs: soil parameters](/pipedream/model-inputs.html#soil-parameters) for specification.
-
+|---------------|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Attribute     | Type         | Description                                                                                                                                                           |
+|---------------|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `soil_params` | pd.DataFrame | Table containing soil parameters for each computational element. See [model inputs: soil parameters](/pipedream/model-inputs.html#soil-parameters) for specification. |
+|---------------|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 
 ## Running the `GreenAmpt` model with `step`
 
