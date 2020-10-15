@@ -7,11 +7,13 @@ setup(name='pipedream-solver',
       description='Interactive hydrodynamic solver for sewer/stormwater networks',
       author='Matt Bartos',
       author_email='mdbartos@umich.edu',
-      url='https://mattbartos.com',
+      url='https://mdbartos.github.io/pipedream',
       packages=["pipedream_solver"],
       install_requires=[
           'numpy',
           'pandas',
-          'scipy'
+          'scipy',
+          'numba',
+          'matplotlib'
       ]
      )
