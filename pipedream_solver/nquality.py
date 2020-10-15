@@ -6,6 +6,94 @@ import scipy.sparse
 import scipy.sparse.linalg
 
 class QualityBuilder():
+    """
+    An implicit, staggered-grid water quality solver based on the 1D
+    advection-reaction-diffusion equations.
+
+    Inputs:
+    -----------
+    hydraulics: pipedream_solver.hydraulics.SuperLink
+        A SuperLink instance describing the system hydraulics.
+
+    superjunction_params: pd.DataFrame
+        Table containing superjunction water quality parameters.
+        The following fields are required:
+
+        |-------+-------+-------+-----------------------------------------------------------|
+        | Field | Type  | Unit  | Description                                               |
+        |-------+-------+-------+-----------------------------------------------------------|
+        | K     | float | 1/s   | First order reaction constant in superjunction            |
+        | c_0   | float | */m^3 | Initial contaminant concentration in superjunction        |
+        | bc    | bool  | -     | Indicates contaminant boundary condition at superjunction |
+        |-------+-------+-------+-----------------------------------------------------------|
+
+    superlink_params: pd.DataFrame
+        Table containing superlink water quality parameters.
+        The following fields are required:
+
+        |-------+-------+------+------------------------------------------------------------------|
+        | Field | Type  | Unit | Description                                                      |
+        |---------+-------+------+----------------------------------------------------------------|
+        | dx_uk | float | m    | Distance from the upstream end of the superlink to mixing zone   |
+        | dx_dk | float | m    | Distance from the downstream end of the superlink to mixing zone |
+        | D_uk  | float | m    | Diffusion constant of upstream end of superlink                  |
+        | D_dk  | float | m    | Diffusion constant of downstream end of superlink                |
+        |---------+-------+-------+---------------------------------------------------------------|
+
+        If internal link and junction parameters are not provided (arguments 3 and 4), the
+        following fields are required:
+
+        |-------+-------+-------+---------------------------------------------------------------|
+        | Field | Type  | Unit  | Description                                                   |
+        |-------+-------+-------+---------------------------------------------------------------|
+        | K     | float | 1/s   | First order reaction constant in internal links/junctions     |
+        | D     | float | m^2/s | Diffusion constant in internal links/junctions                |
+        | c_0   | float | */m^3 | Initial contaminant concentration in internal links/junctions |
+        |-------+-------+-------+---------------------------------------------------------------|
+
+    junction_params: pd.DataFrame (optional)
+        Table containing junction water quality parameters.
+        The following fields are required.
+
+        |-------+-------+-------+-----------------------------------------------|
+        | Field | Type  | Unit  | Description                                   |
+        |-------+-------+-------+-----------------------------------------------|
+        | K     | float | 1/s   | First order reaction constant in junction     |
+        | D     | float | m^2/s | Diffusion constant in junction                |
+        | c_0   | float | g/m^3 | Initial contaminant concentration in junction |
+        |-------+-------+-------+-----------------------------------------------|
+
+    link_params: pd.DataFrame (optional)
+        Table containing link water quality parameters.
+        The following fields are required.
+
+        |-------+-------+-------+-------------------------------------------|
+        | Field | Type  | Unit  | Description                               |
+        |-------+-------+-------+-------------------------------------------|
+        | K     | float | 1/s   | First order reaction constant in links    |
+        | D     | float | m^2/s | Diffusion constant in link                |
+        | c_0   | float | g/m^3 | Initial contaminant concentration in link |
+        |-------+-------+-------+-------------------------------------------|
+
+    c_min: float
+        Minimum allowed contaminant concentration (default 0).
+
+    c_max: float
+        Maximum allowed contaminant concentration (default np.inf).
+
+    Methods:
+    -----------
+    step : Advance model to next time step, computing water quality states
+
+    Attributes:
+    -----------
+    t        : Current time (s)
+    c_j      : Contaminant concentration in superjunctions (*/m^3)
+    c_Ik     : Contaminant concentration in junctions (*/m^3)
+    c_ik     : Contaminant concentration in links (*/m^3)
+    c_uk     : Contaminant concentration entering upstream end of superlinks (*/m^3)
+    c_dk     : Contaminant concentration exiting downstream end of superlinks (*/m^3)
+    """
     def __init__(self, hydraulics, superjunction_params, superlink_params,
                  junction_params=None, link_params=None, c_min=0.0, c_max=np.inf):
         self.hydraulics = hydraulics
@@ -767,7 +855,36 @@ class QualityBuilder():
                        np.repeat(_c_1k, nk))
         return c_ik_b, c_ik_f
 
-    def step(self, dt=None, c_bc=None, c_0j=None, Q_0j=None, c_0Ik=None, Q_0Ik=None, u_j_frac=0.0):
+    def step(self, dt=None, c_bc=None, c_0j=None, Q_0j=None, c_0Ik=None,
+             Q_0Ik=None, u_j_frac=0.0):
+        """
+        Advance model forward to next time step, computing water quality states.
+
+        Inputs:
+        -------
+        dt : float
+            Time step to advance (s)
+        c_bc : np.ndarray (M)
+            Boundary concentration at each superjunction (*/m^3)
+        c_0j : np.ndarray (M)
+            Contaminant concentration in direction superjunction inflow `Q_in` (*/m^3).
+            Defaults to 0.
+        Q_0j : np.ndarray (M)
+            Direct inflow at each superjunction (m^3/s).
+            Defaults to `_Q_in` of underlying SuperLink model.
+        c_0Ik : np.ndarray (M)
+            Contaminant concentration in direction junction inflow `Q_0Ik` (*/m^3).
+            Defaults to 0.
+        Q_0Ik : np.ndarray (M)
+            Direct inflow at each junction (m^3/s).
+            Defaults to `_Q_0Ik` of underlying SuperLink model.
+        u_j_frac : float
+            (Deprecated).
+
+        Returns:
+        --------
+        None
+        """
         self.import_hydraulic_states()
         if dt is None:
             dt = self._dt
