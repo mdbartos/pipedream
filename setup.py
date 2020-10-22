@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='pipedream-solver',
-      version='0.1',
+      version='0.1.1',
       description='Interactive hydrodynamic solver for sewer/stormwater networks',
       author='Matt Bartos',
       author_email='mdbartos@umich.edu',
