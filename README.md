@@ -22,6 +22,8 @@ Example use-cases for *pipedream* include:
 
 Read the docs [here 📖](https://mdbartos.github.io/pipedream/).
 
+Read the paper [here 📄](https://eartharxiv.org/d8ca6).
+
 ## Installation
 
 Use `pip` to install `pipedream-solver` via pypi:
