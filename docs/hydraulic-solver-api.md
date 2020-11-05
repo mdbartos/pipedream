@@ -1,6 +1,6 @@
 # Hydraulic solver API documentation
 
-This section enumerates all the methods of the `SuperLink` class
+This section enumerates all the methods of the `SuperLink` class.
 
 ## Instantiating the `SuperLink` model
 
@@ -103,15 +103,9 @@ The hydraulic model is advanced forward in time using the `SuperLink.step` metho
 |----------|------|-------------|
 | Attribute | Type | Description |
 |----------|------|-------------|
+| `_i`   | np.ndarray (Nik) | Array indicating the index of each link |
+| `_I`   | np.ndarray (NIk) | Array indicating the index of each junction |
 | `_ki`  | np.ndarray (Nik) | Array indicating the index of the superlink that each link belongs to |
-| `_kI`  | np.ndarray (Nik) | Array indicating the index of the superlink that each junction belongs to |
+| `_kI`  | np.ndarray (NIk) | Array indicating the index of the superlink that each junction belongs to |
 |----------|------|-------------|
-
-### Other attributes
-
-<!-- z_inv_j  : Superjunction invert elevation (m) -->
-<!-- z_inv_uk : Offset of superlink upstream invert above superjunction (m) -->
-<!-- z_inv_dk : Offset of superlink downstream invert above superjunction (m) -->
-
-## Methods of the `SuperLink` model
 

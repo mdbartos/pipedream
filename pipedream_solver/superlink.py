@@ -349,7 +349,6 @@ class SuperLink():
         # If internal links and junctions are not provided, create them
         if (links is None) or (junctions is None):
             generate_elems = True
-            # self._configure_internals(end_length=end_length)
             self._configure_internals_variable(njunctions_fixed=internal_links)
             links = self.links
             junctions = self.junctions
@@ -371,6 +370,7 @@ class SuperLink():
         self.min_depth = min_depth
         self._I = junctions.index.values
         self._ik = links.index.values
+        self._i = self._ik
         self._Ik = links['j_0'].values.astype(int)
         self._Ip1k = links['j_1'].values.astype(int)
         self._kI = junctions['k'].values.astype(int)
@@ -906,123 +906,6 @@ class SuperLink():
         self.weirs = weirs
         self.pumps = pumps
         self.permutations = permutations
-
-    def _configure_internals(self, end_length=None):
-        """
-        Generate internal structure of each superlink (links and junctions).
-        """
-        # Import instance variables
-        superlinks = self.superlinks            # Table of superlinks
-        superjunctions = self.superjunctions    # Table of superjunctions
-        # Set parameters
-        njunctions_fixed = 4
-        njunctions = njunctions_fixed + 1
-        nlinks = njunctions - 1
-        link_ncols = 15
-        junction_ncols = 5
-        n_superlinks = len(superlinks)
-        NJ = njunctions * n_superlinks
-        NL = nlinks * n_superlinks
-        elems = np.repeat(njunctions_fixed, n_superlinks)
-        total_elems = elems + 1
-        upstream_nodes = np.cumsum(total_elems) - total_elems
-        downstream_nodes = np.cumsum(total_elems) - 2
-        # Configure links
-        links = pd.DataFrame(np.zeros((NL, link_ncols)))
-        links.columns = ['A_c', 'C', 'Q_0', 'ctrl', 'dx', 'g1', 'g2', 'g3', 'g4',
-                        'id', 'j_0', 'j_1', 'k', 'n', 'shape']
-        links['A_c'] = np.repeat(superlinks['A_c'].values, nlinks)
-        links['C'] = np.repeat(superlinks['C'].values, nlinks)
-        links['Q_0'] = np.repeat(superlinks['Q_0'].values, nlinks)
-        links['ctrl'] = np.repeat(superlinks['ctrl'].values, nlinks)
-        links['k'] = np.repeat(superlinks.index.values, nlinks)
-        links['shape'] = np.repeat(superlinks['shape'].values, nlinks)
-        links['n'] = np.repeat(superlinks['n'].values, nlinks)
-        links['g1'] = np.repeat(superlinks['g1'].values, nlinks)
-        links['g2'] = np.repeat(superlinks['g2'].values, nlinks)
-        links['g3'] = np.repeat(superlinks['g3'].values, nlinks)
-        links['g4'] = np.repeat(superlinks['g4'].values, nlinks)
-        links['id'] = links.index.values
-        j = np.arange(NJ)
-        links['j_0'] = np.delete(j, downstream_nodes + 1)
-        links['j_1'] = np.delete(j, upstream_nodes)
-        # Configure junctions
-        junctions = pd.DataFrame(np.zeros((NJ, junction_ncols)))
-        junctions.columns = ['A_s', 'h_0', 'id', 'k', 'z_inv']
-        junctions['A_s'] = np.repeat(superlinks['A_s'].values, njunctions)
-        junctions['h_0'] = np.repeat(superlinks['h_0'].values, njunctions)
-        junctions['k'] = np.repeat(superlinks.index.values, njunctions)
-        junctions['id'] = junctions.index.values
-        # Configure internal variables
-        x = np.zeros(NJ)
-        z = np.zeros(NJ)
-        dx = np.zeros(NL)
-        h = junctions['h_0'].values
-        Q = links['Q_0'].values
-        xx = x.reshape(-1, njunctions)
-        zz = z.reshape(-1, njunctions)
-        dxdx = dx.reshape(-1, nlinks)
-        hh = h.reshape(-1, njunctions)
-        QQ = Q.reshape(-1, nlinks)
-        dx_j = superlinks['dx'].values
-        _z_inv_j = superjunctions['z_inv'].values.astype(float)
-        inoffset = superlinks['in_offset'].values.astype(float)
-        outoffset = superlinks['out_offset'].values.astype(float)
-        _J_uk = superlinks['sj_0'].values.astype(int)
-        _J_dk = superlinks['sj_1'].values.astype(int)
-        x[upstream_nodes] = 0.
-        x[downstream_nodes] = dx_j
-        if end_length is None:
-            x[upstream_nodes + 1] = np.minimum(0.05 * dx_j, 10)
-            x[downstream_nodes - 1] = dx_j - np.minimum(0.05 * dx_j, 10)
-        else:
-            x[upstream_nodes + 1] = end_length * dx_j
-            x[downstream_nodes - 1] = dx_j - end_length * dx_j
-        _b0 = _z_inv_j[_J_uk] + inoffset
-        _b1 = _z_inv_j[_J_dk] + outoffset
-        _m = (_b1 - _b0) / dx_j
-        _x0 = (dx_j / 2)
-        _z0 = _m * _x0 + _b0
-        # Set junction invert elevations and positions
-        zz.flat[upstream_nodes] = _b0
-        zz.flat[downstream_nodes] = _b1
-        zz.flat[upstream_nodes + 1] = _b0 + _m * x[upstream_nodes + 1]
-        zz.flat[downstream_nodes - 1] = _b0 + _m * x[downstream_nodes -  1]
-        xx[:, -1] = _x0
-        zz[:, -1] = _z0
-        ix = np.argsort(xx)
-        _fixed = (ix < nlinks)
-        r, c = np.where(~_fixed)
-        cm1 = ix[r, c - 1]
-        cp1 = ix[r, c + 1]
-        frac = (xx[r, xx.shape[1] - 1] - xx[r, cm1]) / (xx[r, cp1] - xx[r, cm1])
-        # Set depths and flows
-        hh[:, -1] = (1 - frac) * hh[r, cm1] + (frac) * hh[r, cp1]
-        QQ[:, -1] = QQ[r, cm1]
-        # Write new variables
-        xx = np.take_along_axis(xx, ix, axis=-1)
-        zz = np.take_along_axis(zz, ix, axis=-1)
-        hh = np.take_along_axis(hh, ix, axis=-1)
-        dxdx = np.diff(xx)
-        _h_Ik = hh.ravel()
-        junctions['z_inv'] = zz.ravel()
-        junctions['h_0'] = hh.ravel()
-        links['dx'] = dxdx.ravel()
-        links['Q_0'] = QQ.ravel()
-        # Set start and end junctions on superlinks
-        superlinks['j_0'] = links.groupby('k')['j_0'].min()
-        superlinks['j_1'] = links.groupby('k')['j_1'].max()
-        # Export instance variables
-        self.junctions = junctions
-        self.links = links
-        self.superlinks = superlinks
-        self._fixed = _fixed
-        self._elem_pos = c
-        self._b0 = _b0
-        self._b1 = _b1
-        self._m = _m
-        self._x0 = _x0
-        self._z0 = _z0
 
     def _configure_internals_variable(self, njunctions_fixed=4):
         # Import instance variables

@@ -51,6 +51,83 @@ def test_nsuperlink_step():
     hillslope_nsuperlink_model.step(dt=dt, Q_in=Q_in, Q_0Ik=Q_0Ik)
     hillslope_nsuperlink_model.reposition_junctions()
 
+def test_superlink_spinup():
+    hillslope_superlink_model = SuperLink(hillslope_superlinks,
+                                        hillslope_superjunctions,
+                                        internal_links=4)
+    hillslope_superlink_model.spinup(n_steps=100)
+
+def test_superlink_convergence():
+    hillslope_superlink_model = SuperLink(hillslope_superlinks,
+                                        hillslope_superjunctions,
+                                        internal_links=4)
+    dt = 10
+    Q_in = 1e-2 * np.asarray([1., 0.])
+    Q_0Ik = 1e-3 * np.ones(hillslope_superlink_model.NIk)
+    hillslope_superlink_model.step(dt=dt, Q_in=Q_in, Q_0Ik=Q_0Ik, num_iter=8)
+
+def test_superlink_banded_step():
+    hillslope_superlink_model = SuperLink(hillslope_superlinks,
+                                          hillslope_superjunctions,
+                                          internal_links=4, auto_permute=True)
+    dt = 10
+    Q_in = 1e-2 * np.asarray([1., 0.])
+    Q_0Ik = 1e-3 * np.ones(hillslope_superlink_model.NIk)
+    hillslope_superlink_model.step(dt=dt, Q_in=Q_in, Q_0Ik=Q_0Ik)
+
+def test_superlink_recurrence_method():
+    hillslope_superlink_model = SuperLink(hillslope_superlinks,
+                                          hillslope_superjunctions,
+                                          internal_links=4, method='f')
+    dt = 10
+    Q_in = 1e-2 * np.asarray([1., 0.])
+    Q_0Ik = 1e-3 * np.ones(hillslope_superlink_model.NIk)
+    hillslope_superlink_model.step(dt=dt, Q_in=Q_in, Q_0Ik=Q_0Ik)
+    hillslope_superlink_model = SuperLink(hillslope_superlinks,
+                                          hillslope_superjunctions,
+                                          internal_links=4, method='nnls')
+    hillslope_superlink_model.step(dt=dt, Q_in=Q_in, Q_0Ik=Q_0Ik)
+    hillslope_superlink_model = SuperLink(hillslope_superlinks,
+                                          hillslope_superjunctions,
+                                          internal_links=4, method='lsq')
+    hillslope_superlink_model.step(dt=dt, Q_in=Q_in, Q_0Ik=Q_0Ik)
+
+def test_simulation_manager():
+    dt = 10
+    hillslope_superlink_model = SuperLink(hillslope_superlinks,
+                                          hillslope_superjunctions,
+                                          internal_links=24)
+    Q_in = pd.DataFrame.from_dict(
+        {
+            0 :  np.zeros(hillslope_superlink_model.M),
+            3600: np.zeros(hillslope_superlink_model.M),
+            3601: 1e-3 * np.ones(hillslope_superlink_model.M),
+            18000 : 1e-3 * np.ones(hillslope_superlink_model.M),
+            18001 : np.zeros(hillslope_superlink_model.M),
+            28000 : np.zeros(hillslope_superlink_model.M)
+        }, orient='index')
+
+    Q_Ik = pd.DataFrame.from_dict(
+        {
+            0 :  np.zeros(hillslope_superlink_model.NIk),
+            3600: np.zeros(hillslope_superlink_model.NIk),
+            3601: 1e-3 * np.ones(hillslope_superlink_model.NIk),
+            18000 : 1e-3 * np.ones(hillslope_superlink_model.NIk),
+            18001 : np.zeros(hillslope_superlink_model.NIk),
+            28000 : np.zeros(hillslope_superlink_model.NIk)
+        }, orient='index'
+    )
+    # Create simulation context manager
+    with Simulation(hillslope_superlink_model, Q_in=Q_in, Q_Ik=Q_Ik) as simulation:
+        # While simulation time has not expired...
+        while simulation.t <= simulation.t_end:
+            # Step hillslope_superlink_model forward in time
+            simulation.step(dt=dt)
+            # Record internal depth and flow states
+            simulation.record_state()
+            # Print progress bar
+            simulation.print_progress()
+
 def test_plot_profile():
     hillslope_superlink_model.plot_profile([0, 1], width=100)
     hillslope_nsuperlink_model.plot_profile([0, 1], width=100)
