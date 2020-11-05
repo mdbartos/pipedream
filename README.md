@@ -1,5 +1,5 @@
 # pipedream <sub>🚰</sub> <sup>💭</sup>
-[![Build Status](https://travis-ci.org/mdbartos/pipedream.svg?branch=master)](https://travis-ci.org/mdbartos/pipedream) [![Coverage Status](https://coveralls.io/repos/github/mdbartos/pipedream/badge.svg?branch=master)](https://coveralls.io/github/mdbartos/pipedream?branch=master)
+[![Build Status](https://travis-ci.org/mdbartos/pipedream.svg?branch=master)](https://travis-ci.org/mdbartos/pipedream) [![Coverage Status](https://coveralls.io/repos/github/mdbartos/pipedream/badge.svg?branch=master)](https://coveralls.io/github/mdbartos/pipedream?branch=master) [![Python 3.7](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/downloads/release/python-370/)
 
 An interactive hydrodynamic solver for sewer/stormwater networks.
 
