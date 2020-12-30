@@ -1,5 +1,5 @@
 # pipedream <sub>🚰</sub> <sup>💭</sup>
-[![Build Status](https://travis-ci.org/mdbartos/pipedream.svg?branch=master)](https://travis-ci.org/mdbartos/pipedream) [![Coverage Status](https://coveralls.io/repos/github/mdbartos/pipedream/badge.svg?branch=master)](https://coveralls.io/github/mdbartos/pipedream?branch=master) [![Python 3.7](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/downloads/release/python-370/)
+[![Build Status](https://travis-ci.org/mdbartos/pipedream.svg?branch=master)](https://travis-ci.org/mdbartos/pipedream) [![Coverage Status](https://coveralls.io/repos/github/mdbartos/pipedream/badge.svg?branch=master)](https://coveralls.io/github/mdbartos/pipedream?branch=master) [![Python 3.7](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/downloads/release/python-370/) [![Docs](https://img.shields.io/badge/docs-read%20here-ff69b4)](https://mdbartos.github.io/pipedream/) [![Paper](https://img.shields.io/badge/EarthArXiv-10.31223/osf.io/d8ca6-orange)](https://eartharxiv.org/d8ca6)
 
 An interactive hydrodynamic solver for sewer/stormwater networks.
 
@@ -20,9 +20,9 @@ Example use-cases for *pipedream* include:
 
 ## Documentation
 
-Read the docs [here 📖](https://mdbartos.github.io/pipedream/).
+- Read the docs [here 📖](https://mdbartos.github.io/pipedream/).
 
-Read the paper [here 📄](https://eartharxiv.org/d8ca6).
+- Read the paper [here 📄](https://eartharxiv.org/d8ca6).
 
 ## Installation
 
@@ -59,7 +59,7 @@ from pipedream_solver.hydraulics import SuperLink
 from pipedream_solver.simulation import Simulation
 
 # Specify data path
-input_path = '../data/six_pipes'
+input_path = './data/six_pipes'
 
 # Get model components
 superjunctions = pd.read_csv(f'{input_path}/superjunctions.csv')
