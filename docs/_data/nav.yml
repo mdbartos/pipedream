@@ -23,6 +23,8 @@ toc:
         url: /pipedream/adaptive-stepsize.html
       - page: Validation with real-world network
         url: /pipedream/validation.html
+      - page: Kalman filtering with holdout analysis
+        url: /pipedream/kalman-filtering-validation.html
   - title: Reference
     subfolderitems:
       - page: Hydraulic solver API reference

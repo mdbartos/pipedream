@@ -447,7 +447,7 @@ class Simulation():
         return dt_np1
 
     def kalman_filter(self, Z, H=None, C=None, Qcov=None, Rcov=None, P_x_k_k=None,
-                      dt=None):
+                      dt=None, **kwargs):
         """
         Apply Kalman Filter to fuse observed data into model.
 
@@ -485,7 +485,9 @@ class Simulation():
                                                Qcov, Rcov)
         self.P_x_k_k = P_x_k_k
         self.model.b = b_hat
-        self.model._solve_step(dt=dt)
+        self.model.iter_count -= 1
+        self.model.t -= dt
+        self.model._solve_step(dt=dt, **kwargs)
 
     def step(self, dt=None, subdivisions=1, retries=0, tol=1, norm=2,
              coeffs=[0.5, 0.5, 0, 0.5, 0], safety_factor=1.0, **kwargs):
