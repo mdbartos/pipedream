@@ -59,7 +59,7 @@ with Simulation(superlink, Q_in=Q_in, H_bc=H_bc) as simulation:
 
 ### Plot results
 
-See plotting code [here](https://github.com/mdbartos/superlink/blob/master/test/six_pipe_test.ipynb).
+See plotting code [here](https://github.com/mdbartos/pipedream/blob/master/notebooks/six_pipe_test.ipynb).
 
 ![Superlink Example](https://s3.us-east-2.amazonaws.com/mdbartos-img/superlink/superlink_test.png)
 
