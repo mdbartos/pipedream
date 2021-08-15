@@ -566,6 +566,12 @@ class QualityBuilder():
         n_o = self.n_o                   # Number of orifices in system
         n_w = self.n_w                   # Number of weirs in system
         n_p = self.n_p                   # Number of pumps in system
+        if n_o:
+            _Q_o_next = self._Q_o_next
+        if n_w:
+            _Q_w_next = self._Q_w_next
+        if n_p:
+            _Q_p_next = self._Q_p_next
         A = self.A
         if n_o:
             O = self.O
@@ -617,19 +623,19 @@ class QualityBuilder():
         numba_add_at(D, _J_dk, _omega_dk * _Q_dk_next)
         # Compute control matrix
         if n_o:
-            _omega_o = (_Q_o >= 0).astype(float)
+            _omega_o = (_Q_o_next >= 0).astype(float)
             _O_diag.fill(0)
             numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
             numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _omega_o,
                                     _Q_o_next, M, n_o)
         if n_w:
-            _omega_w = (_Q_w >= 0).astype(float)
+            _omega_w = (_Q_w_next >= 0).astype(float)
             _W_diag.fill(0)
             numba_clear_off_diagonals(W, bc, _J_uw, _J_dw, n_w)
             numba_create_OWP_matrix(W, _W_diag, bc, _J_uw, _J_dw, _omega_w,
                                     _Q_w_next, M, n_w)
         if n_p:
-            _omega_p = (_Q_p >= 0).astype(float)
+            _omega_p = (_Q_p_next >= 0).astype(float)
             _P_diag.fill(0)
             numba_clear_off_diagonals(P, bc, _J_up, _J_dp, n_p)
             numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _omega_p,
@@ -1364,7 +1370,7 @@ def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _omega_c, _Q_c, M, NC):
         _bc_u = bc[_J_u]
         _bc_d = bc[_J_d]
         if not _bc_u:
-            X[_J_u, _J_d] += (_Q_c[c] * (1 - _omega_uc[c]))
+            X[_J_u, _J_d] += (_Q_c[c] * (1 - _omega_c[c]))
         if not _bc_d:
             X[_J_d, _J_u] -= (_Q_c[c] * _omega_c[c])
 
