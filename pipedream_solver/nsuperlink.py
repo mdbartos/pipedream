@@ -1580,6 +1580,11 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _Pe_ik[i] = pipedream_solver.ngeometry.Wide_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Wide_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Wide_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 9:
+                _A_ik[i] = pipedream_solver.ngeometry.Force_Main_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Force_Main_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_ik[i] = pipedream_solver.ngeometry.Force_Main_R_ik(_A_ik[i], _Pe_ik[i])
+                _B_ik[i] = pipedream_solver.ngeometry.Force_Main_B_ik(h_I, h_Ip1, g1_i, g2_i)
     return 1
 
 @njit
@@ -1623,6 +1628,9 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
             elif geom_code == 8:
                 _A_bk[k] = pipedream_solver.ngeometry.Wide_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _B_bk[k] = pipedream_solver.ngeometry.Wide_B_ik(h_I, h_Ip1, g1_i, g2_i)
+            elif geom_code == 9:
+                _A_bk[k] = pipedream_solver.ngeometry.Force_Main_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Force_Main_B_ik(h_I, h_Ip1, g1_i, g2_i)
     return 1
 
 @njit
@@ -1651,6 +1659,8 @@ def numba_orifice_geometry(_Ao, h_eo, u_o, _g1_o, _g2_o, _g3_o, _geom_codes_o, n
                 _Ao[i] = pipedream_solver.ngeometry.Elliptical_A_ik(h_e, h_e, g1 * u, g2)
             elif geom_code == 8:
                 _Ao[i] = pipedream_solver.ngeometry.Wide_A_ik(h_e, h_e, g1 * u, g2)
+            elif geom_code == 9:
+                _Ao[i] = pipedream_solver.ngeometry.Force_Main_A_ik(h_e, h_e, g1 * u, g2)
     return 1
 
 @njit

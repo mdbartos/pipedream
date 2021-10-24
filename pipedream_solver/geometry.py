@@ -10,7 +10,8 @@ geom_code = {
     'trapezoidal' : 5,
     'parabolic' : 6,
     'elliptical' : 7,
-    'wide' : 8
+    'wide' : 8,
+    'force_main' : 9
 }
 
 # Machine precision
@@ -790,6 +791,89 @@ class Wide():
         y_max = g1
         b = g2
         return b
+
+class Force_Main():
+    def __init__(self):
+        pass
+
+    @classmethod
+    def A_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute cross-sectional area of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Diameter of channel (meters)
+        g2: np.ndarray
+            Width of Preissman slot (as a ratio of the diameter)
+        """
+        d = g1
+        r = d / 2
+        A = np.pi * r**2
+        return A
+
+    @classmethod
+    def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute perimeter of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Diameter of channel (meters)
+        g2: np.ndarray
+            Width of Preissman slot (as a ratio of the diameter)
+        """
+        d = g1
+        Pe = np.pi * d
+        return Pe
+
+    @classmethod
+    def R_ik(self, A_ik, Pe_ik):
+        """
+        Compute hydraulic radius for link i, superlink k.
+
+        Inputs:
+        -------
+        A_ik: np.ndarray
+            Area of cross section (square meters)
+        Pe_ik: np.ndarray
+            Wetted perimeter of cross section (meters)
+        """
+        cond = Pe_ik > 0
+        R = np.zeros(A_ik.size)
+        R[cond] = A_ik[cond] / Pe_ik[cond]
+        return R
+
+    @classmethod
+    def B_ik(self, h_Ik, h_Ip1k, g1, g2, **kwargs):
+        """
+        Compute top width of flow for link i, superlink k.
+
+        Inputs:
+        -------
+        h_Ik: np.ndarray
+            Depth at upstream junction (meters)
+        h_Ip1k: np.ndarray
+            Depth at downstream junction (meters)
+        g1: np.ndarray
+            Diameter of channel (meters)
+        g2: np.ndarray
+            Width of Preissman slot (as a ratio of the diameter)
+        """
+        d = g1
+        pslot = g2
+        B = d * pslot
+        return B
 
 class Irregular():
     def __init__(self, x, y, horiz_points=100, vert_points=100):

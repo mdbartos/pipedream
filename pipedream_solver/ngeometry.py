@@ -10,7 +10,8 @@ geom_code = {
     'trapezoidal' : 5,
     'parabolic' : 6,
     'elliptical' : 7,
-    'wide' : 8
+    'wide' : 8,
+    'force_main' : 9
 }
 
 eps = np.finfo(float).eps
@@ -791,4 +792,85 @@ def Wide_B_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     b = g2
     return b
+
+@njit
+def Force_Main_A_ik(h_Ik, h_Ip1k, g1, g2):
+    """
+    Compute cross-sectional area of flow for link i, superlink k.
+
+    Inputs:
+    -------
+    h_Ik: np.ndarray
+        Depth at upstream junction (meters)
+    h_Ip1k: np.ndarray
+        Depth at downstream junction (meters)
+    g1: np.ndarray
+        Diameter of channel (meters)
+    g2: np.ndarray
+        Width of Preissman slot (as a ratio of the diameter)
+    """
+    d = g1
+    r = d / 2
+    A = np.pi * r**2
+    return A
+
+@njit
+def Force_Main_Pe_ik(h_Ik, h_Ip1k, g1, g2):
+    """
+    Compute perimeter of flow for link i, superlink k.
+
+    Inputs:
+    -------
+    h_Ik: np.ndarray
+        Depth at upstream junction (meters)
+    h_Ip1k: np.ndarray
+        Depth at downstream junction (meters)
+    g1: np.ndarray
+        Diameter of channel (meters)
+    g2: np.ndarray
+        Width of Preissman slot (as a ratio of the diameter)
+    """
+    d = g1
+    Pe = np.pi * d
+    return Pe
+
+@njit
+def Force_Main_R_ik(A_ik, Pe_ik):
+    """
+    Compute hydraulic radius for link i, superlink k.
+
+    Inputs:
+    -------
+    A_ik: np.ndarray
+        Area of cross section (square meters)
+    Pe_ik: np.ndarray
+        Wetted perimeter of cross section (meters)
+    """
+    cond = Pe_ik > 0
+    if cond:
+        R = A_ik / Pe_ik
+    else:
+        R = 0
+    return R
+
+@njit
+def Force_Main_B_ik(h_Ik, h_Ip1k, g1, g2):
+    """
+    Compute top width of flow for link i, superlink k.
+
+    Inputs:
+    -------
+    h_Ik: np.ndarray
+        Depth at upstream junction (meters)
+    h_Ip1k: np.ndarray
+        Depth at downstream junction (meters)
+    g1: np.ndarray
+        Diameter of channel (meters)
+    g2: np.ndarray
+        Width of Preissman slot (as a ratio of the diameter)
+    """
+    d = g1
+    pslot = g2
+    B = pslot * d
+    return B
 
