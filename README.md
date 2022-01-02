@@ -1,5 +1,5 @@
 # pipedream <sub>🚰</sub> <sup>💭</sup>
-[![Build Status](https://travis-ci.org/mdbartos/pipedream.svg?branch=master)](https://travis-ci.org/mdbartos/pipedream) [![Coverage Status](https://coveralls.io/repos/github/mdbartos/pipedream/badge.svg?branch=master)](https://coveralls.io/github/mdbartos/pipedream?branch=master) [![Python 3.7](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/downloads/release/python-370/) [![Docs](https://img.shields.io/badge/docs-read%20here-ff69b4)](https://mdbartos.github.io/pipedream/) [![Paper](https://img.shields.io/badge/EarthArXiv-10.31223/osf.io/d8ca6-orange)](https://eartharxiv.org/d8ca6)
+[![Build Status](https://travis-ci.org/mdbartos/pipedream.svg?branch=master)](https://travis-ci.org/mdbartos/pipedream) [![Coverage Status](https://coveralls.io/repos/github/mdbartos/pipedream/badge.svg?branch=master)](https://coveralls.io/github/mdbartos/pipedream?branch=master) [![Python 3.7](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/downloads/release/python-370/) [![Docs](https://img.shields.io/badge/docs-read%20here-ff69b4)](https://mdbartos.github.io/pipedream/) [![Paper](https://img.shields.io/badge/doi-10.1016%2Fj.envsoft.2021.105120-orange)](https://www.sciencedirect.com/science/article/pii/S1364815221001638)
 
 An interactive hydrodynamic solver for sewer/stormwater networks.
 
@@ -22,7 +22,7 @@ Example use-cases for *pipedream* include:
 
 - Read the docs [here 📖](https://mdbartos.github.io/pipedream/).
 
-- Read the paper [here 📄](https://eartharxiv.org/d8ca6).
+- Read the paper [here 📄](https://www.sciencedirect.com/science/article/pii/S1364815221001638).
 
 ## Installation
 
