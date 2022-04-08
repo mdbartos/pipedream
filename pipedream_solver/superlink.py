@@ -1968,15 +1968,13 @@ class SuperLink():
         _c_ik = self.c_ik(_u_Ip1k, _sigma_ik)
         _b_ik = self.b_ik(_dx_ik, _dt, _n_ik, _Q_ik, _A_ik, _R_ik,
                           _A_c_ik, _C_ik, _a_ik, _c_ik, _ctrl)
-        if first_iter:
-            _P_ik = self.P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
-                            _sigma_ik)
+        _P_ik = self.P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
+                        _sigma_ik)
         # Export to instance variables
         self._a_ik = _a_ik
         self._b_ik = _b_ik
         self._c_ik = _c_ik
-        if first_iter:
-            self._P_ik = _P_ik
+        self._P_ik = _P_ik
 
     def node_coeffs(self, _Q_0Ik=None, _dt=None, first_iter=True):
         """
@@ -2014,19 +2012,18 @@ class SuperLink():
         _E_Ik[middle_nodes] = self.E_Ik(_B_ik[forward], _dx_ik[forward],
                                         _B_ik[backward], _dx_ik[backward],
                                         _A_SIk[middle_nodes], _dt)
-        if first_iter:
-            _D_Ik[start_nodes] = self.D_Ik(_Q_0Ik[start_nodes], _B_ik[start_links],
-                                            _dx_ik[start_links], 0.0,
-                                            0.0, _A_SIk[start_nodes],
-                                            _h_Ik[start_nodes], _dt)
-            _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], 0.0,
-                                            0.0, _B_ik[end_links],
-                                            _dx_ik[end_links], _A_SIk[end_nodes],
-                                            _h_Ik[end_nodes], _dt)
-            _D_Ik[middle_nodes] = self.D_Ik(_Q_0Ik[middle_nodes], _B_ik[forward],
-                                            _dx_ik[forward], _B_ik[backward],
-                                            _dx_ik[backward], _A_SIk[middle_nodes],
-                                            _h_Ik[middle_nodes], _dt)
+        _D_Ik[start_nodes] = self.D_Ik(_Q_0Ik[start_nodes], _B_ik[start_links],
+                                        _dx_ik[start_links], 0.0,
+                                        0.0, _A_SIk[start_nodes],
+                                        _h_Ik[start_nodes], _dt)
+        _D_Ik[end_nodes] = self.D_Ik(_Q_0Ik[end_nodes], 0.0,
+                                        0.0, _B_ik[end_links],
+                                        _dx_ik[end_links], _A_SIk[end_nodes],
+                                        _h_Ik[end_nodes], _dt)
+        _D_Ik[middle_nodes] = self.D_Ik(_Q_0Ik[middle_nodes], _B_ik[forward],
+                                        _dx_ik[forward], _B_ik[backward],
+                                        _dx_ik[backward], _A_SIk[middle_nodes],
+                                        _h_Ik[middle_nodes], _dt)
         # Export instance variables
         self._E_Ik = _E_Ik
         self._D_Ik = _D_Ik
@@ -3793,7 +3790,7 @@ class SuperLink():
         if self.n_p:
             self.states['Q_p'] = np.copy(self.Q_p)
 
-    def load_state(self, states={}):
+    def load_state(self, states={}, compute_hydraulic_geometries=True):
         """
         Load model state.
 
@@ -3808,11 +3805,12 @@ class SuperLink():
         for key, value in states.items():
             setattr(self, key, value)
         # Ensure consistency of internal states
-        self.link_hydraulic_geometry()
-        self.upstream_hydraulic_geometry()
-        self.downstream_hydraulic_geometry()
-        self.compute_storage_areas()
-        self.node_velocities()
+        if compute_hydraulic_geometries:
+            self.link_hydraulic_geometry()
+            self.upstream_hydraulic_geometry()
+            self.downstream_hydraulic_geometry()
+            self.compute_storage_areas()
+            self.node_velocities()
 
     def spinup(self, n_steps=100, dt=10, Q_in=None, Q_0Ik=None, reposition_junctions=True,
                reset_counters=True, **kwargs):
@@ -3884,12 +3882,18 @@ class SuperLink():
         self._Q_0Ik = Q_0Ik
         if not implicit:
             raise NotImplementedError
+        # Compute all hydraulic geometries
         self.link_hydraulic_geometry()
         self.upstream_hydraulic_geometry()
         self.downstream_hydraulic_geometry()
         self.compute_storage_areas()
         self.compute_storage_volumes()
         self.node_velocities()
+        if self.orifices is not None:
+            self.orifice_hydraulic_geometry(u=u_o)
+        # If iterating towards convergence, load initial step states
+        if not first_iter:
+            self.load_state(compute_hydraulic_geometries=False)
         if self.inertial_damping:
             self.compute_flow_regime()
         self.link_coeffs(_dt=dt, first_iter=first_iter)
@@ -3900,7 +3904,6 @@ class SuperLink():
         self.superlink_downstream_head_coefficients()
         self.superlink_flow_coefficients()
         if self.orifices is not None:
-            self.orifice_hydraulic_geometry(u=u_o)
             self.orifice_flow_coefficients(u=u_o)
         if self.weirs is not None:
             self.weir_flow_coefficients(u=u_w)
@@ -3985,42 +3988,24 @@ class SuperLink():
                          first_iter=first_iter)
         # Perform fixed-point iteration until convergence
         num_iter -= 1
+        iter_elapsed = 1
         if (num_iter > 0):
             H_j_prev = self.states['H_j']
             H_j_next = np.copy(self.H_j)
-            h_Ik_prev = self.states['h_Ik']
-            Q_ik_prev = self.states['Q_ik']
-            Q_uk_prev = self.states['Q_uk']
-            Q_dk_prev = self.states['Q_dk']
-            if self.n_o:
-                Q_o_prev = self.states['Q_o']
-            if self.n_w:
-                Q_w_prev = self.states['Q_w']
-            if self.n_p:
-                Q_p_prev = self.states['Q_p']
             residual = np.abs(H_j_next - H_j_prev)
             if not (residual < head_tol).all():
                 for _ in range(num_iter):
                     self.iter_count -= 1
                     self.t -= dt
-                    self.H_j = H_j_prev
-                    self._h_Ik = (h_Ik_prev + self._h_Ik) / 2
-                    self._Q_ik = (Q_ik_prev + self._Q_ik) / 2
-                    self._Q_uk = (Q_uk_prev + self._Q_uk) / 2
-                    self._Q_dk = (Q_dk_prev + self._Q_dk) / 2
-                    if self.n_o:
-                        self._Qo = (Q_o_prev + self._Qo) / 2
-                    if self.n_w:
-                        self._Qw = (Q_w_prev + self._Qw) / 2
-                    if self.n_p:
-                        self._Qp = (Q_p_prev + self._Qp) / 2
-                    self._setup_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                    self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                      first_time=first_time, implicit=implicit, banded=banded,
                                      first_iter=False)
-                    self._solve_step(H_bc=H_bc, Q_in=Q_in, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                    self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                      first_time=first_time, implicit=implicit, banded=banded,
                                      first_iter=False)
+                    iter_elapsed += 1
                     residual = np.abs(H_j_next - self.H_j)
                     if (residual < head_tol).all():
                         break
                     H_j_next = np.copy(self.H_j)
+        self.iter_elapsed = iter_elapsed
