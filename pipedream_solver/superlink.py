@@ -575,10 +575,11 @@ class SuperLink():
         # Enforce minimum depth
         self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
-        self._A_ik = np.zeros(self._ik.size)
-        self._Pe_ik = np.zeros(self._ik.size)
-        self._R_ik = np.zeros(self._ik.size)
-        self._B_ik = np.zeros(self._ik.size)
+        self._A_ik = np.zeros(self._ik.size, dtype=float)
+        self._Pe_ik = np.zeros(self._ik.size, dtype=float)
+        self._R_ik = np.zeros(self._ik.size, dtype=float)
+        self._B_ik = np.zeros(self._ik.size, dtype=float)
+        self._sigma_ik = np.ones(self._ik.size, dtype=float)
         # Node velocities
         self._u_ik = np.zeros(self._ik.size, dtype=float)
         self._u_Ik = np.zeros(self._Ik.size, dtype=float)
