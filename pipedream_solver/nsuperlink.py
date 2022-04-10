@@ -1543,12 +1543,12 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _A_ik[i] = pipedream_solver.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Circular_Pe_ik(h_I, h_Ip1, g1_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Circular_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
+                _B_ik[i] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 2:
                 _A_ik[i] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Rect_Closed_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Rect_Closed_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_ik[i] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
             elif geom_code == 3:
                 _A_ik[i] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Rect_Open_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
@@ -1608,10 +1608,10 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         if geom_code:
             if geom_code == 1:
                 _A_bk[k] = pipedream_solver.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
-                _B_bk[k] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 2:
                 _A_bk[k] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _B_bk[k] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
             elif geom_code == 3:
                 _A_bk[k] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _B_bk[k] = pipedream_solver.ngeometry.Rect_Open_B_ik(h_I, h_Ip1, g1_i, g2_i)

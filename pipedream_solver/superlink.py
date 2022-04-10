@@ -1490,6 +1490,9 @@ class SuperLink():
         _link_start = self._link_start      # Link is first link in superlink k
         _link_end = self._link_end          # Link is last link in superlink k
         _geom_numbers = pipedream_solver.geometry.geom_code
+        _g1_ik = self._g1_ik
+        _g2_ik = self._g2_ik
+        _g3_ik = self._g3_ik
         nk = self.nk
         n_o = self.n_o
         # Set attributes
@@ -1548,7 +1551,16 @@ class SuperLink():
             # Export instance variables
             self._geom_factory_o = _geom_factory_o
             self._geom_codes_o = _geom_codes_o
+        # Add default Preissman slot for circular
+        _g2_ik[(_geom_codes == 1) & (_g2_ik == 0.)] = 0.001
+        # Add default Preissman slot for rect_closed
+        _g3_ik[(_geom_codes == 2) & (_g3_ik == 0.)] = 0.001
+        # Add default Preissman slot for force_main
+        _g2_ik[(_geom_codes == 9) & (_g2_ik == 0.)] = 0.001
         # Export instance variables
+        self._g1_ik = _g1_ik
+        self._g2_ik = _g2_ik
+        self._g3_ik = _g3_ik
         self._has_irregular = _has_irregular
         self._geom_factory = _geom_factory
         self._transect_factory = _transect_factory
