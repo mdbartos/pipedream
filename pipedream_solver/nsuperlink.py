@@ -6,6 +6,7 @@ import scipy.integrate
 import scipy.sparse
 import scipy.sparse.linalg
 from numba import njit, prange
+from numba.types import float64, int64, uint32, uint16, uint8, boolean, UniTuple, Tuple, List, DictType, void
 import pipedream_solver.geometry
 import pipedream_solver.ngeometry
 import pipedream_solver.storage
@@ -600,13 +601,8 @@ class nSuperLink(SuperLink):
         _C_ik = self._C_ik         # Discharge coefficient of control structure at link ik
         _ctrl = self._ctrl         # Control structure exists at link ik (y/n)
         inertial_damping = self.inertial_damping    # Use inertial damping (y/n)
+        _sigma_ik = self._sigma_ik  # Inertial damping coefficient
         g = 9.81
-        # If using inertial damping, import coefficient
-        if inertial_damping:
-            _sigma_ik = self._sigma_ik
-        # Otherwise, set coefficient to unity
-        else:
-            _sigma_ik = 1
         # If time step not specified, use instance time
         if _dt is None:
             _dt = self._dt
@@ -614,16 +610,14 @@ class nSuperLink(SuperLink):
         _a_ik = numba_a_ik(_u_Ik, _sigma_ik)
         _c_ik = numba_c_ik(_u_Ip1k, _sigma_ik)
         _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik, _A_ik, _R_ik,
-                           _A_c_ik, _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik)
-        if first_iter:
-            _P_ik = numba_P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
-                            _sigma_ik)
+                           _A_c_ik, _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik, g)
+        _P_ik = numba_P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
+                           _sigma_ik, g)
         # Export to instance variables
         self._a_ik = _a_ik
         self._b_ik = _b_ik
         self._c_ik = _c_ik
-        if first_iter:
-            self._P_ik = _P_ik
+        self._P_ik = _P_ik
 
     def node_coeffs(self, _Q_0Ik=None, _dt=None, first_iter=True):
         """
@@ -648,8 +642,7 @@ class nSuperLink(SuperLink):
             _Q_0Ik = np.zeros(_h_Ik.size)
         # Compute E_Ik and D_Ik
         numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk,
-                          _dt, forward_I_i, backward_I_i, _is_start, _is_end,
-                          first_iter)
+                          _dt, forward_I_i, backward_I_i, _is_start, _is_end)
         # Export instance variables
         self._E_Ik = _E_Ik
         self._D_Ik = _D_Ik
@@ -730,11 +723,13 @@ class nSuperLink(SuperLink):
         _C_uk = self._C_uk
         # Current upstream flows
         _Q_uk_t = self._Q_uk
+        g = 9.81
         if _bc_method == 'z':
             # Compute superlink upstream coefficients (Zahner)
-            _gamma_uk = gamma_uk(_Q_uk_t, _C_uk, _A_uk)
+            _gamma_uk = gamma_uk(_Q_uk_t, _C_uk, _A_uk, g)
             self._kappa_uk = _gamma_uk
-            self._lambda_uk = 1
+            # TODO: Clean this up
+            self._lambda_uk = np.ones(_gamma_uk.size, dtype=np.float)
             self._mu_uk = - _z_inv_uk
         elif _bc_method == 'j':
             # Current upstream depth
@@ -774,11 +769,13 @@ class nSuperLink(SuperLink):
         _C_dk = self._C_dk
         # Current downstream flows
         _Q_dk_t = self._Q_dk
+        g = 9.81
         if _bc_method == 'z':
             # Compute superlink downstream coefficients (Zahner)
-            _gamma_dk = gamma_dk(_Q_dk_t, _C_dk, _A_dk)
+            _gamma_dk = gamma_dk(_Q_dk_t, _C_dk, _A_dk, g)
             self._kappa_dk = _gamma_dk
-            self._lambda_dk = 1
+            # TODO: Clean this up
+            self._lambda_dk = np.ones(_gamma_dk.size, dtype=np.float)
             self._mu_dk = - _z_inv_dk
         elif _bc_method == 'j':
             # Downstream top width
@@ -1382,12 +1379,13 @@ class nSuperLink(SuperLink):
         _Co = self._Co                # Discharge coefficient of orifice o
         _Ao = self._Ao                # Maximum flow area of orifice o
         _V_sj = self._V_sj
+        g = 9.81
         # If no input signal, assume orifice is closed
         if u is None:
             u = np.zeros(self.n_o, dtype=float)
         # Compute orifice flows
         _Qo_next = numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o, _tau_o, _y_max_o, _Co, _Ao,
-                                             _J_uo, _J_do)
+                                             _J_uo, _J_do, g)
         # TODO: Move this inside numba function
         upstream_ctrl = (H_j[_J_uo] > H_j[_J_do])
         _Qo_max = np.where(upstream_ctrl, _V_sj[_J_uo], _V_sj[_J_do]) / dt
@@ -1525,8 +1523,9 @@ def handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik, _g1_ik, 
                                                             _g1_ik[_ik_g],
                                                             _g2_ik[_ik_g])
 
-
-@njit
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], int64[:], int64[:], int64[:]),
+      cache=True)
 def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                              _g1_ik, _g2_ik, _g3_ik, _geom_codes, _Ik, _ik):
     n = len(_ik)
@@ -1544,12 +1543,12 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _A_ik[i] = pipedream_solver.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Circular_Pe_ik(h_I, h_Ip1, g1_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Circular_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
+                _B_ik[i] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 2:
                 _A_ik[i] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Rect_Closed_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Rect_Closed_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_ik[i] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
             elif geom_code == 3:
                 _A_ik[i] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Rect_Open_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
@@ -1587,7 +1586,10 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _B_ik[i] = pipedream_solver.ngeometry.Force_Main_B_ik(h_I, h_Ip1, g1_i, g2_i)
     return 1
 
-@njit
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], int64[:],
+            int64[:], int64[:], int64[:]),
+      cache=True)
 def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
                             _g1_ik, _g2_ik, _g3_ik, _geom_codes,
                             _i_bk, _I_bk, _J_bk):
@@ -1606,10 +1608,10 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         if geom_code:
             if geom_code == 1:
                 _A_bk[k] = pipedream_solver.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
-                _B_bk[k] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 2:
                 _A_bk[k] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
-                _B_bk[k] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
             elif geom_code == 3:
                 _A_bk[k] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _B_bk[k] = pipedream_solver.ngeometry.Rect_Open_B_ik(h_I, h_Ip1, g1_i, g2_i)
@@ -1633,7 +1635,9 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
                 _B_bk[k] = pipedream_solver.ngeometry.Force_Main_B_ik(h_I, h_Ip1, g1_i, g2_i)
     return 1
 
-@njit
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            int64[:], int64),
+      cache=True)
 def numba_orifice_geometry(_Ao, h_eo, u_o, _g1_o, _g2_o, _g3_o, _geom_codes_o, n_o):
     for i in range(n_o):
         geom_code = _geom_codes_o[i]
@@ -1663,7 +1667,8 @@ def numba_orifice_geometry(_Ao, h_eo, u_o, _g1_o, _g2_o, _g3_o, _geom_codes_o, n
                 _Ao[i] = pipedream_solver.ngeometry.Force_Main_A_ik(h_e, h_e, g1 * u, g2)
     return 1
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], boolean[:]),
+      cache=True)
 def numba_compute_functional_storage_areas(h, A, a, b, c, _functional):
     M = h.size
     for j in range(M):
@@ -1674,7 +1679,8 @@ def numba_compute_functional_storage_areas(h, A, a, b, c, _functional):
                 A[j] = a[j] * (h[j]**b[j]) + c[j]
     return A
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], boolean[:]),
+      cache=True)
 def numba_compute_functional_storage_volumes(h, V, a, b, c, _functional):
     M = h.size
     for j in range(M):
@@ -1744,21 +1750,25 @@ def numba_compute_tabular_storage_volumes(h_j, V_sj, hs, As, Vs, sjs, sts, inds,
             V_sj[sj] = (1 - frac) * V_range[ix - 1] + (frac) * V_range[ix]
     return V_sj
 
-@njit
+@njit(float64[:](float64[:], float64[:]),
+      cache=True)
 def numba_a_ik(u_Ik, sigma_ik):
     """
     Compute link coefficient 'a' for link i, superlink k.
     """
     return -np.maximum(u_Ik, 0) * sigma_ik
 
-@njit
+@njit(float64[:](float64[:], float64[:]),
+      cache=True)
 def numba_c_ik(u_Ip1k, sigma_ik):
     """
     Compute link coefficient 'c' for link i, superlink k.
     """
     return -np.maximum(-u_Ip1k, 0) * sigma_ik
 
-@njit
+@njit(float64[:](float64[:], float64, float64[:], float64[:], float64[:], float64[:],
+                 float64[:], float64[:], float64[:], float64[:], boolean[:], float64[:], float64),
+      cache=True)
 def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
                A_c_ik, C_ik, a_ik, c_ik, ctrl, sigma_ik, g=9.81):
     """
@@ -1777,7 +1787,8 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
     t_4 = c_ik
     return t_0 + t_1 + t_2 - t_3 - t_4
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64, float64[:], float64[:], float64[:], float64),
+      cache=True)
 def numba_P_ik(Q_ik_t, dx_ik, dt, A_ik, S_o_ik, sigma_ik, g=9.81):
     """
     Compute link coefficient 'P' for link i, superlink k.
@@ -1786,7 +1797,8 @@ def numba_P_ik(Q_ik_t, dx_ik, dt, A_ik, S_o_ik, sigma_ik, g=9.81):
     t_1 = g * A_ik * S_o_ik * dx_ik
     return t_0 + t_1
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64),
+      cache=True)
 def E_Ik(B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, dt):
     """
     Compute node coefficient 'E' for node I, superlink k.
@@ -1797,7 +1809,8 @@ def E_Ik(B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, dt):
     t_3 = dt
     return (t_0 + t_1 + t_2) / t_3
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
 def D_Ik(Q_0IK, B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, h_Ik_t, dt):
     """
     Compute node coefficient 'D' for node I, superlink k.
@@ -1809,35 +1822,77 @@ def D_Ik(Q_0IK, B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, h_Ik_t, dt):
     t_4 = h_Ik_t / dt
     return t_0 + ((t_1 + t_2 + t_3) * t_4)
 
-@njit
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64,
+            int64[:], int64[:], boolean[:], boolean[:]),
+      cache=True)
 def numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk, _dt,
-                      _forward_I_i, _backward_I_i, _is_start, _is_end, first_iter):
+                      _forward_I_i, _backward_I_i, _is_start, _is_end):
     N = _h_Ik.size
     for I in range(N):
         if _is_start[I]:
             i = _forward_I_i[I]
             _E_Ik[I] = E_Ik(_B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I], _dt)
-            if first_iter:
-                _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I],
-                                _h_Ik[I], _dt)
+            _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I],
+                            _h_Ik[I], _dt)
         elif _is_end[I]:
             im1 = _backward_I_i[I]
             _E_Ik[I] = E_Ik(0.0, 0.0, _B_ik[im1], _dx_ik[im1],
                             _A_SIk[I], _dt)
-            if first_iter:
-                _D_Ik[I] = D_Ik(_Q_0Ik[I], 0.0, 0.0, _B_ik[im1],
-                                _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
+            _D_Ik[I] = D_Ik(_Q_0Ik[I], 0.0, 0.0, _B_ik[im1],
+                            _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
         else:
             i = _forward_I_i[I]
             im1 = i - 1
             _E_Ik[I] = E_Ik(_B_ik[i], _dx_ik[i], _B_ik[im1], _dx_ik[im1],
                             _A_SIk[I], _dt)
-            if first_iter:
-                _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], _B_ik[im1],
-                                _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
+            _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], _B_ik[im1],
+                            _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
     return 1
 
-@njit
+@njit(float64(float64, float64),
+      cache=True)
+def safe_divide(num, den):
+    if (den == 0):
+        return 0
+    else:
+        return num / den
+
+@njit(float64[:](float64[:], float64[:]),
+      cache=True)
+def safe_divide_vec(num, den):
+    result = np.zeros_like(num)
+    cond = (den != 0)
+    result[cond] = num[cond] / den[cond]
+    return result
+
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
+def Q_i_f(h_Ip1k, h_1k, U_Ik, V_Ik, W_Ik):
+    t_0 = U_Ik * h_Ip1k
+    t_1 = V_Ik
+    t_2 = W_Ik * h_1k
+    return t_0 + t_1 + t_2
+
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
+def Q_i_b(h_Ik, h_Np1k, X_Ik, Y_Ik, Z_Ik):
+    t_0 = X_Ik * h_Ik
+    t_1 = Y_Ik
+    t_2 = Z_Ik * h_Np1k
+    return t_0 + t_1 + t_2
+
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
+def h_i_b(Q_ik, h_Np1k, X_Ik, Y_Ik, Z_Ik):
+    num = Q_ik - Y_Ik - Z_Ik * h_Np1k
+    den = X_Ik
+    result = safe_divide(num, den)
+    return result
+
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], int64[:], int64[:], int64[:], int64,
+            float64, float64[:], boolean),
+      cache=True)
 def numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
                           _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
                           min_depth, max_depth_k, first_link_backwards=True):
@@ -1875,28 +1930,8 @@ def numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
                             _W_Ik[I_1])
     return 1
 
-@njit
-def Q_i_f(h_Ip1k, h_1k, U_Ik, V_Ik, W_Ik):
-    t_0 = U_Ik * h_Ip1k
-    t_1 = V_Ik
-    t_2 = W_Ik * h_1k
-    return t_0 + t_1 + t_2
-
-@njit
-def Q_i_b(h_Ik, h_Np1k, X_Ik, Y_Ik, Z_Ik):
-    t_0 = X_Ik * h_Ik
-    t_1 = Y_Ik
-    t_2 = Z_Ik * h_Np1k
-    return t_0 + t_1 + t_2
-
-@njit
-def h_i_b(Q_ik, h_Np1k, X_Ik, Y_Ik, Z_Ik):
-    num = Q_ik - Y_Ik - Z_Ik * h_Np1k
-    den = X_Ik
-    result = safe_divide(num, den)
-    return result
-
-@njit
+@njit(float64[:](float64[:], int64, int64[:], int64[:], int64[:], int64[:], float64[:], float64[:], float64[:]),
+      cache=True)
 def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
     for k in range(NK):
         nlinks = nk[k]
@@ -1907,9 +1942,10 @@ def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
         for i in range(nlinks - 1):
             _Ak[i, i] = _U[lstart + i]
             _Ak[i + 1, i] = -_X[lstart + i]
-        _bk = _b[rstart:rstart+nlinks]
-        _AA = _Ak.T @ _Ak
-        _Ab = _Ak.T @ _bk
+        _AkT = _Ak.T.copy()
+        _bk = _b[rstart:rstart+nlinks].copy()
+        _AA = _AkT @ _Ak
+        _Ab = _AkT @ _bk
         # If want to prevent singular matrix, set ( diag == 0 ) = 1
         for i in range(nlinks - 1):
             if (_AA[i, i] == 0.0):
@@ -1918,7 +1954,8 @@ def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
         _h_Ik[jstart+1:jstart+nlinks] = _h_inner
     return _h_Ik
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:]),
+      cache=True)
 def numba_u_ik(_Q_ik, _A_ik, _u_ik):
     n = _u_ik.size
     for i in range(n):
@@ -1930,7 +1967,8 @@ def numba_u_ik(_Q_ik, _A_ik, _u_ik):
             _u_ik[i] = 0
     return _u_ik
 
-@njit
+@njit(float64[:](float64[:], float64[:], boolean[:], float64[:]),
+      cache=True)
 def numba_u_Ik(_dx_ik, _u_ik, _link_start, _u_Ik):
     n = _u_Ik.size
     for i in range(n):
@@ -1946,7 +1984,8 @@ def numba_u_Ik(_dx_ik, _u_ik, _link_start, _u_Ik):
                 _u_Ik[i] = 0
     return _u_Ik
 
-@njit
+@njit(float64[:](float64[:], float64[:], boolean[:], float64[:]),
+      cache=True)
 def numba_u_Ip1k(_dx_ik, _u_ik, _link_end, _u_Ip1k):
     n = _u_Ip1k.size
     for i in range(n):
@@ -1962,21 +2001,8 @@ def numba_u_Ip1k(_dx_ik, _u_ik, _link_end, _u_Ip1k):
                 _u_Ip1k[i] = 0
     return _u_Ip1k
 
-@njit
-def safe_divide(num, den):
-    if (den == 0):
-        return 0
-    else:
-        return num / den
-
-@njit
-def safe_divide_vec(num, den):
-    result = np.zeros_like(num)
-    cond = (den != 0)
-    result[cond] = num[cond] / den[cond]
-    return result
-
-@njit
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
 def U_1k(E_2k, c_1k, A_1k, T_1k, g=9.81):
     """
     Compute forward recurrence coefficient 'U' for node 1, superlink k.
@@ -1986,7 +2012,8 @@ def U_1k(E_2k, c_1k, A_1k, T_1k, g=9.81):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64),
+      cache=True)
 def V_1k(P_1k, D_2k, c_1k, T_1k, a_1k=0.0, D_1k=0.0):
     """
     Compute forward recurrence coefficient 'V' for node 1, superlink k.
@@ -1996,7 +2023,8 @@ def V_1k(P_1k, D_2k, c_1k, T_1k, a_1k=0.0, D_1k=0.0):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
 def W_1k(A_1k, T_1k, a_1k=0.0, E_1k=0.0, g=9.81):
     """
     Compute forward recurrence coefficient 'W' for node 1, superlink k.
@@ -2006,14 +2034,16 @@ def W_1k(A_1k, T_1k, a_1k=0.0, E_1k=0.0, g=9.81):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64),
+      cache=True)
 def T_1k(a_1k, b_1k, c_1k):
     """
     Compute forward recurrence coefficient 'T' for link 1, superlink k.
     """
     return a_1k + b_1k + c_1k
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
 def U_Ik(E_Ip1k, c_ik, A_ik, T_ik, g=9.81):
     """
     Compute forward recurrence coefficient 'U' for node I, superlink k.
@@ -2023,7 +2053,8 @@ def U_Ik(E_Ip1k, c_ik, A_ik, T_ik, g=9.81):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
 def V_Ik(P_ik, a_ik, D_Ik, D_Ip1k, c_ik, A_ik, E_Ik, V_Im1k, U_Im1k, T_ik, g=9.81):
     """
     Compute forward recurrence coefficient 'V' for node I, superlink k.
@@ -2041,7 +2072,8 @@ def V_Ik(P_ik, a_ik, D_Ik, D_Ip1k, c_ik, A_ik, E_Ik, V_Im1k, U_Im1k, T_ik, g=9.8
     result = safe_divide(num, den)
     return  result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
 def W_Ik(A_ik, E_Ik, a_ik, W_Im1k, U_Im1k, T_ik, g=9.81):
     """
     Compute forward recurrence coefficient 'W' for node I, superlink k.
@@ -2051,7 +2083,8 @@ def W_Ik(A_ik, E_Ik, a_ik, W_Im1k, U_Im1k, T_ik, g=9.81):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
 def T_ik(a_ik, b_ik, c_ik, A_ik, E_Ik, U_Im1k, g=9.81):
     """
     Compute forward recurrence coefficient 'T' for link i, superlink k.
@@ -2062,7 +2095,8 @@ def T_ik(a_ik, b_ik, c_ik, A_ik, E_Ik, U_Im1k, g=9.81):
     result = t_0 - safe_divide(t_1, t_2)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
 def X_Nk(A_nk, E_Nk, a_nk, O_nk, g=9.81):
     """
     Compute backward recurrence coefficient 'X' for node N, superlink k.
@@ -2072,7 +2106,8 @@ def X_Nk(A_nk, E_Nk, a_nk, O_nk, g=9.81):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64),
+      cache=True)
 def Y_Nk(P_nk, D_Nk, a_nk, O_nk, c_nk=0.0, D_Np1k=0.0):
     """
     Compute backward recurrence coefficient 'Y' for node N, superlink k.
@@ -2082,7 +2117,8 @@ def Y_Nk(P_nk, D_Nk, a_nk, O_nk, c_nk=0.0, D_Np1k=0.0):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
 def Z_Nk(A_nk, O_nk, c_nk=0.0, E_Np1k=0.0, g=9.81):
     """
     Compute backward recurrence coefficient 'Z' for node N, superlink k.
@@ -2092,14 +2128,16 @@ def Z_Nk(A_nk, O_nk, c_nk=0.0, E_Np1k=0.0, g=9.81):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64),
+      cache=True)
 def O_nk(a_nk, b_nk, c_nk):
     """
     Compute backward recurrence coefficient 'O' for link n, superlink k.
     """
     return a_nk + b_nk + c_nk
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
 def X_Ik(A_ik, E_Ik, a_ik, O_ik, g=9.81):
     """
     Compute backward recurrence coefficient 'X' for node I, superlink k.
@@ -2109,7 +2147,8 @@ def X_Ik(A_ik, E_Ik, a_ik, O_ik, g=9.81):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
 def Y_Ik(P_ik, a_ik, D_Ik, D_Ip1k, c_ik, A_ik, E_Ip1k, Y_Ip1k, X_Ip1k, O_ik, g=9.81):
     """
     Compute backward recurrence coefficient 'Y' for node I, superlink k.
@@ -2127,7 +2166,8 @@ def Y_Ik(P_ik, a_ik, D_Ik, D_Ip1k, c_ik, A_ik, E_Ip1k, Y_Ip1k, X_Ip1k, O_ik, g=9
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
 def Z_Ik(A_ik, E_Ip1k, c_ik, Z_Ip1k, X_Ip1k, O_ik, g=9.81):
     """
     Compute backward recurrence coefficient 'Z' for node I, superlink k.
@@ -2137,7 +2177,8 @@ def Z_Ik(A_ik, E_Ip1k, c_ik, Z_Ip1k, X_Ip1k, O_ik, g=9.81):
     result = safe_divide(num, den)
     return result
 
-@njit
+@njit(float64(float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
 def O_ik(a_ik, b_ik, c_ik, A_ik, E_Ip1k, X_Ip1k, g=9.81):
     """
     Compute backward recurrence coefficient 'O' for link i, superlink k.
@@ -2148,7 +2189,8 @@ def O_ik(a_ik, b_ik, c_ik, A_ik, E_Ip1k, X_Ip1k, g=9.81):
     result = t_0 + safe_divide(t_1, t_2)
     return result
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
 def numba_D_k_star(X_1k, kappa_uk, U_Nk, kappa_dk, Z_1k, W_Nk):
     """
     Compute superlink boundary condition coefficient 'D_k_star'.
@@ -2158,7 +2200,8 @@ def numba_D_k_star(X_1k, kappa_uk, U_Nk, kappa_dk, Z_1k, W_Nk):
     result = t_0 - t_1
     return result
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
 def numba_alpha_uk(U_Nk, kappa_dk, X_1k, Z_1k, W_Nk, D_k_star, lambda_uk, theta_uk):
     """
     Compute superlink boundary condition coefficient 'alpha' for upstream end
@@ -2170,7 +2213,8 @@ def numba_alpha_uk(U_Nk, kappa_dk, X_1k, Z_1k, W_Nk, D_k_star, lambda_uk, theta_
     result = safe_divide_vec(num, den)
     return result
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
 def numba_beta_uk(U_Nk, kappa_dk, Z_1k, W_Nk, D_k_star, lambda_dk, theta_dk):
     """
     Compute superlink boundary condition coefficient 'beta' for upstream end
@@ -2182,7 +2226,9 @@ def numba_beta_uk(U_Nk, kappa_dk, Z_1k, W_Nk, D_k_star, lambda_dk, theta_dk):
     result = safe_divide_vec(num, den)
     return result
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+                 float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
 def numba_chi_uk(U_Nk, kappa_dk, Y_1k, X_1k, mu_uk, Z_1k,
                     mu_dk, V_Nk, W_Nk, D_k_star, theta_uk, theta_dk):
     """
@@ -2196,7 +2242,8 @@ def numba_chi_uk(U_Nk, kappa_dk, Y_1k, X_1k, mu_uk, Z_1k,
     result = safe_divide_vec(num, den)
     return result
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
 def numba_alpha_dk(X_1k, kappa_uk, W_Nk, D_k_star, lambda_uk, theta_uk):
     """
     Compute superlink boundary condition coefficient 'alpha' for downstream end
@@ -2208,7 +2255,8 @@ def numba_alpha_dk(X_1k, kappa_uk, W_Nk, D_k_star, lambda_uk, theta_uk):
     result = safe_divide_vec(num, den)
     return result
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
 def numba_beta_dk(X_1k, kappa_uk, U_Nk, W_Nk, Z_1k, D_k_star, lambda_dk, theta_dk):
     """
     Compute superlink boundary condition coefficient 'beta' for downstream end
@@ -2220,7 +2268,9 @@ def numba_beta_dk(X_1k, kappa_uk, U_Nk, W_Nk, Z_1k, D_k_star, lambda_dk, theta_d
     result = safe_divide_vec(num, den)
     return result
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+                 float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
 def numba_chi_dk(X_1k, kappa_uk, V_Nk, W_Nk, mu_uk, U_Nk,
                     mu_dk, Y_1k, Z_1k, D_k_star, theta_uk, theta_dk):
     """
@@ -2234,8 +2284,9 @@ def numba_chi_dk(X_1k, kappa_uk, V_Nk, W_Nk, mu_uk, U_Nk,
     result = safe_divide_vec(num, den)
     return result
 
-@njit
-def gamma_o(Q_o_t, Ao, Co=0.67, g=9.81):
+@njit(float64[:](float64[:], float64[:], float64[:], float64),
+      cache=True)
+def gamma_o(Q_o_t, Ao, Co, g=9.81):
     """
     Compute flow coefficient 'gamma' for orifice o.
     """
@@ -2244,8 +2295,9 @@ def gamma_o(Q_o_t, Ao, Co=0.67, g=9.81):
     result = safe_divide_vec(num, den)
     return result
 
-@njit
-def gamma_w(Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
+def gamma_w(Q_w_t, H_w_t, L_w, s_w, Cwr, Cwt):
     """
     Compute flow coefficient 'gamma' for weir w.
     """
@@ -2254,8 +2306,9 @@ def gamma_w(Q_w_t, H_w_t, L_w, s_w, Cwr=1.838, Cwt=1.380):
     result = safe_divide_vec(num, den)
     return result
 
-@njit
-def gamma_p(Q_p_t, dH_p_t, a_q=1.0, a_h=1.0):
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
+def gamma_p(Q_p_t, dH_p_t, a_q, a_h):
     """
     Compute flow coefficient 'gamma' for pump p.
     """
@@ -2264,7 +2317,8 @@ def gamma_p(Q_p_t, dH_p_t, a_q=1.0, a_h=1.0):
     result = safe_divide_vec(num, den)
     return result
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64),
+      cache=True)
 def gamma_uk(Q_uk_t, C_uk, A_uk, g=9.81):
     """
     Compute flow coefficient 'gamma' for upstream end of superlink k
@@ -2274,7 +2328,8 @@ def gamma_uk(Q_uk_t, C_uk, A_uk, g=9.81):
     result = safe_divide_vec(num, den)
     return result
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64),
+      cache=True)
 def gamma_dk(Q_dk_t, C_dk, A_dk, g=9.81):
     """
     Compute flow coefficient 'gamma' for downstream end of superlink k
@@ -2284,9 +2339,12 @@ def gamma_dk(Q_dk_t, C_dk, A_dk, g=9.81):
     result = safe_divide_vec(num, den)
     return result
 
-@njit
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:]),
+      cache=True)
 def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_inv_j,
                                     _z_o, _tau_o, _Co, _Ao, _y_max_o, _J_uo, _J_do):
+    g = 9.81
     _H_uo = H_j[_J_uo]
     _H_do = H_j[_J_do]
     _z_inv_uo = _z_inv_j[_J_uo]
@@ -2294,7 +2352,7 @@ def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_i
     _omega_o = np.zeros_like(_H_uo)
     _omega_o[_H_uo >= _H_do] = 1.0
     # Compute universal coefficients
-    _gamma_o = gamma_o(_Qo, _Ao, _Co)
+    _gamma_o = gamma_o(_Qo, _Ao, _Co, g)
     # Create conditionals
     cond_0 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
                 _z_o + _z_inv_uo + (_tau_o * _y_max_o * u))
@@ -2328,7 +2386,9 @@ def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_i
     _chi_o[d] = 0.0
     return 1
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], int64[:], int64[:], float64),
+      cache=True)
 def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
                               _tau_o, _y_max_o, _Co, _Ao, _J_uo, _J_do, g=9.81):
     # Specify orifice heads at previous timestep
@@ -2381,7 +2441,9 @@ def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
     # Export instance variables
     return _Qo_next
 
-@njit
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:]),
+      cache=True)
 def numba_weir_flow_coefficients(_Hw, _Qw, _alpha_w, _beta_w, _chi_w, H_j, _z_inv_j, _z_w,
                                  _y_max_w, u, _L_w, _s_w, _Cwr, _Cwt, _J_uw, _J_dw):
     # Specify weir heads at previous timestep
@@ -2426,7 +2488,9 @@ def numba_weir_flow_coefficients(_Hw, _Qw, _alpha_w, _beta_w, _chi_w, H_j, _z_in
     _chi_w[c] = 0.0
     return 1
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], int64[:], int64[:]),
+      cache=True)
 def numba_solve_weir_flows(_Hw, _Qw, H_j, _z_inv_j, _z_w, _y_max_w, u, _L_w,
                            _s_w, _Cwr, _Cwt, _J_uw, _J_dw):
     _H_uw = H_j[_J_uw]
@@ -2456,7 +2520,9 @@ def numba_solve_weir_flows(_Hw, _Qw, H_j, _z_inv_j, _z_w, _y_max_w, u, _L_w,
     _Qw_next = (-1)**(1 - _omega_w) * np.sqrt(_gamma_ww * _Hw)
     return _Qw_next
 
-@njit
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:]),
+      cache=True)
 def numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, u,
                                  _z_p, _dHp_max, _dHp_min, _ap_q, _ap_h, _J_up, _J_dp):
     # Get upstream and downstream heads and invert elevation
@@ -2489,7 +2555,9 @@ def numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, 
     _chi_p[c] = 0.0
     return 1
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+                 int64[:], int64[:]),
+      cache=True)
 def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _ap_q, _ap_h,
                            _J_up, _J_dp):
     _H_up = H_j[_J_up]
@@ -2505,9 +2573,12 @@ def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _ap_q, _a
     _Qp_next[~cond_0] = 0.0
     return _Qp_next
 
-@njit
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], int64, int64[:], int64[:], int64[:]),
+      cache=True)
 def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
                              _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_1k, _i_1k):
+    g = 9.81
     for k in range(NK):
         # Start at junction 1
         _I_1 = _I_1k[k]
@@ -2516,10 +2587,10 @@ def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
         _i_2 = _i_1 + 1
         nlinks = nk[k]
         _T_ik[_i_1] = T_1k(_a_ik[_i_1], _b_ik[_i_1], _c_ik[_i_1])
-        _U_Ik[_I_1] = U_1k(_E_Ik[_I_2], _c_ik[_i_1], _A_ik[_i_1], _T_ik[_i_1])
+        _U_Ik[_I_1] = U_1k(_E_Ik[_I_2], _c_ik[_i_1], _A_ik[_i_1], _T_ik[_i_1], g)
         _V_Ik[_I_1] = V_1k(_P_ik[_i_1], _D_Ik[_I_2], _c_ik[_i_1], _T_ik[_i_1],
                             _a_ik[_i_1], _D_Ik[_I_1])
-        _W_Ik[_I_1] = W_1k(_A_ik[_i_1], _T_ik[_i_1], _a_ik[_i_1], _E_Ik[_I_1])
+        _W_Ik[_I_1] = W_1k(_A_ik[_i_1], _T_ik[_i_1], _a_ik[_i_1], _E_Ik[_I_1], g)
         # Loop from junction 2 -> Nk
         for i in range(nlinks - 1):
             _i_next = _i_2 + i
@@ -2527,20 +2598,23 @@ def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
             _Im1_next = _I_next - 1
             _Ip1_next = _I_next + 1
             _T_ik[_i_next] = T_ik(_a_ik[_i_next], _b_ik[_i_next], _c_ik[_i_next],
-                                  _A_ik[_i_next], _E_Ik[_I_next], _U_Ik[_Im1_next])
+                                  _A_ik[_i_next], _E_Ik[_I_next], _U_Ik[_Im1_next], g)
             _U_Ik[_I_next] = U_Ik(_E_Ik[_Ip1_next], _c_ik[_i_next],
-                                  _A_ik[_i_next], _T_ik[_i_next])
+                                  _A_ik[_i_next], _T_ik[_i_next], g)
             _V_Ik[_I_next] = V_Ik(_P_ik[_i_next], _a_ik[_i_next], _D_Ik[_I_next],
                                   _D_Ik[_Ip1_next], _c_ik[_i_next], _A_ik[_i_next],
                                   _E_Ik[_I_next], _V_Ik[_Im1_next], _U_Ik[_Im1_next],
-                                  _T_ik[_i_next])
+                                  _T_ik[_i_next], g)
             _W_Ik[_I_next] = W_Ik(_A_ik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
-                                  _W_Ik[_Im1_next], _U_Ik[_Im1_next], _T_ik[_i_next])
+                                  _W_Ik[_Im1_next], _U_Ik[_Im1_next], _T_ik[_i_next], g)
     return 1
 
-@njit
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], int64, int64[:], int64[:], int64[:]),
+      cache=True)
 def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
                               _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_Nk, _i_nk):
+    g = 9.81
     for k in range(NK):
         _I_N = _I_Nk[k]
         _i_n = _i_nk[k]
@@ -2549,27 +2623,28 @@ def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
         _I_Np1 = _I_N + 1
         nlinks = nk[k]
         _O_ik[_i_n] = O_nk(_a_ik[_i_n], _b_ik[_i_n], _c_ik[_i_n])
-        _X_Ik[_I_N] = X_Nk(_A_ik[_i_n], _E_Ik[_I_N], _a_ik[_i_n], _O_ik[_i_n])
+        _X_Ik[_I_N] = X_Nk(_A_ik[_i_n], _E_Ik[_I_N], _a_ik[_i_n], _O_ik[_i_n], g)
         _Y_Ik[_I_N] = Y_Nk(_P_ik[_i_n], _D_Ik[_I_N], _a_ik[_i_n], _O_ik[_i_n],
                             _c_ik[_i_n], _D_Ik[_I_Np1])
-        _Z_Ik[_I_N] = Z_Nk(_A_ik[_i_n], _O_ik[_i_n], _c_ik[_i_n], _E_Ik[_I_Np1])
+        _Z_Ik[_I_N] = Z_Nk(_A_ik[_i_n], _O_ik[_i_n], _c_ik[_i_n], _E_Ik[_I_Np1], g)
         for i in range(nlinks - 1):
             _i_next = _i_nm1 - i
             _I_next = _I_Nm1 - i
             _Ip1_next = _I_next + 1
             _O_ik[_i_next] = O_ik(_a_ik[_i_next], _b_ik[_i_next], _c_ik[_i_next],
-                                  _A_ik[_i_next], _E_Ik[_Ip1_next], _X_Ik[_Ip1_next])
+                                  _A_ik[_i_next], _E_Ik[_Ip1_next], _X_Ik[_Ip1_next], g)
             _X_Ik[_I_next] = X_Ik(_A_ik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
-                                  _O_ik[_i_next])
+                                  _O_ik[_i_next], g)
             _Y_Ik[_I_next] = Y_Ik(_P_ik[_i_next], _a_ik[_i_next], _D_Ik[_I_next],
                                   _D_Ik[_Ip1_next], _c_ik[_i_next], _A_ik[_i_next],
                                   _E_Ik[_Ip1_next], _Y_Ik[_Ip1_next], _X_Ik[_Ip1_next],
-                                  _O_ik[_i_next])
+                                  _O_ik[_i_next], g)
             _Z_Ik[_I_next] = Z_Ik(_A_ik[_i_next], _E_Ik[_Ip1_next], _c_ik[_i_next],
-                                  _Z_Ik[_Ip1_next], _X_Ik[_Ip1_next], _O_ik[_i_next])
+                                  _Z_Ik[_Ip1_next], _X_Ik[_Ip1_next], _O_ik[_i_next], g)
     return 1
 
-@njit
+@njit(float64[:,:](float64[:,:], int64, int64),
+      cache=True)
 def numba_create_banded(l, bandwidth, M):
     AB = np.zeros((2*bandwidth + 1, M))
     for i in range(M):
@@ -2580,14 +2655,17 @@ def numba_create_banded(l, bandwidth, M):
             AB[bandwidth + n + 1, j] = l[j + n + 1, j]
     return AB
 
-@njit(fastmath=True)
+@njit(void(float64[:], int64[:], float64[:]),
+      cache=True,
+      fastmath=True)
 def numba_add_at(a, indices, b):
     n = len(indices)
     for k in range(n):
         i = indices[k]
         a[i] += b[k]
 
-@njit
+@njit(void(float64[:, :], boolean[:], int64[:], int64[:], int64),
+      cache=True)
 def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
     for k in range(NK):
         _J_u = _J_uk[k]
@@ -2599,7 +2677,10 @@ def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
         if not _bc_d:
             A[_J_d, _J_u] = 0.0
 
-@njit(fastmath=True)
+@njit(void(float64[:, :], float64[:], boolean[:], int64[:], int64[:], float64[:],
+           float64[:], float64[:], float64[:], float64[:], float64, int64, int64),
+      cache=True,
+      fastmath=True)
 def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
                           _alpha_dk, _beta_uk, _beta_dk, _A_sj, _dt,
                           M, NK):
@@ -2622,7 +2703,10 @@ def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
         if not _bc_d:
             A[_J_d, _J_u] -= _alpha_dk[k]
 
-@njit(fastmath=True)
+@njit(void(float64[:, :], float64[:], boolean[:], int64[:], int64[:], float64[:],
+           float64[:], float64[:], float64[:], int64, int64),
+      cache=True,
+      fastmath=True)
 def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _alpha_uc,
                             _alpha_dc, _beta_uc, _beta_dc, M, NC):
     # Set diagonal
@@ -2644,7 +2728,8 @@ def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _alpha_uc,
         if not _bc_d:
             X[_J_d, _J_u] -= _alpha_dc[c]
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:], int64),
+      cache=True)
 def numba_Q_i_next_b(X_Ik, h_Ik, Y_Ik, Z_Ik, h_Np1k, _Ik, _ki, n):
     _Q_i = np.zeros(n)
     for i in range(n):
@@ -2656,7 +2741,8 @@ def numba_Q_i_next_b(X_Ik, h_Ik, Y_Ik, Z_Ik, h_Np1k, _Ik, _ki, n):
         _Q_i[i] = t_0 + t_1 + t_2
     return _Q_i
 
-@njit
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:], int64),
+      cache=True)
 def numba_Q_im1k_next_f(U_Ik, h_Ik, V_Ik, W_Ik, h_1k, _Ik, _ki, n):
     _Q_i = np.zeros(n)
     for i in range(n):
@@ -2669,7 +2755,10 @@ def numba_Q_im1k_next_f(U_Ik, h_Ik, V_Ik, W_Ik, h_1k, _Ik, _ki, n):
         _Q_i[i] = t_0 + t_1 + t_2
     return _Q_i
 
-@njit
+@njit(void(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+           float64[:], float64[:], float64[:], float64[:], int64[:], int64[:], int64[:],
+           int64[:], int64[:], int64, boolean[:]),
+      cache=True)
 def numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
                                _b0, _z0, _x0, _m, _elem_pos, _i_1k, _I_1k,
                                _I_Np1k, nk, NK, reposition):
