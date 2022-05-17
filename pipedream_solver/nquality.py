@@ -183,10 +183,10 @@ class QualityBuilder():
         self._W_dk = np.zeros(self.NK)
         self._rho_uk = np.zeros(self.NK)
         self._tau_uk = np.zeros(self.NK)
-        self._omega_uk = np.zeros(self.NK)
+        self._zeta_uk = np.zeros(self.NK)
         self._rho_dk = np.zeros(self.NK)
         self._tau_dk = np.zeros(self.NK)
-        self._omega_dk = np.zeros(self.NK)
+        self._zeta_dk = np.zeros(self.NK)
         self._F_jj = np.zeros(self.M, dtype=float)
         self._O_diag = np.zeros(self.M, dtype=float)
         self._W_diag = np.zeros(self.M, dtype=float)
@@ -558,10 +558,10 @@ class QualityBuilder():
         _gamma_dk = self._gamma_dk
         _rho_uk = self._rho_uk
         _tau_uk = self._tau_uk
-        _omega_uk = self._omega_uk
+        _zeta_uk = self._zeta_uk
         _rho_dk = self._rho_dk
         _tau_dk = self._tau_dk
-        _omega_dk = self._omega_dk
+        _zeta_dk = self._zeta_dk
         # Compute boundary coefficients
         numba_boundary_coefficients(_X_uk, _Y_uk, _Z_uk, _U_dk, _V_dk, _W_dk,
                                     _X_Ik, _Y_Ik, _Z_Ik, _U_Ik, _V_Ik, _W_Ik,
@@ -578,11 +578,11 @@ class QualityBuilder():
         _D_k_star = D_k_star(_X_uk, _U_dk, _W_dk, _Z_uk, _theta_uk, _theta_dk)
         _rho_uk = rho_uk(_U_dk, _X_uk, _Z_uk, _W_dk, _theta_dk, _sigma_uk, _D_k_star)
         _tau_uk = tau_uk(_Z_uk, _sigma_dk, _D_k_star)
-        _omega_uk = omega_uk(_Z_uk, _V_dk, _U_dk, _Y_uk, _X_uk, _W_dk,
+        _zeta_uk = zeta_uk(_Z_uk, _V_dk, _U_dk, _Y_uk, _X_uk, _W_dk,
                              _theta_dk, _xi_uk, _xi_dk, _D_k_star)
         _rho_dk = rho_dk(_W_dk, _sigma_uk, _D_k_star)
         _tau_dk = tau_dk(_X_uk, _U_dk, _W_dk, _Z_uk, _theta_uk, _sigma_dk, _D_k_star)
-        _omega_dk = omega_dk(_W_dk, _Y_uk, _X_uk, _V_dk, _Z_uk, _U_dk,
+        _zeta_dk = zeta_dk(_W_dk, _Y_uk, _X_uk, _V_dk, _Z_uk, _U_dk,
                              _theta_uk, _xi_uk, _xi_dk, _D_k_star)
         # Export instance variables
         self._X_uk = _X_uk
@@ -599,10 +599,10 @@ class QualityBuilder():
         self._xi_dk = _xi_dk
         self._rho_uk = _rho_uk
         self._tau_uk = _tau_uk
-        self._omega_uk = _omega_uk
+        self._zeta_uk = _zeta_uk
         self._rho_dk = _rho_dk
         self._tau_dk = _tau_dk
-        self._omega_dk = _omega_dk
+        self._zeta_dk = _zeta_dk
 
     def sparse_matrix_equations(self, c_bc=None, _Q_0j=None, _c_0j=None, u=None, _dt=None,
                                 implicit=True, first_time=False):
@@ -615,10 +615,10 @@ class QualityBuilder():
         _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
         _rho_uk = self._rho_uk
         _tau_uk = self._tau_uk
-        _omega_uk = self._omega_uk
+        _zeta_uk = self._zeta_uk
         _rho_dk = self._rho_dk
         _tau_dk = self._tau_dk
-        _omega_dk = self._omega_dk
+        _zeta_dk = self._zeta_dk
         _F_jj = self._F_jj
         _A_sj = self._A_sj               # Surface area of superjunction j
         _V_j_next = self._V_j_next
@@ -688,14 +688,17 @@ class QualityBuilder():
         numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
         # Create A matrix
         # TODO: Need to rename other omega_uk and omega_dk
-        _OMEGA_UK = (_Q_uk_next >= 0).astype(float)
-        _OMEGA_DK = (_Q_dk_next >= 0).astype(float)
+        _omega_uk = (_Q_uk_next >= 0).astype(float)
+        _omega_dk = (_Q_dk_next >= 0).astype(float)
         numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk, _tau_dk,
-                              _Q_uk_next, _Q_dk_next, _OMEGA_UK, _OMEGA_DK, _V_j_next, _V_j_prev,
-                              _H_j_next, _dt, _K_j, _D_uk, _D_dk, _A_uk_next, _A_dk_next, _dx_uk, _dx_dk, M, NK)
+                              _Q_uk_next, _Q_dk_next, _omega_uk, _omega_dk, _V_j_next, _V_j_prev,
+                              _H_j_next, _dt, _K_j, _D_uk, _D_dk, _A_uk_next, _A_dk_next,
+                              _dx_uk, _dx_dk, M, NK)
         # Create D vector
-        numba_add_at(D, _J_uk, (-_Q_uk_next * (1 - _OMEGA_UK) + 2 * _D_uk * _A_uk_next / _dx_uk) * _omega_uk)
-        numba_add_at(D, _J_dk, ( _Q_dk_next * _OMEGA_DK + 2 * _D_dk * _A_dk_next / _dx_dk) * _omega_dk)
+        numba_add_at(D, _J_uk, (-_Q_uk_next * (1 - _omega_uk)
+                                + 2 * _D_uk * _A_uk_next / _dx_uk) * _zeta_uk)
+        numba_add_at(D, _J_dk, (_Q_dk_next * _omega_dk
+                                + 2 * _D_dk * _A_dk_next / _dx_dk) * _zeta_dk)
         # Compute control matrix
         if n_o:
             _omega_o = (_Q_o_next >= 0).astype(float)
@@ -812,15 +815,15 @@ class QualityBuilder():
         _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
         _rho_uk = self._rho_uk
         _tau_uk = self._tau_uk
-        _omega_uk = self._omega_uk
+        _zeta_uk = self._zeta_uk
         _rho_dk = self._rho_dk
         _tau_dk = self._tau_dk
-        _omega_dk = self._omega_dk
+        _zeta_dk = self._zeta_dk
         _c_min = self._c_min
         _c_max = self._c_max
         # Solve for boundary flow concentrations
-        _c_uk_next = _rho_uk * _c_j[_J_uk] + _tau_uk * _c_j[_J_dk] + _omega_uk
-        _c_dk_next = _rho_dk * _c_j[_J_uk] + _tau_dk * _c_j[_J_dk] + _omega_dk
+        _c_uk_next = _rho_uk * _c_j[_J_uk] + _tau_uk * _c_j[_J_dk] + _zeta_uk
+        _c_dk_next = _rho_dk * _c_j[_J_uk] + _tau_dk * _c_j[_J_dk] + _zeta_dk
         _c_1k = 2 * _c_uk_next - _c_j[_J_uk]
         _c_Np1k = 2 * _c_dk_next - _c_j[_J_dk]
         # Enforce non-negative concentration
@@ -1241,7 +1244,7 @@ def tau_uk(Z_uk, sigma_dk, D_k_star):
     return result
 
 @njit
-def omega_uk(Z_uk, V_dk, U_dk, Y_uk, X_uk, W_dk, theta_dk, xi_uk, xi_dk, D_k_star):
+def zeta_uk(Z_uk, V_dk, U_dk, Y_uk, X_uk, W_dk, theta_dk, xi_uk, xi_dk, D_k_star):
     """
     Compute superlink boundary condition coefficient 'chi' for upstream end
     of superlink k.
@@ -1276,7 +1279,7 @@ def tau_dk(X_uk, U_dk, W_dk, Z_uk, theta_uk, sigma_dk, D_k_star):
     return result
 
 @njit
-def omega_dk(W_dk, Y_uk, X_uk, V_dk, Z_uk, U_dk, theta_uk, xi_uk, xi_dk, D_k_star):
+def zeta_dk(W_dk, Y_uk, X_uk, V_dk, Z_uk, U_dk, theta_uk, xi_uk, xi_dk, D_k_star):
     """
     Compute superlink boundary condition coefficient 'chi' for downstream end
     of superlink k.
@@ -1433,11 +1436,11 @@ def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
 
 @njit(fastmath=True)
 def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk, _tau_dk,
-                          _Q_uk, _Q_dk, _OMEGA_UK, _OMEGA_DK, _V_j_next, _V_j_prev, _H_j_next, _dt,
+                          _Q_uk, _Q_dk, _omega_uk, _omega_dk, _V_j_next, _V_j_prev, _H_j_next, _dt,
                           _K_j, _D_uk, _D_dk, _A_uk_next, _A_dk_next, _dx_uk, _dx_dk, M, NK):
     # TODO: Grouping of Q multiplication changed
-    kuj = - _Q_uk * (_rho_uk * _OMEGA_UK + (1 - _OMEGA_UK)) + 2 * _D_uk * _A_uk_next * (_rho_uk - 1) / _dx_uk
-    kdj = _Q_dk * (_tau_dk * _OMEGA_DK + (1 - _OMEGA_DK)) + 2 * _D_dk * _A_dk_next * (_tau_dk - 1) / _dx_dk
+    kuj = - _Q_uk * (_rho_uk * _omega_uk + (1 - _omega_uk)) + 2 * _D_uk * _A_uk_next * (_rho_uk - 1) / _dx_uk
+    kdj = _Q_dk * (_tau_dk * _omega_dk + (1 - _omega_dk)) + 2 * _D_dk * _A_dk_next * (_tau_dk - 1) / _dx_dk
     numba_add_at(_F_jj, _J_uk, -kuj)
     numba_add_at(_F_jj, _J_dk, -kdj)
     _F_jj += (2 * _V_j_next - _V_j_prev) / _dt + (_K_j * _V_j_next)
@@ -1453,10 +1456,10 @@ def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk,
         _bc_u = bc[_J_u]
         _bc_d = bc[_J_d]
         if not _bc_u:
-            A[_J_u, _J_d] -= _tau_uk[k] * (-_Q_uk[k] * (1 - _OMEGA_UK[k])
+            A[_J_u, _J_d] -= _tau_uk[k] * (-_Q_uk[k] * (1 - _omega_uk[k])
                               + 2 * _D_uk[k] * _A_uk_next[k] / _dx_uk[k])
         if not _bc_d:
-            A[_J_d, _J_u] -= _rho_dk[k] * (_Q_dk[k] * _OMEGA_DK[k]
+            A[_J_d, _J_u] -= _rho_dk[k] * (_Q_dk[k] * _omega_dk[k]
                               + 2 * _D_dk[k] * _A_dk_next[k] / _dx_dk[k])
 
 @njit(fastmath=True)
