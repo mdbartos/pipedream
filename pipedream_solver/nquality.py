@@ -207,10 +207,8 @@ class QualityBuilder():
         self._Ip1k = self.hydraulics._Ip1k
         self._Q_Ik_next = np.zeros(self._Ik.size, dtype=float)
         self._Q_Ip1k_next = np.zeros(self._Ip1k.size, dtype=float)
-        self._D_Ik = np.zeros(self._Ik.size, dtype=float)
-        self._D_Ip1k = np.zeros(self._Ip1k.size, dtype=float)
-        self._A_Ik_next = np.zeros(self._Ik.size, dtype=float)
-        self._A_Ip1k_next = np.zeros(self._Ip1k.size, dtype=float)
+        self._D_Ik = np.zeros(self._I.size, dtype=float)
+        self._A_Ik_next = np.zeros(self._I.size, dtype=float)
         self.step(dt=1e-6)
 
     # TODO: It might be safer to have these as @properties
@@ -234,12 +232,8 @@ class QualityBuilder():
         if self.n_p:
             self._Q_p_next = self.hydraulics.Q_p
             self._Q_p_prev = self.hydraulics.states['Q_p']
-        # self._u_ik_next = self.hydraulics._u_ik
-        # self._u_Ik_next = self.hydraulics._u_Ik
-        # self._u_Ip1k_next = self.hydraulics._u_Ip1k
         self._dx_ik_next = self.hydraulics._dx_ik
         self._A_ik_next = self.hydraulics._A_ik
-        # self._B_ik_next = self.hydraulics._B_ik
         self._A_uk_next = self.hydraulics._A_uk
         self._A_dk_next = self.hydraulics._A_dk
         # TODO: Added additional states to superlink
@@ -305,10 +299,8 @@ class QualityBuilder():
         _Q_Ik_next = self._Q_Ik_next                   # Flow velocity at junction Ik
         _Q_Ip1k_next = self._Q_Ip1k_next               # Flow velocity at junction I + 1k
         _A_Ik_next = self._A_Ik_next                   # Flow velocity at junction Ik
-        _A_Ip1k_next = self._A_Ip1k_next               # Flow velocity at junction I + 1k
         _D_ik = self._D_ik
         _D_Ik = self._D_Ik                   # Flow velocity at junction Ik
-        _D_Ip1k = self._D_Ip1k               # Flow velocity at junction I + 1k
         _dx_ik_next = self._dx_ik_next                 # Length of link ik
         _link_start = self.hydraulics._link_start
         _link_end = self.hydraulics._link_end
@@ -325,10 +317,10 @@ class QualityBuilder():
         # TODO: Min-Gyu's method
         self._Q_Ik_next = _Q_ik_next
         self._Q_Ip1k_next = _Q_ik_next
-        self._A_Ik_next = _A_ik_next
-        self._A_Ip1k_next = _A_ik_next
-        self._D_Ik = _D_ik
-        self._D_Ip1k = _D_ik
+        self._A_Ik_next[self._Ik] = _A_ik_next
+        self._A_Ik_next[self._Ip1k] = _A_ik_next
+        self._D_Ik[self._Ik] = _D_ik
+        self._D_Ik[self._Ip1k] = _D_ik
         # TODO: These are probably more technically correct
         # self._Q_Ik_next = _Q_Ik_next
         # self._Q_Ip1k_next = _Q_Ip1k_next
@@ -1039,7 +1031,6 @@ def beta_ik(dt, D_ik, A_ik, A_ik_prev, dx_ik, K_ik, Q_Ik, Q_Ip1k, omega_Ik, omeg
     # TODO: Check if this is 4 or 8
     t_2 = 4 * D_ik * A_ik / dx_ik
     t_3 = K_ik * dx_ik * A_ik
-    # TODO: Need to add A_ik_prev
     t_4 = dx_ik * (2 * A_ik - A_ik_prev) / dt
     return t_0 + t_1 + t_2 + t_3 + t_4
 
@@ -1062,7 +1053,6 @@ def kappa_Ik(Q_im1k_next, omega_im1k, D_Ik, A_Ik, dx_im1k):
     # TODO: Check if this is 4 or 2
     # TODO: Check if this is D_Ik, A_Ik or D_ik, A_ik
     t_1 = - 2 * D_Ik * A_Ik / dx_im1k
-    # return t_0
     return t_0 + t_1
 
 @njit
@@ -1084,7 +1074,6 @@ def mu_Ik(Q_ik_next, omega_ik, D_Ik, A_Ik, dx_ik):
     # TODO: Check if this is 4 or 2
     # TODO: Check if this is D_Ik, A_Ik or D_ik, A_ik
     t_1 = - 2 * D_Ik * A_Ik / dx_ik
-    # return t_0
     return t_0 + t_1
 
 @njit
@@ -1329,6 +1318,7 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
         elif _is_end[I]:
             im1 = _backward_I_i[I]
             k = _kI[I]
+            # TODO: Possible out-of-bounds error
             _kappa_Ik[I] = kappa_Ik(_Q_ik_next[im1], _omega_ik[im1], _D_Ik[I], _A_Ik_next[I],
                                     _dx_ik_next[im1])
             _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _h_Ik_prev[I], _Q_dk_next[k],
