@@ -234,12 +234,12 @@ class QualityBuilder():
         if self.n_p:
             self._Q_p_next = self.hydraulics.Q_p
             self._Q_p_prev = self.hydraulics.states['Q_p']
-        self._u_ik_next = self.hydraulics._u_ik
-        self._u_Ik_next = self.hydraulics._u_Ik
-        self._u_Ip1k_next = self.hydraulics._u_Ip1k
+        # self._u_ik_next = self.hydraulics._u_ik
+        # self._u_Ik_next = self.hydraulics._u_Ik
+        # self._u_Ip1k_next = self.hydraulics._u_Ip1k
         self._dx_ik_next = self.hydraulics._dx_ik
         self._A_ik_next = self.hydraulics._A_ik
-        self._B_ik_next = self.hydraulics._B_ik
+        # self._B_ik_next = self.hydraulics._B_ik
         self._A_uk_next = self.hydraulics._A_uk
         self._A_dk_next = self.hydraulics._A_dk
         # TODO: Added additional states to superlink
@@ -314,21 +314,30 @@ class QualityBuilder():
         _link_end = self.hydraulics._link_end
         # Determine start and end nodes
         # Compute velocities for start nodes (1 -> Nk)
-        numba_Q_Ik(_dx_ik_next, _Q_ik_next, _link_start, _Q_Ik_next)
-        numba_Q_Ip1k(_dx_ik_next, _Q_ik_next, _link_end, _Q_Ip1k_next)
-        numba_Q_Ik(_dx_ik_next, _A_ik_next, _link_start, _A_Ik_next)
-        numba_Q_Ip1k(_dx_ik_next, _A_ik_next, _link_end, _A_Ip1k_next)
-        numba_Q_Ik(_dx_ik_next, _D_ik, _link_start, _D_Ik)
-        numba_Q_Ip1k(_dx_ik_next, _D_ik, _link_end, _D_Ip1k)
+        # TODO: These are not needed for Min-Gyu's method
+        # numba_Q_Ik(_dx_ik_next, _Q_ik_next, _link_start, _Q_Ik_next)
+        # numba_Q_Ip1k(_dx_ik_next, _Q_ik_next, _link_end, _Q_Ip1k_next)
+        # numba_Q_Ik(_dx_ik_next, _A_ik_next, _link_start, _A_Ik_next)
+        # numba_Q_Ip1k(_dx_ik_next, _A_ik_next, _link_end, _A_Ip1k_next)
+        # numba_Q_Ik(_dx_ik_next, _D_ik, _link_start, _D_Ik)
+        # numba_Q_Ip1k(_dx_ik_next, _D_ik, _link_end, _D_Ip1k)
         # Export to instance variables
-        self._Q_Ik_next = _Q_Ik_next
-        self._Q_Ip1k_next = _Q_Ip1k_next
-        self._A_Ik_next = _A_Ik_next
-        self._A_Ip1k_next = _A_Ip1k_next
-        self._D_Ik = _D_Ik
-        self._D_Ip1k = _D_Ip1k
+        # TODO: Min-Gyu's method
+        self._Q_Ik_next = _Q_ik_next
+        self._Q_Ip1k_next = _Q_ik_next
+        self._A_Ik_next = _A_ik_next
+        self._A_Ip1k_next = _A_ik_next
+        self._D_Ik = _D_ik
+        self._D_Ip1k = _D_ik
+        # TODO: These are probably more technically correct
+        # self._Q_Ik_next = _Q_Ik_next
+        # self._Q_Ip1k_next = _Q_Ip1k_next
+        # self._A_Ik_next = _A_Ik_next
+        # self._A_Ip1k_next = _A_Ip1k_next
+        # self._D_Ik = _D_Ik
+        # self._D_Ip1k = _D_Ip1k
 
-    def link_coeffs(self, _dt=None, _u_j_frac=0.0, first_iter=True):
+    def link_coeffs(self, _dt=None, first_iter=True):
         """
         Compute link momentum coefficients: a_ik, b_ik, c_ik and P_ik.
         """
@@ -366,13 +375,15 @@ class QualityBuilder():
         if _dt is None:
             _dt = self._dt
         # Compute link coefficients
-        # TODO: This should happen in hydraulic solver
-        _Q_1k = (_Q_uk_next + _Q_ik_next[_i_1k]) / 2
-        _Q_Np1k = (_Q_dk_next + _Q_ik_next[_i_nk]) / 2
+        # TODO: Min-Gyu's method
+        _Q_1k = _Q_ik_next[_i_1k]
+        _Q_Np1k = _Q_ik_next[_i_nk]
+        # _Q_1k = (_Q_uk_next + _Q_ik_next[_i_1k]) / 2
+        # _Q_Np1k = (_Q_dk_next + _Q_ik_next[_i_nk]) / 2
         # TODO: Is this even necessary?
         # TODO: Redundant computations
-        _Q_Ik_next[np.cumsum(self.nk) - self.nk[0]] = _Q_1k
-        _Q_Ip1k_next[np.cumsum(self.nk) - 1] = _Q_Np1k
+        # _Q_Ik_next[np.cumsum(self.nk) - self.nk[0]] = _Q_1k
+        # _Q_Ip1k_next[np.cumsum(self.nk) - 1] = _Q_Np1k
         _omega_Ik = (_Q_Ik_next > 0).astype(float)
         _omega_Ip1k = (_Q_Ip1k_next > 0).astype(float)
         _omega_1k = (_Q_1k > 0.).astype(float)
@@ -432,7 +443,7 @@ class QualityBuilder():
         _mu_Ik = self._mu_Ik
         _eta_Ik = self._eta_Ik
         _c_ik_prev = self._c_ik
-        _B_ik_next = self._B_ik_next
+        # _B_ik_next = self._B_ik_next
         _A_ik_next = self._A_ik_next
         _K_ik = self._K_ik
         _dx_ik_next = self._dx_ik_next
@@ -455,7 +466,7 @@ class QualityBuilder():
         numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                           _h_Ik_next, _h_Ik_prev, _c_Ik_prev, _c_ik_prev,
                           _Q_uk_next, _Q_dk_next, _c_0Ik, _Q_0Ik, _A_SIk,
-                          _K_Ik, _K_ik, _B_ik_next, _A_ik_next, _dx_ik_next,
+                          _K_Ik, _K_ik, _A_ik_next, _dx_ik_next,
                           _forward_I_i, _backward_I_i, _is_start, _is_end, _kI,
                           _dt, _omega_ik, _omega_uk, _omega_dk, _D_Ik, _A_Ik_next,
                           _dx_uk, _dx_dk)
@@ -819,13 +830,22 @@ class QualityBuilder():
         _rho_dk = self._rho_dk
         _tau_dk = self._tau_dk
         _zeta_dk = self._zeta_dk
+        _theta_uk = self._theta_uk
+        _theta_dk = self._theta_dk
+        _sigma_uk = self._sigma_uk
+        _sigma_dk = self._sigma_dk
+        _xi_uk = self._xi_uk
+        _xi_dk = self._xi_dk
         _c_min = self._c_min
         _c_max = self._c_max
         # Solve for boundary flow concentrations
         _c_uk_next = _rho_uk * _c_j[_J_uk] + _tau_uk * _c_j[_J_dk] + _zeta_uk
         _c_dk_next = _rho_dk * _c_j[_J_uk] + _tau_dk * _c_j[_J_dk] + _zeta_dk
-        _c_1k = 2 * _c_uk_next - _c_j[_J_uk]
-        _c_Np1k = 2 * _c_dk_next - _c_j[_J_dk]
+        # TODO: Where did this come from?
+        # _c_1k = 2 * _c_uk_next - _c_j[_J_uk]
+        # _c_Np1k = 2 * _c_dk_next - _c_j[_J_dk]
+        _c_1k = _theta_uk * _c_uk_next + _sigma_uk * _c_j[_J_uk] + _xi_uk
+        _c_Np1k = _theta_dk * _c_dk_next + _sigma_dk * _c_j[_J_dk] + _xi_dk
         # Enforce non-negative concentration
         _c_uk_next = np.maximum(_c_uk_next, _c_min)
         _c_dk_next = np.maximum(_c_dk_next, _c_min)
@@ -941,7 +961,7 @@ class QualityBuilder():
         return c_ik_b, c_ik_f
 
     def step(self, dt=None, c_bc=None, c_0j=None, Q_0j=None, c_0Ik=None,
-             Q_0Ik=None, u_j_frac=0.0):
+             Q_0Ik=None):
         """
         Advance model forward to next time step, computing water quality states.
 
@@ -963,8 +983,6 @@ class QualityBuilder():
         Q_0Ik : np.ndarray (M)
             Direct inflow at each junction (m^3/s).
             Defaults to `_Q_0Ik` of underlying SuperLink model.
-        u_j_frac : float
-            (Deprecated).
 
         Returns:
         --------
@@ -978,7 +996,7 @@ class QualityBuilder():
         if Q_0Ik is None:
             Q_0Ik = self.hydraulics._Q_0Ik
         self.node_quantities()
-        self.link_coeffs(_dt=dt, _u_j_frac=u_j_frac)
+        self.link_coeffs(_dt=dt)
         self.node_coeffs(_Q_0Ik=Q_0Ik, _c_0Ik=c_0Ik, _dt=dt)
         self.forward_recurrence()
         self.backward_recurrence()
@@ -1070,8 +1088,7 @@ def mu_Ik(Q_ik_next, omega_ik, D_Ik, A_Ik, dx_ik):
     return t_0 + t_1
 
 @njit
-def eta_Ik(c_0_Ik, Q_0_Ik, A_SIk, h_Ik_prev, c_Ik_prev, B_ik, B_im1k,
-           dx_ik, dx_im1k, c_ik_prev, c_im1k_prev, dt):
+def eta_Ik(c_0_Ik, Q_0_Ik, A_SIk, h_Ik_prev, c_Ik_prev, dt):
     t_0 = c_0_Ik * Q_0_Ik
     # TODO: Should this be next or previous timestep?
     t_1 = A_SIk * h_Ik_prev * c_Ik_prev / dt
@@ -1295,7 +1312,7 @@ def zeta_dk(W_dk, Y_uk, X_uk, V_dk, Z_uk, U_dk, theta_uk, xi_uk, xi_dk, D_k_star
 def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                       _h_Ik_next, _h_Ik_prev, _c_Ik_prev, _c_ik_prev,
                       _Q_uk_next, _Q_dk_next, _c_0Ik, _Q_0Ik, _A_SIk, _K_Ik,
-                      _K_ik, _B_ik_next, _A_ik_next, _dx_ik_next, _forward_I_i,
+                      _K_ik, _A_ik_next, _dx_ik_next, _forward_I_i,
                       _backward_I_i, _is_start, _is_end, _kI, _dt, _omega_ik,
                       _omega_uk, _omega_dk, _D_Ik, _A_Ik_next, _dx_uk, _dx_dk):
     N = _kI.size
@@ -1308,8 +1325,7 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                                       _Q_uk_next[k], _omega_ik[i], _omega_uk[k], _dt, _K_Ik[I],
                                       _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i], _dx_uk[k])
             _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i])
-            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I],
-                                _B_ik_next[i], 0.0, _dx_ik_next[i], 0.0, _c_ik_prev[i], 0.0, _dt)
+            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I], _dt)
         elif _is_end[I]:
             im1 = _backward_I_i[I]
             k = _kI[I]
@@ -1320,8 +1336,7 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                                       _D_Ik[I], _A_Ik_next[I], _dx_dk[k], _dx_ik_next[im1])
             _mu_Ik[I] = mu_Ik(_Q_dk_next[k], _omega_dk[k], _D_Ik[I], _A_Ik_next[I], _dx_dk[k])
             _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I],
-                                _c_Ik_prev[I], 0.0, _B_ik_next[im1], 0.0, _dx_ik_next[im1],
-                                0.0, _c_ik_prev[im1], _dt)
+                                _c_Ik_prev[I], _dt)
         else:
             i = _forward_I_i[I]
             im1 = i - 1
@@ -1332,9 +1347,7 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                                       _K_Ik[I], _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i],
                                       _dx_ik_next[im1])
             _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i])
-            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I],
-                                _B_ik_next[i], _B_ik_next[im1], _dx_ik_next[i], _dx_ik_next[im1],
-                                _c_ik_prev[i], _c_ik_prev[im1], _dt)
+            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I], _dt)
     return 1
 
 @njit
@@ -1415,7 +1428,7 @@ def numba_boundary_coefficients(_X_uk, _Y_uk, _Z_uk, _U_dk, _V_dk, _W_dk,
         _W_dk[k] = W_dk(_kappa_Ik[_I_Np1], _W_Ik[_I_N], _mu_Ik[_I_Np1])
     return 1
 
-@njit(fastmath=True)
+@njit(fastmath=False)
 def numba_add_at(a, indices, b):
     n = len(indices)
     for k in range(n):
@@ -1434,7 +1447,7 @@ def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
         if not _bc_d:
             A[_J_d, _J_u] = 0.0
 
-@njit(fastmath=True)
+@njit(fastmath=False)
 def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk, _tau_dk,
                           _Q_uk, _Q_dk, _omega_uk, _omega_dk, _V_j_next, _V_j_prev, _H_j_next, _dt,
                           _K_j, _D_uk, _D_dk, _A_uk_next, _A_dk_next, _dx_uk, _dx_dk, M, NK):
@@ -1462,7 +1475,7 @@ def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk,
             A[_J_d, _J_u] -= _rho_dk[k] * (_Q_dk[k] * _omega_dk[k]
                               + 2 * _D_dk[k] * _A_dk_next[k] / _dx_dk[k])
 
-@njit(fastmath=True)
+@njit(fastmath=False)
 def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _omega_c, _Q_c, M, NC):
     # Set diagonal
     numba_add_at(diag, _J_uc, _Q_c * _omega_c)
