@@ -242,8 +242,13 @@ class QualityBuilder():
         self._B_ik_next = self.hydraulics._B_ik
         self._A_uk_next = self.hydraulics._A_uk
         self._A_dk_next = self.hydraulics._A_dk
+        # TODO: Added additional states to superlink
+        self._A_ik_prev = self.hydraulics.states['A_ik']
+        self._A_uk_prev = self.hydraulics.states['A_uk']
+        self._A_dk_prev = self.hydraulics.states['A_dk']
         self._A_sj = self.hydraulics._A_sj
-        self._V_sj = self.hydraulics._V_sj
+        self._V_j_next = self.hydraulics.V_j
+        self._V_j_prev = self.hydraulics.states['V_j']
 
     @property
     def c_j(self):
@@ -340,6 +345,9 @@ class QualityBuilder():
         _A_dk_next = self._A_dk_next
         _Q_ik_next = self._Q_ik_next
         _A_ik_next = self._A_ik_next
+        _A_ik_prev = self._A_ik_prev
+        _A_uk_prev = self._A_uk_prev
+        _A_dk_prev = self._A_dk_prev
         _D_uk = self._D_uk
         _D_dk = self._D_dk
         _dx_uk = self._dx_uk
@@ -372,20 +380,20 @@ class QualityBuilder():
         _omega_uk = (_Q_uk_next > 0.).astype(float)
         _omega_dk = (_Q_dk_next > 0.).astype(float)
         _alpha_ik = alpha_ik(_Q_Ik_next, _omega_Ik, _dx_ik_next, _D_ik, _A_ik_next)
-        _beta_ik = beta_ik(_dt, _D_ik, _A_ik_next, _dx_ik_next, _K_ik, _Q_Ik_next, _Q_Ip1k_next,
-                           _omega_Ik, _omega_Ip1k)
+        _beta_ik = beta_ik(_dt, _D_ik, _A_ik_next, _A_ik_prev, _dx_ik_next, _K_ik,
+                           _Q_Ik_next, _Q_Ip1k_next, _omega_Ik, _omega_Ip1k)
         _chi_ik = chi_ik(_Q_Ip1k_next, _omega_Ip1k, _dx_ik_next, _D_ik, _A_ik_next)
         _gamma_ik = gamma_ik(_dt, _c_ik, _A_ik_next, _dx_ik_next)
         # Compute link coefficients for boundaries
-        _alpha_uk = alpha_ik(_u_j_frac * _Q_uk_next, _omega_uk, _dx_uk, _D_uk, _A_uk_next)
-        _beta_uk = beta_ik(_dt, _D_uk, _A_uk_next, _dx_uk, 0.0, _u_j_frac * _Q_uk_next, _Q_1k,
+        _alpha_uk = alpha_ik(_Q_uk_next, _omega_uk, _dx_uk, _D_uk, _A_uk_next)
+        _beta_uk = beta_ik(_dt, _D_uk, _A_uk_next, _A_uk_prev, _dx_uk, 0.0, _Q_uk_next, _Q_1k,
                            _omega_uk, _omega_1k)
         _chi_uk = chi_ik(_Q_1k, _omega_1k, _dx_uk, _D_uk, _A_uk_next)
         _gamma_uk = gamma_ik(_dt, _c_uk, _A_uk_next, _dx_uk)
         _alpha_dk = alpha_ik(_Q_Np1k, _omega_Np1k, _dx_dk, _D_dk, _A_dk_next)
-        _beta_dk = beta_ik(_dt, _D_dk, _A_dk_next, _dx_dk, 0.0, _Q_Np1k, _u_j_frac * _Q_dk_next,
+        _beta_dk = beta_ik(_dt, _D_dk, _A_dk_next, _A_dk_prev, _dx_dk, 0.0, _Q_Np1k, _Q_dk_next,
                            _omega_Np1k, _omega_dk)
-        _chi_dk = chi_ik(_u_j_frac * _Q_dk_next, _omega_dk, _dx_dk, _D_dk, _A_dk_next)
+        _chi_dk = chi_ik(_Q_dk_next, _omega_dk, _dx_dk, _D_dk, _A_dk_next)
         _gamma_dk = gamma_ik(_dt, _c_dk, _A_dk_next, _dx_dk)
         # Export to instance variables
         self._alpha_ik = _alpha_ik
@@ -613,7 +621,14 @@ class QualityBuilder():
         _omega_dk = self._omega_dk
         _F_jj = self._F_jj
         _A_sj = self._A_sj               # Surface area of superjunction j
-        _V_sj = self._V_sj
+        _V_j_next = self._V_j_next
+        _V_j_prev = self._V_j_prev
+        _D_uk = self._D_uk
+        _D_dk = self._D_dk
+        _A_uk_next = self._A_uk_next
+        _A_dk_next = self._A_dk_next
+        _dx_uk = self._dx_uk
+        _dx_dk = self._dx_dk
         _c_j = self._c_j
         _Q_uk_next = self._Q_uk_next
         _Q_dk_next = self._Q_dk_next
@@ -676,11 +691,11 @@ class QualityBuilder():
         _OMEGA_UK = (_Q_uk_next >= 0).astype(float)
         _OMEGA_DK = (_Q_dk_next >= 0).astype(float)
         numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk, _tau_dk,
-                              _Q_uk_next, _Q_dk_next, _OMEGA_UK, _OMEGA_DK, _A_sj, _V_sj,
-                              _H_j_next, _dt, _K_j, M, NK)
+                              _Q_uk_next, _Q_dk_next, _OMEGA_UK, _OMEGA_DK, _V_j_next, _V_j_prev,
+                              _H_j_next, _dt, _K_j, _D_uk, _D_dk, _A_uk_next, _A_dk_next, _dx_uk, _dx_dk, M, NK)
         # Create D vector
-        numba_add_at(D, _J_uk, -_omega_uk * _Q_uk_next)
-        numba_add_at(D, _J_dk, _omega_dk * _Q_dk_next)
+        numba_add_at(D, _J_uk, (-_Q_uk_next * (1 - _OMEGA_UK) + 2 * _D_uk * _A_uk_next / _dx_uk) * _omega_uk)
+        numba_add_at(D, _J_dk, ( _Q_dk_next * _OMEGA_DK + 2 * _D_dk * _A_dk_next / _dx_dk) * _omega_dk)
         # Compute control matrix
         if n_o:
             _omega_o = (_Q_o_next >= 0).astype(float)
@@ -701,7 +716,8 @@ class QualityBuilder():
             numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _omega_p,
                                     _Q_p_next, M, n_p)
         b.fill(0)
-        b = (_A_sj * _H_j_prev * _c_j / _dt) + (_Q_0j * _c_0j) + D
+        # TODO: Change to _c_j_prev
+        b = (_V_j_next * _c_j / _dt) + (_Q_0j * _c_0j) + D
         # Ensure boundary condition is specified
         b[bc] = c_bc[bc]
         # Export instance variables
@@ -991,24 +1007,27 @@ def safe_divide_vec(num, den):
 def alpha_ik(Q_Ik, omega_Ik, dx_ik, D_ik, A_ik):
     # Use upwind scheme
     t_0 = - Q_Ik * omega_Ik
-    t_1 = - 4 * D_ik * A_ik / dx_ik
+    # TODO: Check if this is 4 or 2
+    t_1 = - 2 * D_ik * A_ik / dx_ik
     return t_0 + t_1
 
 @njit
-def beta_ik(dt, D_ik, A_ik, dx_ik, K_ik, Q_Ik, Q_Ip1k, omega_Ik, omega_Ip1k):
-    t_0 = dx_ik * A_ik / dt
-    t_1 = 8 * D_ik * A_ik / dx_ik
-    # Why is sign different on K here?
-    t_2 = K_ik * dx_ik * A_ik
-    t_3 = - Q_Ik * (1 - omega_Ik)
-    t_4 = Q_Ip1k * omega_Ip1k
+def beta_ik(dt, D_ik, A_ik, A_ik_prev, dx_ik, K_ik, Q_Ik, Q_Ip1k, omega_Ik, omega_Ip1k):
+    t_0 = Q_Ip1k * omega_Ip1k
+    t_1 = - Q_Ik * (1 - omega_Ik)
+    # TODO: Check if this is 4 or 8
+    t_2 = 4 * D_ik * A_ik / dx_ik
+    t_3 = K_ik * dx_ik * A_ik
+    # TODO: Need to add A_ik_prev
+    t_4 = dx_ik * (2 * A_ik - A_ik_prev) / dt
     return t_0 + t_1 + t_2 + t_3 + t_4
 
 @njit
 def chi_ik(Q_Ip1k, omega_Ip1k, dx_ik, D_ik, A_ik):
     # Use upwind scheme
     t_0 = Q_Ip1k * (1 - omega_Ip1k)
-    t_1 = - 4 * D_ik * A_ik / dx_ik
+    # TODO: Check if this is 4 or 2
+    t_1 = - 2 * D_ik * A_ik / dx_ik
     return t_0 + t_1
 
 @njit
@@ -1019,24 +1038,31 @@ def gamma_ik(dt, c_ik_prev, A_ik, dx_ik):
 @njit
 def kappa_Ik(Q_im1k_next, omega_im1k, D_Ik, A_Ik, dx_im1k):
     t_0 = - Q_im1k_next * omega_im1k
-    t_1 = - 4 * D_Ik * A_Ik / dx_im1k
+    # TODO: Check if this is 4 or 2
+    # TODO: Check if this is D_Ik, A_Ik or D_ik, A_ik
+    t_1 = - 2 * D_Ik * A_Ik / dx_im1k
     # return t_0
     return t_0 + t_1
 
 @njit
-def lambda_Ik(A_SIk, h_Ik_next, Q_ik_next, Q_im1k_next, omega_ik, omega_im1k, dt, K_Ik, D_Ik,
+def lambda_Ik(A_SIk, h_Ik_next, h_Ik_prev, Q_ik_next, Q_im1k_next, omega_ik, omega_im1k, dt, K_Ik, D_Ik,
               A_Ik, dx_ik, dx_im1k):
-    t_0 = omega_ik * Q_ik_next
-    t_1 = - (1 - omega_im1k) * Q_im1k_next
-    t_2 = A_SIk * h_Ik_next * (1 / dt + K_Ik)
-    t_3 = 4 * D_Ik * A_Ik / dx_im1k
-    t_4 = 4 * D_Ik * A_Ik / dx_ik
-    return t_0 + t_1 + t_2 + t_3 + t_4
+    t_0 = A_SIk * h_Ik_next * K_Ik
+    t_1 = omega_ik * Q_ik_next
+    t_2 = - (1 - omega_im1k) * Q_im1k_next
+    # TODO: Check if this is 4 or 2
+    t_3 = 2 * D_Ik * A_Ik / dx_im1k
+    t_4 = 2 * D_Ik * A_Ik / dx_ik
+    # TODO: Need to add h_Ik_prev
+    t_5 = A_SIk * (2 * h_Ik_next - h_Ik_prev) / dt
+    return t_0 + t_1 + t_2 + t_3 + t_4 + t_5
 
 @njit
 def mu_Ik(Q_ik_next, omega_ik, D_Ik, A_Ik, dx_ik):
     t_0 = Q_ik_next * (1 - omega_ik)
-    t_1 = - 4 * D_Ik * A_Ik / dx_ik
+    # TODO: Check if this is 4 or 2
+    # TODO: Check if this is D_Ik, A_Ik or D_ik, A_ik
+    t_1 = - 2 * D_Ik * A_Ik / dx_ik
     # return t_0
     return t_0 + t_1
 
@@ -1044,6 +1070,7 @@ def mu_Ik(Q_ik_next, omega_ik, D_Ik, A_Ik, dx_ik):
 def eta_Ik(c_0_Ik, Q_0_Ik, A_SIk, h_Ik_prev, c_Ik_prev, B_ik, B_im1k,
            dx_ik, dx_im1k, c_ik_prev, c_im1k_prev, dt):
     t_0 = c_0_Ik * Q_0_Ik
+    # TODO: Should this be next or previous timestep?
     t_1 = A_SIk * h_Ik_prev * c_Ik_prev / dt
     return t_0 + t_1
 
@@ -1274,9 +1301,9 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
             i = _forward_I_i[I]
             k = _kI[I]
             _kappa_Ik[I] = kappa_Ik(_Q_uk_next[k], _omega_uk[k], _D_Ik[I], _A_Ik_next[I], _dx_uk[k])
-            _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _Q_ik_next[i], _Q_uk_next[k],
-                                      _omega_ik[i], _omega_uk[k], _dt, _K_Ik[I], _D_Ik[I],
-                                      _A_Ik_next[I], _dx_ik_next[i], _dx_uk[k])
+            _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _h_Ik_prev[I], _Q_ik_next[i],
+                                      _Q_uk_next[k], _omega_ik[i], _omega_uk[k], _dt, _K_Ik[I],
+                                      _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i], _dx_uk[k])
             _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i])
             _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I],
                                 _B_ik_next[i], 0.0, _dx_ik_next[i], 0.0, _c_ik_prev[i], 0.0, _dt)
@@ -1285,9 +1312,9 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
             k = _kI[I]
             _kappa_Ik[I] = kappa_Ik(_Q_ik_next[im1], _omega_ik[im1], _D_Ik[I], _A_Ik_next[I],
                                     _dx_ik_next[im1])
-            _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _Q_dk_next[k], _Q_ik_next[im1],
-                                      _omega_dk[k], _omega_ik[im1], _dt, _K_Ik[I], _D_Ik[I],
-                                      _A_Ik_next[I], _dx_dk[k], _dx_ik_next[im1])
+            _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _h_Ik_prev[I], _Q_dk_next[k],
+                                      _Q_ik_next[im1], _omega_dk[k], _omega_ik[im1], _dt, _K_Ik[I],
+                                      _D_Ik[I], _A_Ik_next[I], _dx_dk[k], _dx_ik_next[im1])
             _mu_Ik[I] = mu_Ik(_Q_dk_next[k], _omega_dk[k], _D_Ik[I], _A_Ik_next[I], _dx_dk[k])
             _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I],
                                 _c_Ik_prev[I], 0.0, _B_ik_next[im1], 0.0, _dx_ik_next[im1],
@@ -1297,9 +1324,10 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
             im1 = i - 1
             _kappa_Ik[I] = kappa_Ik(_Q_ik_next[im1], _omega_ik[im1], _D_Ik[I], _A_Ik_next[I],
                                     _dx_ik_next[im1])
-            _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _Q_ik_next[i], _Q_ik_next[im1],
-                                      _omega_ik[i], _omega_ik[im1], _dt, _K_Ik[I], _D_Ik[I],
-                                      _A_Ik_next[I], _dx_ik_next[i], _dx_ik_next[im1])
+            _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _h_Ik_prev[I], _Q_ik_next[i],
+                                      _Q_ik_next[im1], _omega_ik[i], _omega_ik[im1], _dt,
+                                      _K_Ik[I], _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i],
+                                      _dx_ik_next[im1])
             _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i])
             _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I],
                                 _B_ik_next[i], _B_ik_next[im1], _dx_ik_next[i], _dx_ik_next[im1],
@@ -1405,13 +1433,14 @@ def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
 
 @njit(fastmath=True)
 def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk, _tau_dk,
-                          _Q_uk, _Q_dk, _OMEGA_UK, _OMEGA_DK, _A_sj, _V_sj, _H_j_next, _dt,
-                          _K_j, M, NK):
-    kuj = _rho_uk * _OMEGA_UK * _Q_uk + (1 - _OMEGA_UK)
-    kdj = -(_tau_dk * _OMEGA_DK * _Q_dk + (1 - _OMEGA_DK))
-    numba_add_at(_F_jj, _J_uk, kuj)
-    numba_add_at(_F_jj, _J_dk, kdj)
-    _F_jj += (_A_sj * _H_j_next / _dt) + (_K_j * _V_sj)
+                          _Q_uk, _Q_dk, _OMEGA_UK, _OMEGA_DK, _V_j_next, _V_j_prev, _H_j_next, _dt,
+                          _K_j, _D_uk, _D_dk, _A_uk_next, _A_dk_next, _dx_uk, _dx_dk, M, NK):
+    # TODO: Grouping of Q multiplication changed
+    kuj = - _Q_uk * (_rho_uk * _OMEGA_UK + (1 - _OMEGA_UK)) + 2 * _D_uk * _A_uk_next * (_rho_uk - 1) / _dx_uk
+    kdj = _Q_dk * (_tau_dk * _OMEGA_DK + (1 - _OMEGA_DK)) + 2 * _D_dk * _A_dk_next * (_tau_dk - 1) / _dx_dk
+    numba_add_at(_F_jj, _J_uk, -kuj)
+    numba_add_at(_F_jj, _J_dk, -kdj)
+    _F_jj += (2 * _V_j_next - _V_j_prev) / _dt + (_K_j * _V_j_next)
     # Set diagonal of A matrix
     for i in range(M):
         if bc[i]:
@@ -1424,9 +1453,11 @@ def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk,
         _bc_u = bc[_J_u]
         _bc_d = bc[_J_d]
         if not _bc_u:
-            A[_J_u, _J_d] += (_tau_uk[k] * _Q_uk[k])
+            A[_J_u, _J_d] -= _tau_uk[k] * (-_Q_uk[k] * (1 - _OMEGA_UK[k])
+                              + 2 * _D_uk[k] * _A_uk_next[k] / _dx_uk[k])
         if not _bc_d:
-            A[_J_d, _J_u] -= (_rho_dk[k] * _Q_dk[k])
+            A[_J_d, _J_u] -= _rho_dk[k] * (_Q_dk[k] * _OMEGA_DK[k]
+                              + 2 * _D_dk[k] * _A_dk_next[k] / _dx_dk[k])
 
 @njit(fastmath=True)
 def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _omega_c, _Q_c, M, NC):

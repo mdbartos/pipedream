@@ -273,7 +273,7 @@ class SuperLink():
     R_ik     : Hydraulic radius in links (m)
     B_ik     : Top width of flow in links (m)
     A_sj     : Superjunction surface areas (m^2)
-    V_sj     : Superjunction stored volumes (m^3)
+    V_j      : Superjunction stored volumes (m^3)
     z_inv_j  : Superjunction invert elevation (m)
     z_inv_uk : Offset of superlink upstream invert above superjunction (m)
     z_inv_dk : Offset of superlink downstream invert above superjunction (m)
@@ -762,6 +762,22 @@ class SuperLink():
         self._A_ik = np.asarray(value)
 
     @property
+    def A_uk(self):
+        return self._A_uk
+
+    @A_uk.setter
+    def A_uk(self, value):
+        self._A_uk = np.asarray(value)
+
+    @property
+    def A_dk(self):
+        return self._A_dk
+
+    @A_dk.setter
+    def A_dk(self, value):
+        self._A_dk = np.asarray(value)
+
+    @property
     def Pe_ik(self):
         return self._Pe_ik
 
@@ -794,11 +810,11 @@ class SuperLink():
         self._A_sj = np.asarray(value)
 
     @property
-    def V_sj(self):
+    def V_j(self):
         return self._V_sj
 
-    @V_sj.setter
-    def V_sj(self, value):
+    @V_j.setter
+    def V_j(self, value):
         self._V_sj = np.asarray(value)
 
     @property
@@ -3802,6 +3818,10 @@ class SuperLink():
             self.states['Q_w'] = np.copy(self.Q_w)
         if self.n_p:
             self.states['Q_p'] = np.copy(self.Q_p)
+        self.states['A_ik'] = np.copy(self.A_ik)
+        self.states['A_uk'] = np.copy(self.A_uk)
+        self.states['A_dk'] = np.copy(self.A_dk)
+        self.states['V_j'] = np.copy(self.V_j)
 
     def load_state(self, states={}, compute_hydraulic_geometries=True):
         """
