@@ -435,7 +435,6 @@ class QualityBuilder():
         _mu_Ik = self._mu_Ik
         _eta_Ik = self._eta_Ik
         _c_ik_prev = self._c_ik
-        # _B_ik_next = self._B_ik_next
         _A_ik_next = self._A_ik_next
         _K_ik = self._K_ik
         _dx_ik_next = self._dx_ik_next
@@ -443,6 +442,11 @@ class QualityBuilder():
         _A_Ik_next = self._A_Ik_next
         _dx_uk = self._dx_uk
         _dx_dk = self._dx_dk
+        _A_uk_next = self._A_uk_next
+        _A_dk_next = self._A_dk_next
+        _D_uk = self._D_uk
+        _D_dk = self._D_dk
+        _D_ik = self._D_ik
         # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
@@ -460,8 +464,8 @@ class QualityBuilder():
                           _Q_uk_next, _Q_dk_next, _c_0Ik, _Q_0Ik, _A_SIk,
                           _K_Ik, _K_ik, _A_ik_next, _dx_ik_next,
                           _forward_I_i, _backward_I_i, _is_start, _is_end, _kI,
-                          _dt, _omega_ik, _omega_uk, _omega_dk, _D_Ik, _A_Ik_next,
-                          _dx_uk, _dx_dk)
+                          _dt, _omega_ik, _omega_uk, _omega_dk, _D_Ik, _D_ik, _A_Ik_next,
+                          _dx_uk, _dx_dk, _D_uk, _D_dk, _A_uk_next, _A_dk_next)
         # Export instance variables
         self._kappa_Ik = _kappa_Ik
         self._lambda_Ik = _lambda_Ik
@@ -1056,14 +1060,14 @@ def kappa_Ik(Q_im1k_next, omega_im1k, D_Ik, A_Ik, dx_im1k):
     return t_0 + t_1
 
 @njit
-def lambda_Ik(A_SIk, h_Ik_next, h_Ik_prev, Q_ik_next, Q_im1k_next, omega_ik, omega_im1k, dt, K_Ik, D_Ik,
-              A_Ik, dx_ik, dx_im1k):
+def lambda_Ik(A_SIk, h_Ik_next, h_Ik_prev, Q_ik_next, Q_im1k_next, omega_ik, omega_im1k, dt,
+              K_Ik, D_ik, D_im1k, A_ik, A_im1k, dx_ik, dx_im1k):
     t_0 = A_SIk * h_Ik_next * K_Ik
     t_1 = omega_ik * Q_ik_next
     t_2 = - (1 - omega_im1k) * Q_im1k_next
     # TODO: Check if this is 4 or 2
-    t_3 = 2 * D_Ik * A_Ik / dx_im1k
-    t_4 = 2 * D_Ik * A_Ik / dx_ik
+    t_3 = 2 * D_im1k * A_im1k / dx_im1k
+    t_4 = 2 * D_ik * A_ik / dx_ik
     # TODO: Need to add h_Ik_prev
     t_5 = A_SIk * (2 * h_Ik_next - h_Ik_prev) / dt
     return t_0 + t_1 + t_2 + t_3 + t_4 + t_5
@@ -1303,40 +1307,43 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                       _Q_uk_next, _Q_dk_next, _c_0Ik, _Q_0Ik, _A_SIk, _K_Ik,
                       _K_ik, _A_ik_next, _dx_ik_next, _forward_I_i,
                       _backward_I_i, _is_start, _is_end, _kI, _dt, _omega_ik,
-                      _omega_uk, _omega_dk, _D_Ik, _A_Ik_next, _dx_uk, _dx_dk):
+                      _omega_uk, _omega_dk, _D_Ik, _D_ik, _A_Ik_next, _dx_uk, _dx_dk,
+                      _D_uk, _D_dk, _A_uk_next, _A_dk_next):
     N = _kI.size
     for I in range(N):
         if _is_start[I]:
             i = _forward_I_i[I]
             k = _kI[I]
-            _kappa_Ik[I] = kappa_Ik(_Q_uk_next[k], _omega_uk[k], _D_Ik[I], _A_Ik_next[I], _dx_uk[k])
+            _kappa_Ik[I] = kappa_Ik(_Q_uk_next[k], _omega_uk[k], _D_uk[k], _A_uk_next[k], _dx_uk[k])
             _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _h_Ik_prev[I], _Q_ik_next[i],
                                       _Q_uk_next[k], _omega_ik[i], _omega_uk[k], _dt, _K_Ik[I],
-                                      _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i], _dx_uk[k])
-            _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i])
+                                      _D_ik[i], _D_uk[k], _A_ik_next[i], _A_uk_next[k],
+                                      _dx_ik_next[i], _dx_uk[k])
+            _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_ik[i], _A_ik_next[i], _dx_ik_next[i])
             _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I], _dt)
         elif _is_end[I]:
             im1 = _backward_I_i[I]
             k = _kI[I]
             # TODO: Possible out-of-bounds error
-            _kappa_Ik[I] = kappa_Ik(_Q_ik_next[im1], _omega_ik[im1], _D_Ik[I], _A_Ik_next[I],
+            _kappa_Ik[I] = kappa_Ik(_Q_ik_next[im1], _omega_ik[im1], _D_ik[im1], _A_ik_next[im1],
                                     _dx_ik_next[im1])
             _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _h_Ik_prev[I], _Q_dk_next[k],
                                       _Q_ik_next[im1], _omega_dk[k], _omega_ik[im1], _dt, _K_Ik[I],
-                                      _D_Ik[I], _A_Ik_next[I], _dx_dk[k], _dx_ik_next[im1])
-            _mu_Ik[I] = mu_Ik(_Q_dk_next[k], _omega_dk[k], _D_Ik[I], _A_Ik_next[I], _dx_dk[k])
+                                      _D_dk[k], _D_ik[im1], _A_dk_next[k], _A_ik_next[im1],
+                                      _dx_dk[k], _dx_ik_next[im1])
+            _mu_Ik[I] = mu_Ik(_Q_dk_next[k], _omega_dk[k], _D_dk[k], _A_dk_next[k], _dx_dk[k])
             _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I],
                                 _c_Ik_prev[I], _dt)
         else:
             i = _forward_I_i[I]
             im1 = i - 1
-            _kappa_Ik[I] = kappa_Ik(_Q_ik_next[im1], _omega_ik[im1], _D_Ik[I], _A_Ik_next[I],
+            _kappa_Ik[I] = kappa_Ik(_Q_ik_next[im1], _omega_ik[im1], _D_ik[im1], _A_ik_next[im1],
                                     _dx_ik_next[im1])
             _lambda_Ik[I] = lambda_Ik(_A_SIk[I], _h_Ik_next[I], _h_Ik_prev[I], _Q_ik_next[i],
                                       _Q_ik_next[im1], _omega_ik[i], _omega_ik[im1], _dt,
-                                      _K_Ik[I], _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i],
-                                      _dx_ik_next[im1])
-            _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_Ik[I], _A_Ik_next[I], _dx_ik_next[i])
+                                      _K_Ik[I], _D_ik[i], _D_ik[im1], _A_ik_next[i],
+                                      _A_ik_next[im1], _dx_ik_next[i], _dx_ik_next[im1])
+            _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_ik[i], _A_ik_next[i], _dx_ik_next[i])
             _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I], _dt)
     return 1
 
