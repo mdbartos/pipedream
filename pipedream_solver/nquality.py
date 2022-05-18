@@ -387,12 +387,13 @@ class QualityBuilder():
                            _Q_Ik_next, _Q_Ip1k_next, _omega_Ik, _omega_Ip1k)
         _chi_ik = chi_ik(_Q_Ip1k_next, _omega_Ip1k, _dx_ik_next, _D_ik, _A_ik_next)
         _gamma_ik = gamma_ik(_dt, _c_ik, _A_ik_next, _dx_ik_next)
-        # Compute link coefficients for boundaries
+        # Compute link coefficients for upstream boundary
         _alpha_uk = alpha_ik(_Q_uk_next, _omega_uk, _dx_uk, _D_uk, _A_uk_next)
         _beta_uk = beta_ik(_dt, _D_uk, _A_uk_next, _A_uk_prev, _dx_uk, 0.0, _Q_uk_next, _Q_1k,
                            _omega_uk, _omega_1k)
         _chi_uk = chi_ik(_Q_1k, _omega_1k, _dx_uk, _D_uk, _A_uk_next)
         _gamma_uk = gamma_ik(_dt, _c_uk, _A_uk_next, _dx_uk)
+        # Compute link coefficients for downstream boundary
         _alpha_dk = alpha_ik(_Q_Np1k, _omega_Np1k, _dx_dk, _D_dk, _A_dk_next)
         _beta_dk = beta_ik(_dt, _D_dk, _A_dk_next, _A_dk_prev, _dx_dk, 0.0, _Q_Np1k, _Q_dk_next,
                            _omega_Np1k, _omega_dk)
@@ -1081,10 +1082,9 @@ def mu_Ik(Q_ik_next, omega_ik, D_Ik, A_Ik, dx_ik):
     return t_0 + t_1
 
 @njit
-def eta_Ik(c_0_Ik, Q_0_Ik, A_SIk, h_Ik_prev, c_Ik_prev, dt):
+def eta_Ik(c_0_Ik, Q_0_Ik, A_SIk, h_Ik_next, c_Ik_prev, dt):
     t_0 = c_0_Ik * Q_0_Ik
-    # TODO: Should this be next or previous timestep?
-    t_1 = A_SIk * h_Ik_prev * c_Ik_prev / dt
+    t_1 = A_SIk * h_Ik_next * c_Ik_prev / dt
     return t_0 + t_1
 
 @njit
@@ -1320,7 +1320,7 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                                       _D_ik[i], _D_uk[k], _A_ik_next[i], _A_uk_next[k],
                                       _dx_ik_next[i], _dx_uk[k])
             _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_ik[i], _A_ik_next[i], _dx_ik_next[i])
-            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I], _dt)
+            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_next[I], _c_Ik_prev[I], _dt)
         elif _is_end[I]:
             im1 = _backward_I_i[I]
             k = _kI[I]
@@ -1332,7 +1332,7 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                                       _D_dk[k], _D_ik[im1], _A_dk_next[k], _A_ik_next[im1],
                                       _dx_dk[k], _dx_ik_next[im1])
             _mu_Ik[I] = mu_Ik(_Q_dk_next[k], _omega_dk[k], _D_dk[k], _A_dk_next[k], _dx_dk[k])
-            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I],
+            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_next[I],
                                 _c_Ik_prev[I], _dt)
         else:
             i = _forward_I_i[I]
@@ -1344,7 +1344,7 @@ def numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                                       _K_Ik[I], _D_ik[i], _D_ik[im1], _A_ik_next[i],
                                       _A_ik_next[im1], _dx_ik_next[i], _dx_ik_next[im1])
             _mu_Ik[I] = mu_Ik(_Q_ik_next[i], _omega_ik[i], _D_ik[i], _A_ik_next[i], _dx_ik_next[i])
-            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_prev[I], _c_Ik_prev[I], _dt)
+            _eta_Ik[I] = eta_Ik(_c_0Ik[I], _Q_0Ik[I], _A_SIk[I], _h_Ik_next[I], _c_Ik_prev[I], _dt)
     return 1
 
 @njit
