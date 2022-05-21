@@ -187,10 +187,10 @@ class QualityBuilder():
         self._rho_dk = np.zeros(self.NK)
         self._tau_dk = np.zeros(self.NK)
         self._zeta_dk = np.zeros(self.NK)
-        self._F_jj = np.zeros(self.M, dtype=float)
-        self._O_diag = np.zeros(self.M, dtype=float)
-        self._W_diag = np.zeros(self.M, dtype=float)
-        self._P_diag = np.zeros(self.M, dtype=float)
+        self._F_jj = np.zeros(self.M, dtype=np.float64)
+        self._O_diag = np.zeros(self.M, dtype=np.float64)
+        self._W_diag = np.zeros(self.M, dtype=np.float64)
+        self._P_diag = np.zeros(self.M, dtype=np.float64)
         self.A = np.zeros((self.M, self.M))
         self.O = np.zeros((self.M, self.M))
         self.W = np.zeros((self.M, self.M))
@@ -205,10 +205,10 @@ class QualityBuilder():
         self._c_max = c_max
         self._Ik = self.hydraulics._Ik
         self._Ip1k = self.hydraulics._Ip1k
-        self._Q_Ik_next = np.zeros(self._Ik.size, dtype=float)
-        self._Q_Ip1k_next = np.zeros(self._Ip1k.size, dtype=float)
-        self._D_Ik = np.zeros(self._I.size, dtype=float)
-        self._A_Ik_next = np.zeros(self._I.size, dtype=float)
+        self._Q_Ik_next = np.zeros(self._Ik.size, dtype=np.float64)
+        self._Q_Ip1k_next = np.zeros(self._Ip1k.size, dtype=np.float64)
+        self._D_Ik = np.zeros(self._I.size, dtype=np.float64)
+        self._A_Ik_next = np.zeros(self._I.size, dtype=np.float64)
         self.step(dt=1e-6)
 
     # TODO: It might be safer to have these as @properties
@@ -1449,8 +1449,10 @@ def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk,
                           _Q_uk, _Q_dk, _omega_uk, _omega_dk, _V_j_next, _V_j_prev, _H_j_next, _dt,
                           _K_j, _D_uk, _D_dk, _A_uk_next, _A_dk_next, _dx_uk, _dx_dk, M, NK):
     # TODO: Grouping of Q multiplication changed
-    kuj = - _Q_uk * (_rho_uk * _omega_uk + (1 - _omega_uk)) + 2 * _D_uk * _A_uk_next * (_rho_uk - 1) / _dx_uk
-    kdj = _Q_dk * (_tau_dk * _omega_dk + (1 - _omega_dk)) + 2 * _D_dk * _A_dk_next * (_tau_dk - 1) / _dx_dk
+    kuj = (- _Q_uk * (_omega_uk + (1 - _omega_uk) * _rho_uk)
+           + 2 * _D_uk * _A_uk_next * (_rho_uk - 1) / _dx_uk)
+    kdj = (_Q_dk * (_tau_dk * _omega_dk + (1 - _omega_dk))
+           + 2 * _D_dk * _A_dk_next * (_tau_dk - 1) / _dx_dk)
     numba_add_at(_F_jj, _J_uk, -kuj)
     numba_add_at(_F_jj, _J_dk, -kdj)
     _F_jj += (2 * _V_j_next - _V_j_prev) / _dt + (_K_j * _V_j_next)
