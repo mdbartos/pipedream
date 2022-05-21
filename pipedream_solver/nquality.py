@@ -99,33 +99,33 @@ class QualityBuilder():
         self.hydraulics = hydraulics
         self._ki = self.hydraulics._ki
         self._kI = self.hydraulics._kI
-        self._K_j = superjunction_params['K'].values.astype(float)
-        self._c_j = superjunction_params['c_0'].values.astype(float)
-        self.bc = superjunction_params['bc'].values.astype(bool)
+        self._K_j = superjunction_params['K'].values.astype(np.float64)
+        self._c_j = superjunction_params['c_0'].values.astype(np.float64)
+        self.bc = superjunction_params['bc'].values.astype(np.bool8)
         if junction_params is not None:
-            self._K_Ik = junction_params['K'].values.astype(float)
-            self._c_Ik = junction_params['c_0'].values.astype(float)
+            self._K_Ik = junction_params['K'].values.astype(np.float64)
+            self._c_Ik = junction_params['c_0'].values.astype(np.float64)
         else:
-            self._K_Ik = superlink_params['K'].values[self._kI].astype(float)
-            self._c_Ik = superlink_params['c_0'].values[self._kI].astype(float)
+            self._K_Ik = superlink_params['K'].values[self._kI].astype(np.float64)
+            self._c_Ik = superlink_params['c_0'].values[self._kI].astype(np.float64)
         if link_params is not None:
-            self._D_ik = link_params['D'].values.astype(float)
-            self._K_ik = link_params['K'].values.astype(float)
-            self._c_ik = link_params['c_0'].values.astype(float)
+            self._D_ik = link_params['D'].values.astype(np.float64)
+            self._K_ik = link_params['K'].values.astype(np.float64)
+            self._c_ik = link_params['c_0'].values.astype(np.float64)
         else:
-            self._D_ik = superlink_params['D'].values[self._ki].astype(float)
-            self._K_ik = superlink_params['K'].values[self._ki].astype(float)
-            self._c_ik = superlink_params['c_0'].values[self._ki].astype(float)
-        self._dx_uk = superlink_params['dx_uk'].values.astype(float)
-        self._dx_dk = superlink_params['dx_dk'].values.astype(float)
+            self._D_ik = superlink_params['D'].values[self._ki].astype(np.float64)
+            self._K_ik = superlink_params['K'].values[self._ki].astype(np.float64)
+            self._c_ik = superlink_params['c_0'].values[self._ki].astype(np.float64)
+        self._dx_uk = superlink_params['dx_uk'].values.astype(np.float64)
+        self._dx_dk = superlink_params['dx_dk'].values.astype(np.float64)
         if 'D_uk' in superlink_params.columns:
-            self._D_uk = superlink_params['D_uk'].values.astype(float)
+            self._D_uk = superlink_params['D_uk'].values.astype(np.float64)
         else:
-            self._D_uk = superlink_params['D'].values.astype(float)
+            self._D_uk = superlink_params['D'].values.astype(np.float64)
         if 'D_dk' in superlink_params.columns:
-            self._D_dk = superlink_params['D_dk'].values.astype(float)
+            self._D_dk = superlink_params['D_dk'].values.astype(np.float64)
         else:
-            self._D_dk = superlink_params['D'].values.astype(float)
+            self._D_dk = superlink_params['D'].values.astype(np.float64)
         # Structural parameters of hydraulic model
         self._forward_I_i = self.hydraulics.forward_I_i       # Index of link after junction Ik
         self._backward_I_i = self.hydraulics.backward_I_i     # Index of link before junction Ik
@@ -378,12 +378,12 @@ class QualityBuilder():
         # TODO: Redundant computations
         # _Q_Ik_next[np.cumsum(self.nk) - self.nk[0]] = _Q_1k
         # _Q_Ip1k_next[np.cumsum(self.nk) - 1] = _Q_Np1k
-        _omega_Ik = (_Q_Ik_next > 0).astype(float)
-        _omega_Ip1k = (_Q_Ip1k_next > 0).astype(float)
-        _omega_1k = (_Q_1k > 0.).astype(float)
-        _omega_Np1k = (_Q_Np1k > 0.).astype(float)
-        _omega_uk = (_Q_uk_next > 0.).astype(float)
-        _omega_dk = (_Q_dk_next > 0.).astype(float)
+        _omega_Ik = (_Q_Ik_next > 0).astype(np.float64)
+        _omega_Ip1k = (_Q_Ip1k_next > 0).astype(np.float64)
+        _omega_1k = (_Q_1k > 0.).astype(np.float64)
+        _omega_Np1k = (_Q_Np1k > 0.).astype(np.float64)
+        _omega_uk = (_Q_uk_next > 0.).astype(np.float64)
+        _omega_dk = (_Q_dk_next > 0.).astype(np.float64)
         _alpha_ik = alpha_ik(_Q_Ik_next, _omega_Ik, _dx_ik_next, _D_ik, _A_ik_next)
         _beta_ik = beta_ik(_dt, _D_ik, _A_ik_next, _A_ik_prev, _dx_ik_next, _K_ik,
                            _Q_Ik_next, _Q_Ip1k_next, _omega_Ik, _omega_Ip1k)
@@ -459,9 +459,9 @@ class QualityBuilder():
         if _c_0Ik is None:
             _c_0Ik = np.zeros(_h_Ik_next.size)
         # Compute continuity coefficients
-        _omega_ik = (_Q_ik_next > 0.).astype(float)
-        _omega_uk = (_Q_uk_next > 0.).astype(float)
-        _omega_dk = (_Q_dk_next > 0.).astype(float)
+        _omega_ik = (_Q_ik_next > 0.).astype(np.float64)
+        _omega_uk = (_Q_uk_next > 0.).astype(np.float64)
+        _omega_dk = (_Q_dk_next > 0.).astype(np.float64)
         numba_node_coeffs(_kappa_Ik, _lambda_Ik, _mu_Ik, _eta_Ik, _Q_ik_next,
                           _h_Ik_next, _h_Ik_prev, _c_Ik_prev, _c_ik_prev,
                           _Q_uk_next, _Q_dk_next, _c_0Ik, _Q_0Ik, _A_SIk,
@@ -698,8 +698,8 @@ class QualityBuilder():
         numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
         # Create A matrix
         # TODO: Need to rename other omega_uk and omega_dk
-        _omega_uk = (_Q_uk_next >= 0).astype(float)
-        _omega_dk = (_Q_dk_next >= 0).astype(float)
+        _omega_uk = (_Q_uk_next >= 0).astype(np.float64)
+        _omega_dk = (_Q_dk_next >= 0).astype(np.float64)
         numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _rho_uk, _rho_dk, _tau_uk, _tau_dk,
                               _Q_uk_next, _Q_dk_next, _omega_uk, _omega_dk, _V_j_next, _V_j_prev,
                               _H_j_next, _dt, _K_j, _D_uk, _D_dk, _A_uk_next, _A_dk_next,
@@ -711,19 +711,19 @@ class QualityBuilder():
                                 + 2 * _D_dk * _A_dk_next / _dx_dk) * _zeta_dk)
         # Compute control matrix
         if n_o:
-            _omega_o = (_Q_o_next >= 0).astype(float)
+            _omega_o = (_Q_o_next >= 0).astype(np.float64)
             _O_diag.fill(0)
             numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
             numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _omega_o,
                                     _Q_o_next, M, n_o)
         if n_w:
-            _omega_w = (_Q_w_next >= 0).astype(float)
+            _omega_w = (_Q_w_next >= 0).astype(np.float64)
             _W_diag.fill(0)
             numba_clear_off_diagonals(W, bc, _J_uw, _J_dw, n_w)
             numba_create_OWP_matrix(W, _W_diag, bc, _J_uw, _J_dw, _omega_w,
                                     _Q_w_next, M, n_w)
         if n_p:
-            _omega_p = (_Q_p_next >= 0).astype(float)
+            _omega_p = (_Q_p_next >= 0).astype(np.float64)
             _P_diag.fill(0)
             numba_clear_off_diagonals(P, bc, _J_up, _J_dp, n_p)
             numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _omega_p,
