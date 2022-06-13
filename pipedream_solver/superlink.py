@@ -292,6 +292,7 @@ class SuperLink():
         orifices = copy.deepcopy(orifices)
         weirs = copy.deepcopy(weirs)
         pumps = copy.deepcopy(pumps)
+        # TODO: Ensure index is int
         # TODO: This needs to be done for orifices/weirs/pumps as well
         # Ensure nominal direction of superlinks is correct
         if (superlinks is not None) and (superjunctions is not None):
@@ -368,8 +369,8 @@ class SuperLink():
         self._exit_hydraulics = exit_hydraulics
         self.inertial_damping = inertial_damping
         self.min_depth = min_depth
-        self._I = junctions.index.values
-        self._ik = links.index.values
+        self._I = junctions.index.values.astype(np.int64)
+        self._ik = links.index.values.astype(np.int64)
         self._i = self._ik
         self._Ik = links['j_0'].values.astype(np.int64)
         self._Ip1k = links['j_1'].values.astype(np.int64)
@@ -442,7 +443,7 @@ class SuperLink():
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(np.float64)
         self._S_o_ik = ((self._z_inv_Ik[self._Ik] - self._z_inv_Ik[self._Ip1k])
                         / self._dx_ik)
-        self._x_Ik = np.zeros(self._I.size)
+        self._x_Ik = np.zeros(self._I.size, dtype=np.float64)
         self._x_Ik[~self._is_start] = links.groupby('k')['dx'].cumsum().values
         # TODO: Allow specifying initial flows
         self._Q_0Ik = np.zeros(self._I.size, dtype=np.float64)
@@ -609,8 +610,8 @@ class SuperLink():
         self._Y_Ik = np.zeros(self._I.size)
         self._Z_Ik = np.zeros(self._I.size)
         # Head at superjunctions
-        self._z_inv_j = self.superjunctions['z_inv'].values
-        self.H_j = self.superjunctions['h_0'].values + self._z_inv_j
+        self._z_inv_j = self.superjunctions['z_inv'].values.astype(np.float64)
+        self.H_j = self.superjunctions['h_0'].values.astype(np.float64) + self._z_inv_j
         # Enforce minimum depth
         self.H_j = np.maximum(self.H_j, self._z_inv_j + self.min_depth)
         # Coefficients for head at upstream ends of superlink k
@@ -644,7 +645,7 @@ class SuperLink():
         self._beta_dkl = np.zeros(self.M, dtype=np.float64)
         self._chi_ukl = np.zeros(self.M, dtype=np.float64)
         self._chi_dkm = np.zeros(self.M, dtype=np.float64)
-        self._k = self.superlinks.index.values
+        self._k = self.superlinks.index.values.astype(np.int64)
         self._A_sj = np.zeros(self.M, dtype=np.float64)
         self._V_sj = np.zeros(self.M, dtype=np.float64)
         self._F_jj = np.zeros(self.M, dtype=np.float64)
@@ -3814,6 +3815,7 @@ class SuperLink():
         self.states['x_Ik'] = np.copy(self.x_Ik)
         if self.n_o:
             self.states['Q_o'] = np.copy(self.Q_o)
+            # TODO: Need to add orifice area here
         if self.n_w:
             self.states['Q_w'] = np.copy(self.Q_w)
         if self.n_p:
