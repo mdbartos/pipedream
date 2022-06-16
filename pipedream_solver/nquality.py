@@ -374,10 +374,6 @@ class QualityBuilder():
         # _Q_Np1k = _Q_ik_next[_i_nk]
         # _Q_1k = (_Q_uk_next + _Q_ik_next[_i_1k]) / 2
         # _Q_Np1k = (_Q_dk_next + _Q_ik_next[_i_nk]) / 2
-        # TODO: Is this even necessary?
-        # TODO: Redundant computations
-        # _Q_Ik_next[np.cumsum(self.nk) - self.nk[0]] = _Q_1k
-        # _Q_Ip1k_next[np.cumsum(self.nk) - 1] = _Q_Np1k
         _omega_Ik = (_Q_Ik_next > 0).astype(np.float64)
         _omega_Ip1k = (_Q_Ip1k_next > 0).astype(np.float64)
         _omega_1k = (_Q_1k > 0.).astype(np.float64)
