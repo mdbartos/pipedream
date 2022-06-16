@@ -273,7 +273,7 @@ class SuperLink():
     R_ik     : Hydraulic radius in links (m)
     B_ik     : Top width of flow in links (m)
     A_sj     : Superjunction surface areas (m^2)
-    V_sj     : Superjunction stored volumes (m^3)
+    V_j      : Superjunction stored volumes (m^3)
     z_inv_j  : Superjunction invert elevation (m)
     z_inv_uk : Offset of superlink upstream invert above superjunction (m)
     z_inv_dk : Offset of superlink downstream invert above superjunction (m)
@@ -292,6 +292,7 @@ class SuperLink():
         orifices = copy.deepcopy(orifices)
         weirs = copy.deepcopy(weirs)
         pumps = copy.deepcopy(pumps)
+        # TODO: Ensure index is int
         # TODO: This needs to be done for orifices/weirs/pumps as well
         # Ensure nominal direction of superlinks is correct
         if (superlinks is not None) and (superjunctions is not None):
@@ -336,8 +337,8 @@ class SuperLink():
             self.superjunctions['map_x'] = 0.
         if not 'map_y' in self.superjunctions.columns:
             self.superjunctions['map_y'] = 0.
-        self._map_x_j = self.superjunctions['map_x'].values.astype(float)
-        self._map_y_j = self.superjunctions['map_y'].values.astype(float)
+        self._map_x_j = self.superjunctions['map_x'].values.astype(np.float64)
+        self._map_y_j = self.superjunctions['map_y'].values.astype(np.float64)
         if 'name' in self.superjunctions.columns:
             self.superjunction_names = self.superjunctions['name'].values
         else:
@@ -368,17 +369,17 @@ class SuperLink():
         self._exit_hydraulics = exit_hydraulics
         self.inertial_damping = inertial_damping
         self.min_depth = min_depth
-        self._I = junctions.index.values
-        self._ik = links.index.values
+        self._I = junctions.index.values.astype(np.int64)
+        self._ik = links.index.values.astype(np.int64)
         self._i = self._ik
-        self._Ik = links['j_0'].values.astype(int)
-        self._Ip1k = links['j_1'].values.astype(int)
-        self._kI = junctions['k'].values.astype(int)
-        self._ki = links['k'].values.astype(int)
-        self.start_nodes = self.superlinks['j_0'].values.astype(int)
-        self.end_nodes = self.superlinks['j_1'].values.astype(int)
-        self._is_start = np.zeros(self._I.size, dtype=bool)
-        self._is_end = np.zeros(self._I.size, dtype=bool)
+        self._Ik = links['j_0'].values.astype(np.int64)
+        self._Ip1k = links['j_1'].values.astype(np.int64)
+        self._kI = junctions['k'].values.astype(np.int64)
+        self._ki = links['k'].values.astype(np.int64)
+        self.start_nodes = self.superlinks['j_0'].values.astype(np.int64)
+        self.end_nodes = self.superlinks['j_1'].values.astype(np.int64)
+        self._is_start = np.zeros(self._I.size, dtype=np.bool8)
+        self._is_end = np.zeros(self._I.size, dtype=np.bool8)
         self._is_start[self.start_nodes] = True
         self._is_end[self.end_nodes] = True
         self.middle_nodes = self._I[(~self._is_start) & (~self._is_end)]
@@ -402,193 +403,193 @@ class SuperLink():
             self._transect_ik = links['ts']
         else:
             self._transect_ik = None
-        self._g1_ik = links['g1'].values.astype(float)
-        self._g2_ik = links['g2'].values.astype(float)
-        self._g3_ik = links['g3'].values.astype(float)
-        self._Q_ik = links['Q_0'].values.astype(float)
-        self._dx_ik = links['dx'].values.astype(float)
-        self._n_ik = links['n'].values.astype(float)
-        self._ctrl = links['ctrl'].values.astype(bool)
-        self._A_c_ik = links['A_c'].values.astype(float)
-        self._C_ik = links['C'].values.astype(float)
+        self._g1_ik = links['g1'].values.astype(np.float64)
+        self._g2_ik = links['g2'].values.astype(np.float64)
+        self._g3_ik = links['g3'].values.astype(np.float64)
+        self._Q_ik = links['Q_0'].values.astype(np.float64)
+        self._dx_ik = links['dx'].values.astype(np.float64)
+        self._n_ik = links['n'].values.astype(np.float64)
+        self._ctrl = links['ctrl'].values.astype(np.bool8)
+        self._A_c_ik = links['A_c'].values.astype(np.float64)
+        self._C_ik = links['C'].values.astype(np.float64)
         self._storage_type = superjunctions['storage']
         if storages:
             self._storage_table = superjunctions['table']
         else:
             self._storage_table = None
-        self._storage_a = superjunctions['a'].values.astype(float)
-        self._storage_b = superjunctions['b'].values.astype(float)
-        self._storage_c = superjunctions['c'].values.astype(float)
+        self._storage_a = superjunctions['a'].values.astype(np.float64)
+        self._storage_b = superjunctions['b'].values.astype(np.float64)
+        self._storage_c = superjunctions['c'].values.astype(np.float64)
         # Set maximum superjunction depth
         if 'max_depth' in superjunctions:
-            self.max_depth = superjunctions['max_depth'].values.astype(float)
+            self.max_depth = superjunctions['max_depth'].values.astype(np.float64)
         else:
-            self.max_depth = np.full(len(superjunctions), np.inf, dtype=float)
+            self.max_depth = np.full(len(superjunctions), np.inf, dtype=np.float64)
         # Set maximum superlink depth for stability
         if 'max_depth' in superlinks:
-            self.max_depth_k = superlinks['max_depth'].values.astype(float)
+            self.max_depth_k = superlinks['max_depth'].values.astype(np.float64)
         else:
-            self.max_depth_k = np.full(len(superlinks), np.inf, dtype=float)
+            self.max_depth_k = np.full(len(superlinks), np.inf, dtype=np.float64)
         if 'C_uk' in superlinks:
-            self._C_uk = superlinks['C_uk'].values.astype(float)
+            self._C_uk = superlinks['C_uk'].values.astype(np.float64)
         else:
             self._C_uk = 0.67 * np.ones(self.NK)
         if 'C_dk' in superlinks:
-            self._C_dk = superlinks['C_dk'].values.astype(float)
+            self._C_dk = superlinks['C_dk'].values.astype(np.float64)
         else:
             self._C_dk = 0.67 * np.ones(self.NK)
-        self._h_Ik = junctions.loc[self._I, 'h_0'].values.astype(float)
-        self._A_SIk = junctions.loc[self._I, 'A_s'].values.astype(float)
-        self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(float)
+        self._h_Ik = junctions.loc[self._I, 'h_0'].values.astype(np.float64)
+        self._A_SIk = junctions.loc[self._I, 'A_s'].values.astype(np.float64)
+        self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(np.float64)
         self._S_o_ik = ((self._z_inv_Ik[self._Ik] - self._z_inv_Ik[self._Ip1k])
                         / self._dx_ik)
-        self._x_Ik = np.zeros(self._I.size)
+        self._x_Ik = np.zeros(self._I.size, dtype=np.float64)
         self._x_Ik[~self._is_start] = links.groupby('k')['dx'].cumsum().values
         # TODO: Allow specifying initial flows
-        self._Q_0Ik = np.zeros(self._I.size, dtype=float)
+        self._Q_0Ik = np.zeros(self._I.size, dtype=np.float64)
         # Handle orifices
         if orifices is not None:
             self.n_o = self.orifices.shape[0]
-            self._J_uo = self.orifices['sj_0'].values.astype(int)
-            self._J_do = self.orifices['sj_1'].values.astype(int)
-            self._Ao_max = self.orifices['A'].values.astype(float)
+            self._J_uo = self.orifices['sj_0'].values.astype(np.int64)
+            self._J_do = self.orifices['sj_1'].values.astype(np.int64)
+            self._Ao_max = self.orifices['A'].values.astype(np.float64)
             self._Ao = np.copy(self._Ao_max)
-            self._Co = self.orifices['C'].values.astype(float)
-            self._z_o = self.orifices['z_o'].values.astype(float)
-            self._y_max_o = self.orifices['y_max'].values.astype(float)
+            self._Co = self.orifices['C'].values.astype(np.float64)
+            self._z_o = self.orifices['z_o'].values.astype(np.float64)
+            self._y_max_o = self.orifices['y_max'].values.astype(np.float64)
             self._orient_o = self.orifices['orientation'].values
-            self._tau_o = (self._orient_o == 'side').astype(float)
+            self._tau_o = (self._orient_o == 'side').astype(np.float64)
             if 'shape' in self.orifices.columns:
                 self._shape_o = self.orifices['shape']
-                self._g1_o = self.orifices['g1'].values.astype(float)
-                self._g2_o = self.orifices['g2'].values.astype(float)
-                self._g3_o = self.orifices['g3'].values.astype(float)
+                self._g1_o = self.orifices['g1'].values.astype(np.float64)
+                self._g2_o = self.orifices['g2'].values.astype(np.float64)
+                self._g3_o = self.orifices['g3'].values.astype(np.float64)
             else:
                 self._shape_o = pd.Series(['rect_open'] * self.n_o)
                 self._g1_o = np.sqrt(self._Ao_max)
                 self._g2_o = np.sqrt(self._Ao_max)
                 self._g3_o = np.zeros(self.n_o)
-            self._Qo = np.zeros(self.n_o, dtype=float)
-            self._alpha_o = np.zeros(self.n_o, dtype=float)
-            self._beta_o = np.zeros(self.n_o, dtype=float)
-            self._chi_o = np.zeros(self.n_o, dtype=float)
-            self._alpha_uom = np.zeros(self.M, dtype=float)
-            self._beta_dol = np.zeros(self.M, dtype=float)
-            self._chi_uol = np.zeros(self.M, dtype=float)
-            self._chi_dom = np.zeros(self.M, dtype=float)
+            self._Qo = np.zeros(self.n_o, dtype=np.float64)
+            self._alpha_o = np.zeros(self.n_o, dtype=np.float64)
+            self._beta_o = np.zeros(self.n_o, dtype=np.float64)
+            self._chi_o = np.zeros(self.n_o, dtype=np.float64)
+            self._alpha_uom = np.zeros(self.M, dtype=np.float64)
+            self._beta_dol = np.zeros(self.M, dtype=np.float64)
+            self._chi_uol = np.zeros(self.M, dtype=np.float64)
+            self._chi_dom = np.zeros(self.M, dtype=np.float64)
         else:
-            self._J_uo = np.array([], dtype=int)
-            self._J_do = np.array([], dtype=int)
-            self._Ao_max = np.array([], dtype=float)
-            self._Ao = np.array([], dtype=float)
-            self._Co = np.array([], dtype=float)
-            self._z_o = np.array([], dtype=float)
-            self._y_max_o = np.array([], dtype=float)
+            self._J_uo = np.array([], dtype=np.int64)
+            self._J_do = np.array([], dtype=np.int64)
+            self._Ao_max = np.array([], dtype=np.float64)
+            self._Ao = np.array([], dtype=np.float64)
+            self._Co = np.array([], dtype=np.float64)
+            self._z_o = np.array([], dtype=np.float64)
+            self._y_max_o = np.array([], dtype=np.float64)
             self._orient_o = np.array([])
             self._shape_o = pd.Series(np.array([]))
-            self._g1_o = np.array([], dtype=float)
-            self._g2_o = np.array([], dtype=float)
-            self._g3_o = np.array([], dtype=float)
+            self._g1_o = np.array([], dtype=np.float64)
+            self._g2_o = np.array([], dtype=np.float64)
+            self._g3_o = np.array([], dtype=np.float64)
             self.n_o = 0
-            self._Qo = np.array([], dtype=float)
-            self._alpha_o = np.array([], dtype=float)
-            self._beta_o = np.array([], dtype=float)
-            self._chi_o = np.array([], dtype=float)
-            self._alpha_uom = np.array([], dtype=float)
-            self._beta_dol = np.array([], dtype=float)
-            self._chi_uol = np.array([], dtype=float)
-            self._chi_dom = np.array([], dtype=float)
+            self._Qo = np.array([], dtype=np.float64)
+            self._alpha_o = np.array([], dtype=np.float64)
+            self._beta_o = np.array([], dtype=np.float64)
+            self._chi_o = np.array([], dtype=np.float64)
+            self._alpha_uom = np.array([], dtype=np.float64)
+            self._beta_dol = np.array([], dtype=np.float64)
+            self._chi_uol = np.array([], dtype=np.float64)
+            self._chi_dom = np.array([], dtype=np.float64)
         # Handle weirs
         if weirs is not None:
-            self._J_uw = self.weirs['sj_0'].values.astype(int)
-            self._J_dw = self.weirs['sj_1'].values.astype(int)
-            self._Cwr = self.weirs['Cr'].values.astype(float)
-            self._Cwt = self.weirs['Ct'].values.astype(float)
-            self._L_w = self.weirs['L'].values.astype(float)
-            self._s_w = self.weirs['s'].values.astype(float)
-            self._z_w = self.weirs['z_w'].values.astype(float)
-            self._y_max_w = self.weirs['y_max'].values.astype(float)
+            self._J_uw = self.weirs['sj_0'].values.astype(np.int64)
+            self._J_dw = self.weirs['sj_1'].values.astype(np.int64)
+            self._Cwr = self.weirs['Cr'].values.astype(np.float64)
+            self._Cwt = self.weirs['Ct'].values.astype(np.float64)
+            self._L_w = self.weirs['L'].values.astype(np.float64)
+            self._s_w = self.weirs['s'].values.astype(np.float64)
+            self._z_w = self.weirs['z_w'].values.astype(np.float64)
+            self._y_max_w = self.weirs['y_max'].values.astype(np.float64)
             self.n_w = self.weirs.shape[0]
-            self._Hw = np.zeros(self.n_w, dtype=float)
-            self._Qw = np.zeros(self.n_w, dtype=float)
-            self._alpha_w = np.zeros(self.n_w, dtype=float)
-            self._beta_w = np.zeros(self.n_w, dtype=float)
-            self._chi_w = np.zeros(self.n_w, dtype=float)
-            self._alpha_uwm = np.zeros(self.M, dtype=float)
-            self._beta_dwl = np.zeros(self.M, dtype=float)
-            self._chi_uwl = np.zeros(self.M, dtype=float)
-            self._chi_dwm = np.zeros(self.M, dtype=float)
+            self._Hw = np.zeros(self.n_w, dtype=np.float64)
+            self._Qw = np.zeros(self.n_w, dtype=np.float64)
+            self._alpha_w = np.zeros(self.n_w, dtype=np.float64)
+            self._beta_w = np.zeros(self.n_w, dtype=np.float64)
+            self._chi_w = np.zeros(self.n_w, dtype=np.float64)
+            self._alpha_uwm = np.zeros(self.M, dtype=np.float64)
+            self._beta_dwl = np.zeros(self.M, dtype=np.float64)
+            self._chi_uwl = np.zeros(self.M, dtype=np.float64)
+            self._chi_dwm = np.zeros(self.M, dtype=np.float64)
         else:
-            self._J_uw = np.array([], dtype=int)
-            self._J_dw = np.array([], dtype=int)
-            self._Cwr = np.array([], dtype=float)
-            self._Cwt = np.array([], dtype=float)
-            self._L_w = np.array([], dtype=float)
-            self._s_w = np.array([], dtype=float)
-            self._z_w = np.array([], dtype=float)
-            self._y_max_w = np.array([], dtype=float)
+            self._J_uw = np.array([], dtype=np.int64)
+            self._J_dw = np.array([], dtype=np.int64)
+            self._Cwr = np.array([], dtype=np.float64)
+            self._Cwt = np.array([], dtype=np.float64)
+            self._L_w = np.array([], dtype=np.float64)
+            self._s_w = np.array([], dtype=np.float64)
+            self._z_w = np.array([], dtype=np.float64)
+            self._y_max_w = np.array([], dtype=np.float64)
             self.n_w = 0
-            self._Hw = np.array([], dtype=float)
-            self._Qw = np.array([], dtype=float)
-            self._alpha_w = np.array([], dtype=float)
-            self._beta_w = np.array([], dtype=float)
-            self._chi_w = np.array([], dtype=float)
-            self._alpha_uwm = np.array([], dtype=float)
-            self._beta_dwl = np.array([], dtype=float)
-            self._chi_uwl = np.array([], dtype=float)
-            self._chi_dwm = np.array([], dtype=float)
+            self._Hw = np.array([], dtype=np.float64)
+            self._Qw = np.array([], dtype=np.float64)
+            self._alpha_w = np.array([], dtype=np.float64)
+            self._beta_w = np.array([], dtype=np.float64)
+            self._chi_w = np.array([], dtype=np.float64)
+            self._alpha_uwm = np.array([], dtype=np.float64)
+            self._beta_dwl = np.array([], dtype=np.float64)
+            self._chi_uwl = np.array([], dtype=np.float64)
+            self._chi_dwm = np.array([], dtype=np.float64)
         # Handle pumps
         if pumps is not None:
-            self._J_up = self.pumps['sj_0'].values.astype(int)
-            self._J_dp = self.pumps['sj_1'].values.astype(int)
-            self._z_p = self.pumps['z_p'].values.astype(float)
-            self._ap_h = self.pumps['a_h'].values.astype(float)
-            self._ap_q = self.pumps['a_q'].values.astype(float)
-            self._dHp_max = self.pumps['dH_max'].values.astype(float)
-            self._dHp_min = self.pumps['dH_min'].values.astype(float)
+            self._J_up = self.pumps['sj_0'].values.astype(np.int64)
+            self._J_dp = self.pumps['sj_1'].values.astype(np.int64)
+            self._z_p = self.pumps['z_p'].values.astype(np.float64)
+            self._ap_h = self.pumps['a_h'].values.astype(np.float64)
+            self._ap_q = self.pumps['a_q'].values.astype(np.float64)
+            self._dHp_max = self.pumps['dH_max'].values.astype(np.float64)
+            self._dHp_min = self.pumps['dH_min'].values.astype(np.float64)
             self.n_p = self.pumps.shape[0]
-            self._Qp = np.zeros(self.n_p, dtype=float)
-            self._alpha_p = np.zeros(self.n_p, dtype=float)
-            self._beta_p = np.zeros(self.n_p, dtype=float)
-            self._chi_p = np.zeros(self.n_p, dtype=float)
-            self._alpha_upm = np.zeros(self.M, dtype=float)
-            self._beta_dpl = np.zeros(self.M, dtype=float)
-            self._chi_upl = np.zeros(self.M, dtype=float)
-            self._chi_dpm = np.zeros(self.M, dtype=float)
+            self._Qp = np.zeros(self.n_p, dtype=np.float64)
+            self._alpha_p = np.zeros(self.n_p, dtype=np.float64)
+            self._beta_p = np.zeros(self.n_p, dtype=np.float64)
+            self._chi_p = np.zeros(self.n_p, dtype=np.float64)
+            self._alpha_upm = np.zeros(self.M, dtype=np.float64)
+            self._beta_dpl = np.zeros(self.M, dtype=np.float64)
+            self._chi_upl = np.zeros(self.M, dtype=np.float64)
+            self._chi_dpm = np.zeros(self.M, dtype=np.float64)
         else:
-            self._J_up = np.array([], dtype=int)
-            self._J_dp = np.array([], dtype=int)
-            self._z_p = np.array([], dtype=float)
-            self._ap_h = np.array([], dtype=float)
-            self._ap_q = np.array([], dtype=float)
-            self._dHp_max = np.array([], dtype=float)
-            self._dHp_min = np.array([], dtype=float)
+            self._J_up = np.array([], dtype=np.int64)
+            self._J_dp = np.array([], dtype=np.int64)
+            self._z_p = np.array([], dtype=np.float64)
+            self._ap_h = np.array([], dtype=np.float64)
+            self._ap_q = np.array([], dtype=np.float64)
+            self._dHp_max = np.array([], dtype=np.float64)
+            self._dHp_min = np.array([], dtype=np.float64)
             self.n_p = 0
-            self._Qp = np.array([], dtype=float)
-            self._alpha_p = np.array([], dtype=float)
-            self._beta_p = np.array([], dtype=float)
-            self._chi_p = np.array([], dtype=float)
-            self._alpha_upm = np.array([], dtype=float)
-            self._beta_dpl = np.array([], dtype=float)
-            self._chi_upl = np.array([], dtype=float)
-            self._chi_dpm = np.array([], dtype=float)
+            self._Qp = np.array([], dtype=np.float64)
+            self._alpha_p = np.array([], dtype=np.float64)
+            self._beta_p = np.array([], dtype=np.float64)
+            self._chi_p = np.array([], dtype=np.float64)
+            self._alpha_upm = np.array([], dtype=np.float64)
+            self._beta_dpl = np.array([], dtype=np.float64)
+            self._chi_upl = np.array([], dtype=np.float64)
+            self._chi_dpm = np.array([], dtype=np.float64)
         # Enforce minimum depth
         self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
-        self._A_ik = np.zeros(self._ik.size, dtype=float)
-        self._Pe_ik = np.zeros(self._ik.size, dtype=float)
-        self._R_ik = np.zeros(self._ik.size, dtype=float)
-        self._B_ik = np.zeros(self._ik.size, dtype=float)
-        self._sigma_ik = np.ones(self._ik.size, dtype=float)
+        self._A_ik = np.zeros(self._ik.size, dtype=np.float64)
+        self._Pe_ik = np.zeros(self._ik.size, dtype=np.float64)
+        self._R_ik = np.zeros(self._ik.size, dtype=np.float64)
+        self._B_ik = np.zeros(self._ik.size, dtype=np.float64)
+        self._sigma_ik = np.ones(self._ik.size, dtype=np.float64)
         # Node velocities
-        self._u_ik = np.zeros(self._ik.size, dtype=float)
-        self._u_Ik = np.zeros(self._Ik.size, dtype=float)
-        self._u_Ip1k = np.zeros(self._Ip1k.size, dtype=float)
+        self._u_ik = np.zeros(self._ik.size, dtype=np.float64)
+        self._u_Ik = np.zeros(self._Ik.size, dtype=np.float64)
+        self._u_Ip1k = np.zeros(self._Ip1k.size, dtype=np.float64)
         # Node coefficients
         self._E_Ik = np.zeros(self._I.size)
         self._D_Ik = np.zeros(self._I.size)
         # Forward recurrence relations
-        self._I_end = np.zeros(self._I.size, dtype=bool)
+        self._I_end = np.zeros(self._I.size, dtype=np.bool8)
         self._I_end[self.end_nodes] = True
         self._I_1k = self.start_nodes
         self._I_2k = self.forward_I_I[self._I_1k]
@@ -599,7 +600,7 @@ class SuperLink():
         self._V_Ik = np.zeros(self._I.size)
         self._W_Ik = np.zeros(self._I.size)
         # Backward recurrence relations
-        self._I_start = np.zeros(self._I.size, dtype=bool)
+        self._I_start = np.zeros(self._I.size, dtype=np.bool8)
         self._I_start[self.start_nodes] = True
         self._I_Np1k = self.end_nodes
         self._I_Nk = self.backward_I_I[self._I_Np1k]
@@ -609,15 +610,15 @@ class SuperLink():
         self._Y_Ik = np.zeros(self._I.size)
         self._Z_Ik = np.zeros(self._I.size)
         # Head at superjunctions
-        self._z_inv_j = self.superjunctions['z_inv'].values
-        self.H_j = self.superjunctions['h_0'].values + self._z_inv_j
+        self._z_inv_j = self.superjunctions['z_inv'].values.astype(np.float64)
+        self.H_j = self.superjunctions['h_0'].values.astype(np.float64) + self._z_inv_j
         # Enforce minimum depth
         self.H_j = np.maximum(self.H_j, self._z_inv_j + self.min_depth)
         # Coefficients for head at upstream ends of superlink k
-        self._J_uk = self.superlinks['sj_0'].values.astype(int)
+        self._J_uk = self.superlinks['sj_0'].values.astype(np.int64)
         self._z_inv_uk = np.copy(self._z_inv_Ik[self._I_1k])
         # Coefficients for head at downstream ends of superlink k
-        self._J_dk = self.superlinks['sj_1'].values.astype(int)
+        self._J_dk = self.superlinks['sj_1'].values.astype(np.int64)
         self._z_inv_dk = np.copy(self._z_inv_Ik[self._I_Np1k])
         # Sparse matrix coefficients
         if sparse:
@@ -626,7 +627,7 @@ class SuperLink():
             self.A = np.zeros((self.M, self.M))
         self.b = np.zeros(self.M)
         self.D = np.zeros(self.M)
-        self.bc = self.superjunctions['bc'].values.astype(bool)
+        self.bc = self.superjunctions['bc'].values.astype(np.bool8)
         if sparse:
             self.B = scipy.sparse.lil_matrix((self.M, self.n_o))
             self.O = scipy.sparse.lil_matrix((self.M, self.M))
@@ -640,14 +641,14 @@ class SuperLink():
         # TODO: Should these be size NK?
         self._theta_uk = np.ones(self.NK)
         self._theta_dk = np.ones(self.NK)
-        self._alpha_ukm = np.zeros(self.M, dtype=float)
-        self._beta_dkl = np.zeros(self.M, dtype=float)
-        self._chi_ukl = np.zeros(self.M, dtype=float)
-        self._chi_dkm = np.zeros(self.M, dtype=float)
-        self._k = self.superlinks.index.values
-        self._A_sj = np.zeros(self.M, dtype=float)
-        self._V_sj = np.zeros(self.M, dtype=float)
-        self._F_jj = np.zeros(self.M, dtype=float)
+        self._alpha_ukm = np.zeros(self.M, dtype=np.float64)
+        self._beta_dkl = np.zeros(self.M, dtype=np.float64)
+        self._chi_ukl = np.zeros(self.M, dtype=np.float64)
+        self._chi_dkm = np.zeros(self.M, dtype=np.float64)
+        self._k = self.superlinks.index.values.astype(np.int64)
+        self._A_sj = np.zeros(self.M, dtype=np.float64)
+        self._V_sj = np.zeros(self.M, dtype=np.float64)
+        self._F_jj = np.zeros(self.M, dtype=np.float64)
         # TODO: Allow initial input to be specified
         self._Q_0j = 0
         # Set upstream and downstream superlink variables
@@ -668,8 +669,8 @@ class SuperLink():
         self._Pe_dk = np.copy(self._Pe_ik[self._i_nk])
         self._R_uk = np.copy(self._R_ik[self._i_1k])
         self._R_dk = np.copy(self._R_ik[self._i_nk])
-        self._link_start = np.zeros(self._ik.size, dtype=bool)
-        self._link_end = np.zeros(self._ik.size, dtype=bool)
+        self._link_start = np.zeros(self._ik.size, dtype=np.bool8)
+        self._link_end = np.zeros(self._ik.size, dtype=np.bool8)
         self._link_start[self._i_1k] = True
         self._link_end[self._i_nk] = True
         self._h_c = np.zeros(self.NK)
@@ -678,12 +679,12 @@ class SuperLink():
         self.configure_storages()
         self.configure_hydraulic_geometry()
         # Get superlink lengths
-        self._dx_k = np.zeros(self.NK, dtype=float)
+        self._dx_k = np.zeros(self.NK, dtype=np.float64)
         np.add.at(self._dx_k, self._ki, self._dx_ik)
-        self._Q_k = np.zeros(self.NK, dtype=float)
-        self._A_k = np.zeros(self.NK, dtype=float)
-        self._dt_ck = np.ones(self.NK, dtype=float)
-        self._Q_in = np.zeros(self.M, dtype=float)
+        self._Q_k = np.zeros(self.NK, dtype=np.float64)
+        self._A_k = np.zeros(self.NK, dtype=np.float64)
+        self._dt_ck = np.ones(self.NK, dtype=np.float64)
+        self._Q_in = np.zeros(self.M, dtype=np.float64)
         # Initialize state dictionary
         self.states = {}
         # Iteration counter
@@ -762,6 +763,22 @@ class SuperLink():
         self._A_ik = np.asarray(value)
 
     @property
+    def A_uk(self):
+        return self._A_uk
+
+    @A_uk.setter
+    def A_uk(self, value):
+        self._A_uk = np.asarray(value)
+
+    @property
+    def A_dk(self):
+        return self._A_dk
+
+    @A_dk.setter
+    def A_dk(self, value):
+        self._A_dk = np.asarray(value)
+
+    @property
     def Pe_ik(self):
         return self._Pe_ik
 
@@ -794,11 +811,11 @@ class SuperLink():
         self._A_sj = np.asarray(value)
 
     @property
-    def V_sj(self):
+    def V_j(self):
         return self._V_sj
 
-    @V_sj.setter
-    def V_sj(self, value):
+    @V_j.setter
+    def V_j(self, value):
         self._V_sj = np.asarray(value)
 
     @property
@@ -962,11 +979,11 @@ class SuperLink():
         hh = h.reshape(-1, njunctions)
         QQ = Q.reshape(-1, nlinks)
         dx_j = superlinks['dx'].values
-        _z_inv_j = superjunctions['z_inv'].values.astype(float)
-        inoffset = superlinks['in_offset'].values.astype(float)
-        outoffset = superlinks['out_offset'].values.astype(float)
-        _J_uk = superlinks['sj_0'].values.astype(int)
-        _J_dk = superlinks['sj_1'].values.astype(int)
+        _z_inv_j = superjunctions['z_inv'].values.astype(np.float64)
+        inoffset = superlinks['in_offset'].values.astype(np.float64)
+        outoffset = superlinks['out_offset'].values.astype(np.float64)
+        _J_uk = superlinks['sj_0'].values.astype(np.int64)
+        _J_dk = superlinks['sj_1'].values.astype(np.int64)
         if (njunctions % 2):
             _x0 = (dx_j / 2)
         else:
@@ -1532,7 +1549,7 @@ class SuperLink():
                 _transect_factory[transect_name] = pipedream_solver.geometry.Irregular(**transect)
         # Create array of geom codes
         # TODO: Should have a variable that gives total number of links instead of summing
-        _geom_codes = np.zeros(nk.sum(), dtype=int)
+        _geom_codes = np.zeros(nk.sum(), dtype=np.int64)
         for geom, indices in _geom_factory.items():
             _geom_codes[indices] = _geom_numbers[geom]
         # NOTE: Handle case for elliptical geometry
@@ -1545,7 +1562,7 @@ class SuperLink():
             for geom in _unique_geom_o:
                 _o_g = _geom_indices_o.loc[[geom]].values
                 _geom_factory_o[geom] = _o_g
-            _geom_codes_o = np.zeros(n_o, dtype=int)
+            _geom_codes_o = np.zeros(n_o, dtype=np.int64)
             for geom, indices in _geom_factory_o.items():
                 _geom_codes_o[indices] = _geom_numbers[geom]
             # Export instance variables
@@ -1800,7 +1817,7 @@ class SuperLink():
         _z_inv_uo = _z_inv_j[_J_uo]
         h_e = np.maximum(H_uo - _z_inv_uo - _z_o, H_do - _z_inv_uo - _z_o)
         if u is None:
-            u = np.zeros(n_o, dtype=float)
+            u = np.zeros(n_o, dtype=np.float64)
         # Compute hydraulic geometry for regular geometries
         for geom, indices in _geom_factory_o.items():
             Geom = geom.title()
@@ -2383,13 +2400,13 @@ class SuperLink():
         _chi_o = self._chi_o         # Orifice flow coefficient chi_o
         # If no input signal, assume orifice is closed
         if u is None:
-            u = np.zeros(self.n_o, dtype=float)
+            u = np.zeros(self.n_o, dtype=np.float64)
         # Specify orifice heads at previous timestep
         _H_uo = H_j[_J_uo]
         _H_do = H_j[_J_do]
         _z_inv_uo = _z_inv_j[_J_uo]
         # Create indicator functions
-        _omega_o = (_H_uo >= _H_do).astype(float)
+        _omega_o = (_H_uo >= _H_do).astype(np.float64)
         # Compute universal coefficients
         _gamma_o = self.gamma_o(_Qo, _Ao, _Co)
         # Create conditionals
@@ -2451,13 +2468,13 @@ class SuperLink():
         _Hw = self._Hw             # Current effective head above weir w
         # If no input signal, assume weir is closed
         if u is None:
-            u = np.zeros(self.n_w, dtype=float)
+            u = np.zeros(self.n_w, dtype=np.float64)
         # Specify weir heads at previous timestep
         _H_uw = H_j[_J_uw]
         _H_dw = H_j[_J_dw]
         _z_inv_uw = _z_inv_j[_J_uw]
         # Create indicator functions
-        _omega_w = (_H_uw >= _H_dw).astype(float)
+        _omega_w = (_H_uw >= _H_dw).astype(np.float64)
         # Create conditionals
         cond_0 = (_omega_w * _H_uw + (1 - _omega_w) * _H_dw >
                   _z_w + _z_inv_uw + (1 - u) * _y_max_w)
@@ -2517,7 +2534,7 @@ class SuperLink():
         _chi_p = self._chi_p        # Pump flow coefficient chi_p
         # If no input signal, assume pump is closed
         if u is None:
-            u = np.zeros(self.n_p, dtype=float)
+            u = np.zeros(self.n_p, dtype=np.float64)
         # Specify pump heads at previous timestep
         _H_up = H_j[_J_up]
         _H_dp = H_j[_J_dp]
@@ -2885,19 +2902,19 @@ class SuperLink():
         _V_sj = self._V_sj
         # If no input signal, assume orifice is closed
         if u is None:
-            u = np.zeros(self.n_o, dtype=float)
+            u = np.zeros(self.n_o, dtype=np.float64)
         g = 9.81
         # Create arrays to store flow coefficients for current time step
-        _alpha_oo = np.zeros(self.n_o, dtype=float)
-        _beta_oo = np.zeros(self.n_o, dtype=float)
-        _chi_oo = np.zeros(self.n_o, dtype=float)
+        _alpha_oo = np.zeros(self.n_o, dtype=np.float64)
+        _beta_oo = np.zeros(self.n_o, dtype=np.float64)
+        _chi_oo = np.zeros(self.n_o, dtype=np.float64)
         # Specify orifice heads at previous timestep
         _H_uo = H_j[_J_uo]
         _H_do = H_j[_J_do]
         _z_inv_uo = _z_inv_j[_J_uo]
         # Create indicator functions
         upstream_ctrl = (_H_uo >= _H_do)
-        _omega_o = (upstream_ctrl).astype(float)
+        _omega_o = (upstream_ctrl).astype(np.float64)
         # Compute universal coefficients
         _gamma_oo = 2 * g * _Co**2 * _Ao**2
         # Create conditionals
@@ -2958,13 +2975,13 @@ class SuperLink():
         _Hw = self._Hw              # Current effective head on weir w
         # If no input signal, assume weir is closed
         if u is None:
-            u = np.zeros(self.n_w, dtype=float)
+            u = np.zeros(self.n_w, dtype=np.float64)
         # Specify orifice heads at previous timestep
         _H_uw = H_j[_J_uw]
         _H_dw = H_j[_J_dw]
         _z_inv_uw = _z_inv_j[_J_uw]
         # Create indicator functions
-        _omega_w = (_H_uw >= _H_dw).astype(float)
+        _omega_w = (_H_uw >= _H_dw).astype(np.float64)
         # Create conditionals
         cond_0 = (_omega_w * _H_uw + (1 - _omega_w) * _H_dw >
                   _z_w + _z_inv_uw + (1 - u) * _y_max_w)
@@ -3003,7 +3020,7 @@ class SuperLink():
         _Qp = self._Qp              # Current flow rate through pump p
         # If no input signal, assume pump is closed
         if u is None:
-            u = np.zeros(self.n_p, dtype=float)
+            u = np.zeros(self.n_p, dtype=np.float64)
         # Specify pump heads at previous timestep
         _H_up = H_j[_J_up]
         _H_dp = H_j[_J_dp]
@@ -3798,12 +3815,18 @@ class SuperLink():
         self.states['x_Ik'] = np.copy(self.x_Ik)
         if self.n_o:
             self.states['Q_o'] = np.copy(self.Q_o)
+            # TODO: Need to add orifice area here
         if self.n_w:
             self.states['Q_w'] = np.copy(self.Q_w)
         if self.n_p:
             self.states['Q_p'] = np.copy(self.Q_p)
+        self.states['A_ik'] = np.copy(self.A_ik)
+        self.states['A_uk'] = np.copy(self.A_uk)
+        self.states['A_dk'] = np.copy(self.A_dk)
+        self.states['V_j'] = np.copy(self.V_j)
 
-    def load_state(self, states={}, compute_hydraulic_geometries=True):
+    def load_state(self, states={}, exclude_states=set(),
+                   compute_hydraulic_geometries=True):
         """
         Load model state.
 
@@ -3816,7 +3839,8 @@ class SuperLink():
         if not states:
             states = self.states
         for key, value in states.items():
-            setattr(self, key, value)
+            if not key in exclude_states:
+                setattr(self, key, value)
         # Ensure consistency of internal states
         if compute_hydraulic_geometries:
             self.link_hydraulic_geometry()
@@ -3906,7 +3930,9 @@ class SuperLink():
             self.orifice_hydraulic_geometry(u=u_o)
         # If iterating towards convergence, load initial step states
         if not first_iter:
-            self.load_state(compute_hydraulic_geometries=False)
+            geom_states = {'A_ik', 'A_uk', 'A_dk', 'V_j'}
+            self.load_state(exclude_states=geom_states,
+                            compute_hydraulic_geometries=False)
         if self.inertial_damping:
             self.compute_flow_regime()
         self.link_coeffs(_dt=dt, first_iter=first_iter)

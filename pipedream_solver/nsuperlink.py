@@ -519,7 +519,7 @@ class nSuperLink(SuperLink):
         _z_inv_uo = _z_inv_j[_J_uo]
         h_e = np.maximum(H_uo - _z_inv_uo - _z_o, H_do - _z_inv_uo - _z_o)
         if u is None:
-            u = np.zeros(n_o, dtype=float)
+            u = np.zeros(n_o, dtype=np.float64)
         # Compute orifice geometries
         numba_orifice_geometry(_Ao, h_e, u, _g1_o, _g2_o, _g3_o, _geom_codes_o, n_o)
         # Export to instance variables
@@ -729,7 +729,7 @@ class nSuperLink(SuperLink):
             _gamma_uk = gamma_uk(_Q_uk_t, _C_uk, _A_uk, g)
             self._kappa_uk = _gamma_uk
             # TODO: Clean this up
-            self._lambda_uk = np.ones(_gamma_uk.size, dtype=np.float)
+            self._lambda_uk = np.ones(_gamma_uk.size, dtype=np.float64)
             self._mu_uk = - _z_inv_uk
         elif _bc_method == 'j':
             # Current upstream depth
@@ -775,7 +775,7 @@ class nSuperLink(SuperLink):
             _gamma_dk = gamma_dk(_Q_dk_t, _C_dk, _A_dk, g)
             self._kappa_dk = _gamma_dk
             # TODO: Clean this up
-            self._lambda_dk = np.ones(_gamma_dk.size, dtype=np.float)
+            self._lambda_dk = np.ones(_gamma_dk.size, dtype=np.float64)
             self._mu_dk = - _z_inv_dk
         elif _bc_method == 'j':
             # Downstream top width
@@ -903,7 +903,7 @@ class nSuperLink(SuperLink):
         _chi_o = self._chi_o         # Orifice flow coefficient chi_o
         # If no input signal, assume orifice is closed
         if u is None:
-            u = np.zeros(self.n_o, dtype=float)
+            u = np.zeros(self.n_o, dtype=np.float64)
         # Specify orifice heads at previous timestep
         numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_inv_j,
                                         _z_o, _tau_o, _Co, _Ao, _y_max_o, _J_uo, _J_do)
@@ -935,7 +935,7 @@ class nSuperLink(SuperLink):
         _Hw = self._Hw             # Current effective head above weir w
         # If no input signal, assume weir is closed
         if u is None:
-            u = np.zeros(self.n_w, dtype=float)
+            u = np.zeros(self.n_w, dtype=np.float64)
         # Compute weir flow coefficients
         numba_weir_flow_coefficients(_Hw, _Qw, _alpha_w, _beta_w, _chi_w, H_j, _z_inv_j, _z_w,
                                      _y_max_w, u, _L_w, _s_w, _Cwr, _Cwt, _J_uw, _J_dw)
@@ -965,7 +965,7 @@ class nSuperLink(SuperLink):
         _chi_p = self._chi_p        # Pump flow coefficient chi_p
         # If no input signal, assume pump is closed
         if u is None:
-            u = np.zeros(self.n_p, dtype=float)
+            u = np.zeros(self.n_p, dtype=np.float64)
         # Check max/min head differences
         assert (_dHp_min <= _dHp_max).all()
         # Compute pump flow coefficients
@@ -1382,7 +1382,7 @@ class nSuperLink(SuperLink):
         g = 9.81
         # If no input signal, assume orifice is closed
         if u is None:
-            u = np.zeros(self.n_o, dtype=float)
+            u = np.zeros(self.n_o, dtype=np.float64)
         # Compute orifice flows
         _Qo_next = numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o, _tau_o, _y_max_o, _Co, _Ao,
                                              _J_uo, _J_do, g)
@@ -1412,7 +1412,7 @@ class nSuperLink(SuperLink):
         _Hw = self._Hw              # Current effective head on weir w
         # If no input signal, assume weir is closed
         if u is None:
-            u = np.zeros(self.n_w, dtype=float)
+            u = np.zeros(self.n_w, dtype=np.float64)
         # Solve for weir flows
         _Qw_next = numba_solve_weir_flows(_Hw, _Qw, H_j, _z_inv_j, _z_w,
                                           _y_max_w, u, _L_w, _s_w, _Cwr,
@@ -1437,7 +1437,7 @@ class nSuperLink(SuperLink):
         _Qp = self._Qp              # Current flow rate through pump p
         # If no input signal, assume pump is closed
         if u is None:
-            u = np.zeros(self.n_p, dtype=float)
+            u = np.zeros(self.n_p, dtype=np.float64)
         # Compute pump flows
         _Qp_next = numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max,
                                           _dHp_min, _ap_q, _ap_h, _J_up, _J_dp)
@@ -1507,7 +1507,7 @@ class nSuperLink(SuperLink):
         _H_dk = H_j[_J_dk]
         # Handle which superlinks to reposition
         if reposition is None:
-            reposition = np.ones(NK, dtype=bool)
+            reposition = np.ones(NK, dtype=np.bool8)
         # Reposition junctions
         numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
                                     _b0, _z0, _x0, _m, _elem_pos, _i_1k, _I_1k,
