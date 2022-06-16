@@ -370,6 +370,8 @@ class QualityBuilder():
         # TODO: Min-Gyu's method
         _Q_1k = _Q_uk_next
         _Q_Np1k = _Q_dk_next
+        # Test comments
+        # Test2 comments
         # _Q_1k = _Q_ik_next[_i_1k]
         # _Q_Np1k = _Q_ik_next[_i_nk]
         # _Q_1k = (_Q_uk_next + _Q_ik_next[_i_1k]) / 2
