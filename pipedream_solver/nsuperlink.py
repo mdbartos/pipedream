@@ -288,13 +288,13 @@ class nSuperLink(SuperLink):
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False, auto_permute=False,
-                 end_length=None, end_method='b', internal_links=4):
+                 end_length=None, end_method='b', internal_links=4, mobile_elements=False):
         super().__init__(superlinks, superjunctions,
                          links, junctions, transects, storages,
                          orifices, weirs, pumps, dt, sparse,
                          min_depth, method, inertial_damping,
                          bc_method, exit_hydraulics, auto_permute,
-                         end_length, end_method, internal_links)
+                         end_length, end_method, internal_links, mobile_elements)
 
     def configure_storages(self):
         """
@@ -1506,6 +1506,9 @@ class nSuperLink(SuperLink):
         _elem_pos = self._elem_pos
         nk = self.nk
         NK = self.NK
+        # Check if possible to move elements
+        if not self.mobile_elements:
+            raise ValueError('Model must be instantiated with `mobile_elements=True` to reposition junctions.')
         # Get downstream head
         _H_dk = H_j[_J_dk]
         # Handle which superlinks to reposition
