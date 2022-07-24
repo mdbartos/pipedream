@@ -3823,6 +3823,7 @@ class SuperLink():
         self.states['A_ik'] = np.copy(self.A_ik)
         self.states['A_uk'] = np.copy(self.A_uk)
         self.states['A_dk'] = np.copy(self.A_dk)
+        self.states['A_sj'] = np.copy(self.A_sj)
         self.states['V_j'] = np.copy(self.V_j)
 
     def load_state(self, states={}, exclude_states=set(),
@@ -3929,11 +3930,6 @@ class SuperLink():
         self.node_velocities()
         if self.orifices is not None:
             self.orifice_hydraulic_geometry(u=u_o)
-        # If iterating towards convergence, load initial step states
-        if not first_iter:
-            geom_states = {'A_ik', 'A_uk', 'A_dk', 'V_j'}
-            self.load_state(exclude_states=geom_states,
-                            compute_hydraulic_geometries=False)
         if self.inertial_damping:
             self.compute_flow_regime()
         self.link_coeffs(_dt=dt, first_iter=first_iter)
