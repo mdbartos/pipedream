@@ -3840,7 +3840,8 @@ class SuperLink():
             states = self.states
         for key, value in states.items():
             if not key in exclude_states:
-                setattr(self, key, value)
+                loaded_state = copy.copy(value)
+                setattr(self, key, loaded_state)
         # Ensure consistency of internal states
         if compute_hydraulic_geometries:
             self.link_hydraulic_geometry()
