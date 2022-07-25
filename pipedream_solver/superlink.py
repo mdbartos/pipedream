@@ -4003,7 +4003,7 @@ class SuperLink():
         self.t += dt
 
     def step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
-             first_time=False, implicit=True, banded=False, first_iter=True,
+             first_time=False, implicit=True, banded=None, first_iter=True,
              num_iter=1, head_tol=0.0015):
         """
         Advance model forward to next time step, computing hydraulic states.
@@ -4027,7 +4027,7 @@ class SuperLink():
         first_time : bool
             Set True if this is the first step the model has performed.
         banded : bool
-            If True, use banded matrix solver.
+            If True, use banded matrix solver. Set to value of `self.banded` by default.
         first_iter : bool
             True if this is the first iteration when iterating towards convergence.
         num_iter : int
@@ -4037,6 +4037,8 @@ class SuperLink():
         implicit : bool
             (Deprecated)
         """
+        if banded is None:
+            banded = self.banded
         self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
