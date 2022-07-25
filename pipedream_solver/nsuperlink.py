@@ -845,10 +845,14 @@ class nSuperLink(SuperLink):
         # Compute theta indicator variables
         _H_juk = H_j[_J_uk]
         _H_jdk = H_j[_J_dk]
-        _theta_uk = np.where(_H_juk >= _z_inv_uk, 1.0, 0.0)
-        _theta_dk = np.where(_H_jdk >= _z_inv_dk, 1.0, 0.0)
-        # _theta_uk = 1.
-        # _theta_dk = 1.
+        upstream_depth_above_invert = _H_juk >= _z_inv_uk
+        downstream_depth_above_invert = _H_jdk >= _z_inv_dk
+        _theta_uk.fill(0.)
+        _theta_dk.fill(0.)
+        _theta_uk[upstream_depth_above_invert] = 1.
+        _theta_dk[downstream_depth_above_invert] = 1.
+        # _theta_uk = np.where(_H_juk >= _z_inv_uk, 1.0, 0.0)
+        # _theta_dk = np.where(_H_jdk >= _z_inv_dk, 1.0, 0.0)
         # Compute D_k_star
         _D_k_star = numba_D_k_star(_X_1k, _kappa_uk, _U_Nk,
                                    _kappa_dk, _Z_1k, _W_Nk)

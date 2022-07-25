@@ -3872,7 +3872,7 @@ class SuperLink():
             self.compute_storage_areas()
             self.node_velocities()
 
-    def spinup(self, n_steps=100, dt=10, Q_in=None, Q_0Ik=None, reposition_junctions=True,
+    def spinup(self, n_steps=100, dt=10, Q_in=None, Q_0Ik=None, reposition_junctions=False,
                reset_counters=True, **kwargs):
         """
         Spin up solver for a given number of steps to avoid running a completely dry model.
