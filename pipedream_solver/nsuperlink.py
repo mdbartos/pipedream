@@ -1046,7 +1046,7 @@ class nSuperLink(SuperLink):
         _sparse = self._sparse           # Use sparse matrix data structures (y/n)
         M = self.M                       # Number of superjunctions in system
         H_j_next = self.H_j                   # Head at superjunction j
-        H_j_prev = np.copy(self.states['H_j'])
+        H_j_prev = self.states['H_j']
         bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
         D = self.D                       # Vector for storing chi coefficients
         b = self.b                       # Right-hand side vector
