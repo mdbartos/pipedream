@@ -288,13 +288,13 @@ class nSuperLink(SuperLink):
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False, auto_permute=False,
-                 end_length=None, end_method='b', internal_links=4):
+                 end_length=None, end_method='b', internal_links=4, mobile_elements=False):
         super().__init__(superlinks, superjunctions,
                          links, junctions, transects, storages,
                          orifices, weirs, pumps, dt, sparse,
                          min_depth, method, inertial_damping,
                          bc_method, exit_hydraulics, auto_permute,
-                         end_length, end_method, internal_links)
+                         end_length, end_method, internal_links, mobile_elements)
 
     def configure_storages(self):
         """
@@ -593,7 +593,8 @@ class nSuperLink(SuperLink):
         _u_Ip1k = self._u_Ip1k     # Flow velocity at junction I + 1k
         _dx_ik = self._dx_ik       # Length of link ik
         _n_ik = self._n_ik         # Manning's roughness of link ik
-        _Q_ik = self._Q_ik         # Flow rate at link ik
+        _Q_ik_prev = np.copy(self.states['Q_ik'])
+        _Q_ik_next = self._Q_ik         # Flow rate at link ik
         _A_ik = self._A_ik         # Flow area at link ik
         _R_ik = self._R_ik         # Hydraulic radius at link ik
         _S_o_ik = self._S_o_ik     # Channel bottom slope at link ik
@@ -609,9 +610,9 @@ class nSuperLink(SuperLink):
         # Compute link coefficients
         _a_ik = numba_a_ik(_u_Ik, _sigma_ik)
         _c_ik = numba_c_ik(_u_Ip1k, _sigma_ik)
-        _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik, _A_ik, _R_ik,
+        _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik_next, _A_ik, _R_ik,
                            _A_c_ik, _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik, g)
-        _P_ik = numba_P_ik(_Q_ik, _dx_ik, _dt, _A_ik, _S_o_ik,
+        _P_ik = numba_P_ik(_Q_ik_prev, _dx_ik, _dt, _A_ik, _S_o_ik,
                            _sigma_ik, g)
         # Export to instance variables
         self._a_ik = _a_ik
@@ -631,7 +632,7 @@ class nSuperLink(SuperLink):
         _B_ik = self._B_ik                   # Top width of link ik
         _dx_ik = self._dx_ik                 # Length of link ik
         _A_SIk = self._A_SIk                 # Surface area of junction Ik
-        _h_Ik = self._h_Ik                   # Depth at junction Ik
+        _h_Ik_prev = np.copy(self.states['h_Ik'])         # Depth at junction Ik
         _E_Ik = self._E_Ik                   # Continuity coefficient E_Ik
         _D_Ik = self._D_Ik                   # Continuity coefficient D_Ik
         # If no time step specified, use instance time step
@@ -639,9 +640,9 @@ class nSuperLink(SuperLink):
             _dt = self._dt
         # If no nodal input specified, use zero input
         if _Q_0Ik is None:
-            _Q_0Ik = np.zeros(_h_Ik.size)
+            _Q_0Ik = np.zeros(_h_Ik_prev.size)
         # Compute E_Ik and D_Ik
-        numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk,
+        numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik_prev, _dx_ik, _A_SIk,
                           _dt, forward_I_i, backward_I_i, _is_start, _is_end)
         # Export instance variables
         self._E_Ik = _E_Ik
@@ -722,11 +723,11 @@ class nSuperLink(SuperLink):
         # Placeholder discharge coefficient
         _C_uk = self._C_uk
         # Current upstream flows
-        _Q_uk_t = self._Q_uk
+        _Q_uk = self._Q_uk
         g = 9.81
         if _bc_method == 'z':
             # Compute superlink upstream coefficients (Zahner)
-            _gamma_uk = gamma_uk(_Q_uk_t, _C_uk, _A_uk, g)
+            _gamma_uk = gamma_uk(_Q_uk, _C_uk, _A_uk, g)
             self._kappa_uk = _gamma_uk
             # TODO: Clean this up
             self._lambda_uk = np.ones(_gamma_uk.size, dtype=np.float64)
@@ -739,7 +740,7 @@ class nSuperLink(SuperLink):
             # Head difference
             _dH_uk = _H_juk - _h_uk - _z_inv_uk
             # Compute superlink upstream coefficients (Ji)
-            _kappa_uk = self.kappa_uk(_A_uk, _dH_uk, _Q_uk_t, _B_uk)
+            _kappa_uk = self.kappa_uk(_A_uk, _dH_uk, _Q_uk, _B_uk)
             _lambda_uk = self.lambda_uk(_A_uk, _dH_uk, _B_uk)
             _mu_uk = self.mu_uk(_A_uk, _dH_uk, _B_uk, _z_inv_uk)
             self._kappa_uk = _kappa_uk
@@ -768,11 +769,11 @@ class nSuperLink(SuperLink):
         # Placeholder discharge coefficient
         _C_dk = self._C_dk
         # Current downstream flows
-        _Q_dk_t = self._Q_dk
+        _Q_dk = self._Q_dk
         g = 9.81
         if _bc_method == 'z':
             # Compute superlink downstream coefficients (Zahner)
-            _gamma_dk = gamma_dk(_Q_dk_t, _C_dk, _A_dk, g)
+            _gamma_dk = gamma_dk(_Q_dk, _C_dk, _A_dk, g)
             self._kappa_dk = _gamma_dk
             # TODO: Clean this up
             self._lambda_dk = np.ones(_gamma_dk.size, dtype=np.float64)
@@ -786,7 +787,7 @@ class nSuperLink(SuperLink):
             # Head difference
             _dH_dk = _h_dk + _z_inv_dk - _H_jdk
             # Compute superlink upstream coefficients (Ji)
-            _kappa_dk = self.kappa_dk(_A_dk, _dH_dk, _Q_dk_t, _B_dk)
+            _kappa_dk = self.kappa_dk(_A_dk, _dH_dk, _Q_dk, _B_dk)
             _lambda_dk = self.lambda_dk(_A_dk, _dH_dk, _B_dk)
             _mu_dk = self.mu_dk(_A_dk, _dH_dk, _B_dk, _z_inv_dk)
             self._kappa_dk = _kappa_dk
@@ -844,10 +845,14 @@ class nSuperLink(SuperLink):
         # Compute theta indicator variables
         _H_juk = H_j[_J_uk]
         _H_jdk = H_j[_J_dk]
-        _theta_uk = np.where(_H_juk >= _z_inv_uk, 1.0, 0.0)
-        _theta_dk = np.where(_H_jdk >= _z_inv_dk, 1.0, 0.0)
-        # _theta_uk = 1.
-        # _theta_dk = 1.
+        upstream_depth_above_invert = _H_juk >= _z_inv_uk
+        downstream_depth_above_invert = _H_jdk >= _z_inv_dk
+        _theta_uk.fill(0.)
+        _theta_dk.fill(0.)
+        _theta_uk[upstream_depth_above_invert] = 1.
+        _theta_dk[downstream_depth_above_invert] = 1.
+        # _theta_uk = np.where(_H_juk >= _z_inv_uk, 1.0, 0.0)
+        # _theta_dk = np.where(_H_jdk >= _z_inv_dk, 1.0, 0.0)
         # Compute D_k_star
         _D_k_star = numba_D_k_star(_X_1k, _kappa_uk, _U_Nk,
                                    _kappa_dk, _Z_1k, _W_Nk)
@@ -1040,7 +1045,8 @@ class nSuperLink(SuperLink):
             _P_diag = self._P_diag           # Diagonal elements of matrix P
         _sparse = self._sparse           # Use sparse matrix data structures (y/n)
         M = self.M                       # Number of superjunctions in system
-        H_j = self.H_j                   # Head at superjunction j
+        H_j_next = self.H_j                   # Head at superjunction j
+        H_j_prev = self.states['H_j']
         bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
         D = self.D                       # Vector for storing chi coefficients
         b = self.b                       # Right-hand side vector
@@ -1049,7 +1055,7 @@ class nSuperLink(SuperLink):
             _dt = self._dt
         # If no boundary head specified, use current superjunction head
         if H_bc is None:
-            H_bc = self.H_j
+            H_bc = H_j_next
         # If no flow input specified, assume zero external inflow
         if _Q_0j is None:
             _Q_0j = 0
@@ -1114,7 +1120,8 @@ class nSuperLink(SuperLink):
             numba_add_at(D, _J_up, -_chi_up)
             numba_add_at(D, _J_dp, _chi_dp)
         b.fill(0)
-        b = (_A_sj * H_j / _dt) + _Q_0j + D
+        # TODO: Which A_sj? Might need to apply product rule here.
+        b = (_A_sj * H_j_prev / _dt) + _Q_0j + D
         # Ensure boundary condition is specified
         b[bc] = H_bc[bc]
         # Export instance variables
@@ -1503,6 +1510,9 @@ class nSuperLink(SuperLink):
         _elem_pos = self._elem_pos
         nk = self.nk
         NK = self.NK
+        # Check if possible to move elements
+        if not self.mobile_elements:
+            raise ValueError('Model must be instantiated with `mobile_elements=True` to reposition junctions.')
         # Get downstream head
         _H_dk = H_j[_J_dk]
         # Handle which superlinks to reposition

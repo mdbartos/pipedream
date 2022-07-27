@@ -285,7 +285,8 @@ class SuperLink():
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False, auto_permute=False,
-                 end_length=None, end_method='b', internal_links=4):
+                 end_length=None, end_method='b', internal_links=4,
+                 mobile_elements=False):
         # Copy input tables to prevent modification
         superjunctions = copy.deepcopy(superjunctions)
         superlinks = copy.deepcopy(superlinks)
@@ -348,12 +349,16 @@ class SuperLink():
         else:
             self.superlink_names = self.superlinks.index.values
         # If internal links and junctions are not provided, create them
+        self.mobile_elements = mobile_elements
         if (links is None) or (junctions is None):
             generate_elems = True
-            self._configure_internals_variable(njunctions_fixed=internal_links)
+            self._configure_internals_variable(internal_links=internal_links,
+                                               mobile_elements=mobile_elements)
             links = self.links
             junctions = self.junctions
         else:
+            if mobile_elements:
+                raise ValueError('Cannot use mobile elements if supplying link and junction tables.')
             generate_elems = False
             self.links = links
             self.junctions = junctions
@@ -925,19 +930,19 @@ class SuperLink():
         self.pumps = pumps
         self.permutations = permutations
 
-    def _configure_internals_variable(self, njunctions_fixed=4):
+    def _configure_internals_variable(self, internal_links=4, mobile_elements=True):
         # Import instance variables
         superlinks = self.superlinks            # Table of superlinks
         superjunctions = self.superjunctions    # Table of superjunctions
         # Set parameters
-        njunctions = njunctions_fixed + 1
+        njunctions = internal_links + 1
         nlinks = njunctions - 1
         link_ncols = 15
         junction_ncols = 5
         n_superlinks = len(superlinks)
         NJ = njunctions * n_superlinks
         NL = nlinks * n_superlinks
-        elems = np.repeat(njunctions_fixed, n_superlinks)
+        elems = np.repeat(internal_links, n_superlinks)
         total_elems = elems + 1
         upstream_nodes = np.cumsum(total_elems) - total_elems
         downstream_nodes = np.cumsum(total_elems) - 2
@@ -984,31 +989,44 @@ class SuperLink():
         outoffset = superlinks['out_offset'].values.astype(np.float64)
         _J_uk = superlinks['sj_0'].values.astype(np.int64)
         _J_dk = superlinks['sj_1'].values.astype(np.int64)
-        if (njunctions % 2):
-            _x0 = (dx_j / 2)
-        else:
-            _x0 = (dx_j / 2) + (dx_j / nlinks / 2)
-        xx[:, :-1] = np.vstack([np.linspace(0, i, njunctions - 1)
-                                for i in dx_j])
-        xx[:, -1] = _x0
         _b0 = _z_inv_j[_J_uk] + inoffset
         _b1 = _z_inv_j[_J_dk] + outoffset
         _m = (_b1 - _b0) / dx_j
-        _z0 = _m * _x0 + _b0
-        zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
-        ix = np.argsort(xx)
-        _fixed = (ix < nlinks)
-        r, c = np.where(~_fixed)
-        cm1 = ix[r, c - 1]
-        cp1 = ix[r, c + 1]
-        frac = (xx[r, xx.shape[1] - 1] - xx[r, cm1]) / (xx[r, cp1] - xx[r, cm1])
-        # Set depths and flows
-        hh[:, -1] = (1 - frac) * hh[r, cm1] + (frac) * hh[r, cp1]
-        QQ[:, -1] = QQ[r, cm1]
-        # Write new variables
-        xx = np.take_along_axis(xx, ix, axis=-1)
-        zz = np.take_along_axis(zz, ix, axis=-1)
-        hh = np.take_along_axis(hh, ix, axis=-1)
+        if mobile_elements:
+            try:
+                assert (internal_links > 1)
+            except:
+                raise ValueError('If using mobile elements, must have more than one internal link.')
+            if (njunctions % 2):
+                _x0 = (dx_j / 2)
+            else:
+                _x0 = (dx_j / 2) + (dx_j / nlinks / 2)
+            xx[:, :-1] = np.vstack([np.linspace(0, i, njunctions - 1)
+                                    for i in dx_j])
+            xx[:, -1] = _x0
+            _z0 = _m * _x0 + _b0
+            zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
+            ix = np.argsort(xx)
+            _fixed = (ix < nlinks)
+            r, c = np.where(~_fixed)
+            cm1 = ix[r, c - 1]
+            cp1 = ix[r, c + 1]
+            frac = (xx[r, xx.shape[1] - 1] - xx[r, cm1]) / (xx[r, cp1] - xx[r, cm1])
+            # Set depths and flows
+            hh[:, -1] = (1 - frac) * hh[r, cm1] + (frac) * hh[r, cp1]
+            QQ[:, -1] = QQ[r, cm1]
+            # Write new variables
+            xx = np.take_along_axis(xx, ix, axis=-1)
+            zz = np.take_along_axis(zz, ix, axis=-1)
+            hh = np.take_along_axis(hh, ix, axis=-1)
+        else:
+            xx[:, :] = np.vstack([np.linspace(0, i, njunctions)
+                                for i in dx_j])
+            zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
+            _fixed = np.ones(xx.shape, dtype=np.bool8)
+            _x0 = None
+            _z0 = None
+            c = None
         dxdx = np.diff(xx)
         junctions['z_inv'] = zz.ravel()
         junctions['h_0'] = hh.ravel()
@@ -3566,6 +3584,9 @@ class SuperLink():
         _i_1k = self._i_1k            # Index of first link in superlink k
         H_j = self.H_j                # Head at superjunction j
         _k = self._k                  # List of superlinks
+        # Check if possible to move elements
+        if not self.mobile_elements:
+            raise ValueError('Model must be instantiated with `mobile_elements=True` to reposition junctions.')
         # Configure function variables
         njunctions_fixed = 4
         njunctions = njunctions_fixed + 1
@@ -3823,6 +3844,7 @@ class SuperLink():
         self.states['A_ik'] = np.copy(self.A_ik)
         self.states['A_uk'] = np.copy(self.A_uk)
         self.states['A_dk'] = np.copy(self.A_dk)
+        self.states['A_sj'] = np.copy(self.A_sj)
         self.states['V_j'] = np.copy(self.V_j)
 
     def load_state(self, states={}, exclude_states=set(),
@@ -3840,7 +3862,8 @@ class SuperLink():
             states = self.states
         for key, value in states.items():
             if not key in exclude_states:
-                setattr(self, key, value)
+                loaded_state = copy.copy(value)
+                setattr(self, key, loaded_state)
         # Ensure consistency of internal states
         if compute_hydraulic_geometries:
             self.link_hydraulic_geometry()
@@ -3849,7 +3872,7 @@ class SuperLink():
             self.compute_storage_areas()
             self.node_velocities()
 
-    def spinup(self, n_steps=100, dt=10, Q_in=None, Q_0Ik=None, reposition_junctions=True,
+    def spinup(self, n_steps=100, dt=10, Q_in=None, Q_0Ik=None, reposition_junctions=False,
                reset_counters=True, **kwargs):
         """
         Spin up solver for a given number of steps to avoid running a completely dry model.
@@ -3928,11 +3951,6 @@ class SuperLink():
         self.node_velocities()
         if self.orifices is not None:
             self.orifice_hydraulic_geometry(u=u_o)
-        # If iterating towards convergence, load initial step states
-        if not first_iter:
-            geom_states = {'A_ik', 'A_uk', 'A_dk', 'V_j'}
-            self.load_state(exclude_states=geom_states,
-                            compute_hydraulic_geometries=False)
         if self.inertial_damping:
             self.compute_flow_regime()
         self.link_coeffs(_dt=dt, first_iter=first_iter)
@@ -3985,7 +4003,7 @@ class SuperLink():
         self.t += dt
 
     def step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
-             first_time=False, implicit=True, banded=False, first_iter=True,
+             first_time=False, implicit=True, banded=None, first_iter=True,
              num_iter=1, head_tol=0.0015):
         """
         Advance model forward to next time step, computing hydraulic states.
@@ -4009,7 +4027,7 @@ class SuperLink():
         first_time : bool
             Set True if this is the first step the model has performed.
         banded : bool
-            If True, use banded matrix solver.
+            If True, use banded matrix solver. Set to value of `self.banded` by default.
         first_iter : bool
             True if this is the first iteration when iterating towards convergence.
         num_iter : int
@@ -4019,6 +4037,8 @@ class SuperLink():
         implicit : bool
             (Deprecated)
         """
+        if banded is None:
+            banded = self.banded
         self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
