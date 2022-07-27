@@ -288,13 +288,13 @@ class nSuperLink(SuperLink):
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False, auto_permute=False,
-                 end_length=None, end_method='b', internal_links=4):
+                 end_length=None, end_method='b', internal_links=4, mobile_elements=False):
         super().__init__(superlinks, superjunctions,
                          links, junctions, transects, storages,
                          orifices, weirs, pumps, dt, sparse,
                          min_depth, method, inertial_damping,
                          bc_method, exit_hydraulics, auto_permute,
-                         end_length, end_method, internal_links)
+                         end_length, end_method, internal_links, mobile_elements)
 
     def configure_storages(self):
         """
@@ -845,10 +845,14 @@ class nSuperLink(SuperLink):
         # Compute theta indicator variables
         _H_juk = H_j[_J_uk]
         _H_jdk = H_j[_J_dk]
-        _theta_uk = np.where(_H_juk >= _z_inv_uk, 1.0, 0.0)
-        _theta_dk = np.where(_H_jdk >= _z_inv_dk, 1.0, 0.0)
-        # _theta_uk = 1.
-        # _theta_dk = 1.
+        upstream_depth_above_invert = _H_juk >= _z_inv_uk
+        downstream_depth_above_invert = _H_jdk >= _z_inv_dk
+        _theta_uk.fill(0.)
+        _theta_dk.fill(0.)
+        _theta_uk[upstream_depth_above_invert] = 1.
+        _theta_dk[downstream_depth_above_invert] = 1.
+        # _theta_uk = np.where(_H_juk >= _z_inv_uk, 1.0, 0.0)
+        # _theta_dk = np.where(_H_jdk >= _z_inv_dk, 1.0, 0.0)
         # Compute D_k_star
         _D_k_star = numba_D_k_star(_X_1k, _kappa_uk, _U_Nk,
                                    _kappa_dk, _Z_1k, _W_Nk)
@@ -1042,7 +1046,7 @@ class nSuperLink(SuperLink):
         _sparse = self._sparse           # Use sparse matrix data structures (y/n)
         M = self.M                       # Number of superjunctions in system
         H_j_next = self.H_j                   # Head at superjunction j
-        H_j_prev = np.copy(self.states['H_j'])
+        H_j_prev = self.states['H_j']
         bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
         D = self.D                       # Vector for storing chi coefficients
         b = self.b                       # Right-hand side vector
@@ -1506,6 +1510,9 @@ class nSuperLink(SuperLink):
         _elem_pos = self._elem_pos
         nk = self.nk
         NK = self.NK
+        # Check if possible to move elements
+        if not self.mobile_elements:
+            raise ValueError('Model must be instantiated with `mobile_elements=True` to reposition junctions.')
         # Get downstream head
         _H_dk = H_j[_J_dk]
         # Handle which superlinks to reposition
