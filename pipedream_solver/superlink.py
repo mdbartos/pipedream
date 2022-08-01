@@ -413,20 +413,21 @@ class SuperLink():
         self._g3_ik = links['g3'].values.astype(np.float64)
         self._Q_ik = links['Q_0'].values.astype(np.float64)
         self._dx_ik = links['dx'].values.astype(np.float64)
-        
         # friction slope method
-        if 'Sf_method' in links:
-            _Sf_method = links['Sf_method']
+        if 'friction_method' in links:
+            _Sf_method = links['friction_method']
         else:
-            _Sf_method = pd.Series(['C_M']*len(links))
-        Sf_map = {'C_M' : 0, 'H_W' : 1, 'D_W' : 2}
+            _Sf_method = pd.Series(['cm']*len(links))
+        Sf_map = {'cm' : 0, 'hw' : 1, 'dw' : 2}
         try:
             assert _Sf_method.isin(Sf_map).all()
         except:
-            raise ValueError('Frintion method must be one of C_M, H_W, D_W.')    
+            raise ValueError('Friction method must be one of cm, hw, dw.')    
         self._Sf_method = _Sf_method.map(Sf_map).astype(np.int64).values
-        
-        self._n_ik = links['roughness'].values.astype(np.float64)
+        if 'roughness' in links:
+            self._n_ik = links['roughness'].values.astype(np.float64)
+        else:
+            self._n_ik = links['n'].values.astype(np.float64)
         self._ctrl = links['ctrl'].values.astype(np.bool8)
         self._A_c_ik = links['A_c'].values.astype(np.float64)
         self._C_ik = links['C'].values.astype(np.float64)

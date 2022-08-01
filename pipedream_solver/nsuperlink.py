@@ -1785,15 +1785,15 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
     Compute link coefficient 'b' for link i, superlink k.
     """
     # TODO: Clean up
-    cond = A_ik > 0
     t_0 = (dx_ik / dt) * sigma_ik
     t_1 = np.zeros(Q_ik_t.size)
     
     k = len(Sf_method)
-    for n in range(0,k):
+    for n in range(k):
         if A_ik[n] > 0:
             if Sf_method[n] == 0:   # Chezy-Manning eq.
-                t_1[n] = g * n_ik[n]**2 * np.abs(Q_ik_t[n]) * dx_ik[n]/ A_ik[n] / R_ik[n]**(4/3)
+                t_1[n] = (g * n_ik[n]**2 * np.abs(Q_ik_t[n]) * dx_ik[n]
+                          / A_ik[n] / R_ik[n]**(4/3))
             elif Sf_method[n] == 1:   # Hazen-Williams eq.
                 t_1[n] = (1.354 * g * np.abs(Q_ik_t[n])**0.85 * dx_ik[n]
                           / (A_ik[n]**0.85 * n_ik[n]**1.85 * R_ik[n]**1.1655))
@@ -1801,11 +1801,13 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
                 nu = 0.0000010034     # kinematic viscosity(meter^2/sec), we can consider this is constant.
                 Re = (np.abs(Q_ik_t[n])/A_ik[n])*4*R_ik[n]/nu
                 f = 0.25/(np.log10(n_ik[n]/(3.7*4*R_ik[n]) + 5.74/(Re**0.9)))**2
-                t_1[n] = 0.01274*g*f*np.abs(Q_ik_t[n])*dx_ik[n]/(A_ik[n] * R_ik[n])
+                t_1[n] = (0.01274*g*f*np.abs(Q_ik_t[n])*dx_ik[n]
+                          /(A_ik[n] * R_ik[n]))
             else:
-                print("Error - Inappropriate Sf method option!")
+                print("Invalid friction method.")
+                #raise ValueError('Invalid friction method.')
         else:
-            t_1[n] = 0
+            t_1[n] = 0.0
 
     t_2 = np.zeros(ctrl.size)
     cond = ctrl
@@ -1813,8 +1815,6 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
     t_3 = a_ik
     t_4 = c_ik
     return t_0 + t_1 + t_2 - t_3 - t_4
-
-
 
 @njit(float64[:](float64[:], float64[:], float64, float64[:], float64[:], float64[:], float64),
       cache=True)

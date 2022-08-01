@@ -7,7 +7,7 @@ from pipedream_solver.nquality import QualityBuilder
 import matplotlib.pyplot as plt
 
 # Provide base directory where data is stored
-input_path = './data/Simple_Test_3_Closed'
+input_path = '../data/Simple_Test_3_Open'
 
 # Get model components
 superjunctions = pd.read_csv(f'{input_path}/Model_superjunctions.csv')
@@ -69,7 +69,6 @@ plt.xlim(0,80000)
 plt.legend(fontsize = 15)
 plt.grid()
 
-'''
 plt.figure(2)
 plt.figure(figsize= (10,6))
 plt.plot(Q_ik[:][6], label = 'ik = 6', color = 'r')
@@ -81,7 +80,6 @@ plt.ylim(0,20)
 plt.xlim(0,80000)
 plt.legend(fontsize = 15)
 plt.grid()
-'''
 
 Vel_ik = pd.DataFrame(Vel_ik)
 plt.figure(3)
@@ -96,23 +94,8 @@ plt.xlim(0,8000)
 plt.legend(fontsize = 15)
 plt.grid()
 
-'''
-Depth_ik = pd.DataFrame(Depth_ik)
-plt.figure(4)
-plt.figure(figsize= (10,6))
-plt.plot(Depth_ik[:][6], label = 'ik = 6', color = 'r')
-plt.plot(Depth_ik[:][11], label = 'ik = 11', color = 'g')
-plt.plot(Depth_ik[:][16], label = 'ik = 16', color = 'b')
-plt.ylabel('Depth in the internal links', fontsize = 15)
-plt.xlabel('Time (10s)', fontsize = 15)
-plt.ylim(0,2.5)
-plt.xlim(0,8000)
-plt.legend(fontsize = 15)
-plt.grid()
-'''
-
 A_ik = pd.DataFrame(A_ik)
-plt.figure(5)
+plt.figure(4)
 plt.figure(figsize= (10,6))
 plt.plot(A_ik[:][6], label = 'ik = 6', color = 'r')
 plt.plot(A_ik[:][11], label = 'ik = 11', color = 'g')
