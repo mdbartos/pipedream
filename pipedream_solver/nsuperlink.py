@@ -1796,7 +1796,7 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
                           / A_ik[n] / R_ik[n]**(4/3))
             elif Sf_method[n] == 1:   # Hazen-Williams eq.
                 t_1[n] = (1.354 * g * np.abs(Q_ik_t[n])**0.85 * dx_ik[n]
-                          / (A_ik[n]**0.85 * n_ik[n]**1.85 * R_ik[n]**1.1655))
+                          / A_ik[n]**0.85 / n_ik[n]**1.85 / R_ik[n]**1.1655)
             elif Sf_method[n] == 2:   # Darcy-Weisbach eq.
                 nu = 0.0000010034     # kinematic viscosity(meter^2/sec), we can consider this is constant.
                 Re = (np.abs(Q_ik_t[n])/A_ik[n])*4*R_ik[n]/nu
@@ -1804,8 +1804,7 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
                 t_1[n] = (0.01274*g*f*np.abs(Q_ik_t[n])*dx_ik[n]
                           /(A_ik[n] * R_ik[n]))
             else:
-                print("Invalid friction method.")
-                #raise ValueError('Invalid friction method.')
+                raise ValueError('Invalid friction method.')
         else:
             t_1[n] = 0.0
 
