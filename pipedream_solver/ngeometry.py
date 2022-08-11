@@ -12,7 +12,8 @@ geom_code = {
     'parabolic' : 6,
     'elliptical' : 7,
     'wide' : 8,
-    'force_main' : 9
+    'force_main' : 9,
+    'floodplain' : 10
 }
 
 eps = np.finfo(float).eps
@@ -912,3 +913,168 @@ def Force_Main_B_ik(h_Ik, h_Ip1k, g1, g2):
     B = pslot * d
     return B
 
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
+def Floodplain_A_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6):
+    """
+    Compute cross-sectional area of flow for link i, superlink k.
+
+    Inputs:
+    -------
+    h_Ik: np.ndarray
+        Depth at upstream junction (meters)
+    h_Ip1k: np.ndarray
+        Depth at downstream junction (meters)
+    h_Ik: np.ndarray
+        Depth at upstream junction (meters)
+    h_Ip1k: np.ndarray
+        Depth at downstream junction (meters)
+    g1: np.ndarray
+        Height of channel (meters)
+    g2: np.ndarray
+        Height of floodplain section above channel bottom (meters)
+    g3: np.ndarray
+        Width of lower channel bottom (meters)
+    g4: np.ndarray
+        Width of upper channel bottom (meters)
+    g5: np.ndarray
+        Inverse slope of lower channel sides (run/rise)
+    g6: np.ndarray
+        Inverse slope of upper channel sides (run/rise)
+    """
+    y_max = g1
+    y_mid = g2
+    b_lower = g3
+    b_upper = g4
+    m_lower = g5
+    m_upper = g6
+    y = (h_Ik + h_Ip1k) / 2
+    if y < 0.:
+        y = 0.
+    if y > y_max:
+        y = y_max
+    if y < y_mid:
+        y_lower = y
+        y_upper = 0.
+    elif y >= y_mid:
+        y_lower = y_mid
+        y_upper = y - y_mid
+    A_lower = y_lower * (b_lower + m_lower * y_lower)
+    A_upper = y_upper * (b_upper + m_upper * y_upper)
+    A = A_lower + A_upper
+    return A
+
+
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
+def Floodplain_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6):
+    """
+    Compute perimeter of flow for link i, superlink k.
+
+    Inputs:
+    -------
+    h_Ik: np.ndarray
+        Depth at upstream junction (meters)
+    h_Ip1k: np.ndarray
+        Depth at downstream junction (meters)
+    g1: np.ndarray
+        Height of channel (meters)
+    g2: np.ndarray
+        Height of floodplain section above channel bottom (meters)
+    g3: np.ndarray
+        Width of lower channel bottom (meters)
+    g4: np.ndarray
+        Width of upper channel bottom (meters)
+    g5: np.ndarray
+        Inverse slope of lower channel sides (run/rise)
+    g6: np.ndarray
+        Inverse slope of upper channel sides (run/rise)
+    """
+    y_max = g1
+    y_mid = g2
+    b_lower = g3
+    b_upper = g4
+    m_lower = g5
+    m_upper = g6
+    y = (h_Ik + h_Ip1k) / 2
+    b_mid = b_lower + 2 * m_lower * y_mid
+    if y < 0:
+        y = 0
+    if y > y_max:
+        y = y_max
+    if y < y_mid:
+        y_lower = y
+        y_upper = 0.
+        k = 0.
+    elif y >= y_mid:
+        y_lower = y_mid
+        y_upper = y - y_mid
+        k = 1.
+    Pe_lower = b_lower + 2 * y_lower * np.sqrt(1 + m_lower**2)
+    Pe_upper = k * (b_upper - b_mid) + 2 * y_upper * np.sqrt(1 + m_upper**2)
+    Pe = Pe_lower + Pe_upper
+    return Pe
+
+@njit(float64(float64, float64),
+      cache=True)
+def Floodplain_R_ik(A_ik, Pe_ik):
+    """
+    Compute hydraulic radius for link i, superlink k.
+
+    Inputs:
+    -------
+    A_ik: np.ndarray
+        Area of cross section (square meters)
+    Pe_ik: np.ndarray
+        Wetted perimeter of cross section (meters)
+    """
+    cond = Pe_ik > 0
+    if cond:
+        R = A_ik / Pe_ik
+    else:
+        R = 0
+    return R
+
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
+      cache=True)
+def Floodplain_B_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6):
+    """
+    Compute top width of flow for link i, superlink k.
+
+    Inputs:
+    -------
+    h_Ik: np.ndarray
+        Depth at upstream junction (meters)
+    h_Ip1k: np.ndarray
+        Depth at downstream junction (meters)
+    g1: np.ndarray
+        Height of channel (meters)
+    g2: np.ndarray
+        Height of floodplain section above channel bottom (meters)
+    g3: np.ndarray
+        Width of lower channel bottom (meters)
+    g4: np.ndarray
+        Width of upper channel bottom (meters)
+    g5: np.ndarray
+        Inverse slope of lower channel sides (run/rise)
+    g6: np.ndarray
+        Inverse slope of upper channel sides (run/rise)
+    """
+    y_max = g1
+    y_mid = g2
+    b_lower = g3
+    b_upper = g4
+    m_lower = g5
+    m_upper = g6
+    y = (h_Ik + h_Ip1k) / 2
+    if y < 0:
+        y = 0
+    if y > y_max:
+        y = y_max
+    if y < y_mid:
+        y_lower = y
+        B = b_lower + 2 * m_lower * y_lower
+    elif y >= y_mid:
+        y_upper = y - y_mid
+        B = b_upper + 2 * m_upper * y_upper
+    return B
