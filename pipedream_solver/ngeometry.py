@@ -932,36 +932,49 @@ def Floodplain_A_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6):
     g1: np.ndarray
         Height of channel (meters)
     g2: np.ndarray
-        Height of floodplain section above channel bottom (meters)
+        Height of upper floodplain section above channel bottom (meters)
     g3: np.ndarray
-        Width of lower channel bottom (meters)
+        Height of lower floodplain section above channel bottom (meters)
     g4: np.ndarray
-        Width of upper channel bottom (meters)
-    g5: np.ndarray
-        Inverse slope of lower channel sides (run/rise)
-    g6: np.ndarray
         Inverse slope of upper channel sides (run/rise)
+    g5: np.ndarray
+        Inverse slope of middle channel sides (run/rise)
+    g6: np.ndarray
+        Inverse slope of lower channel sides (run/rise)
     """
-    y_max = g1
-    y_mid = g2
-    b_lower = g3
-    b_upper = g4
-    m_lower = g5
-    m_upper = g6
+    h_max = g1
+    h_mid = g2
+    h_low = g3
+    m_top = g4
+    m_middle = g5
+    m_base = g6
     y = (h_Ik + h_Ip1k) / 2
     if y < 0.:
         y = 0.
-    if y > y_max:
-        y = y_max
-    if y < y_mid:
-        y_lower = y
-        y_upper = 0.
-    elif y >= y_mid:
-        y_lower = y_mid
-        y_upper = y - y_mid
-    A_lower = y_lower * (b_lower + m_lower * y_lower)
-    A_upper = y_upper * (b_upper + m_upper * y_upper)
-    A = A_lower + A_upper
+    if y > h_max:
+        y = h_max
+    if y < h_low:
+        y_base = y
+        y_middle = 0.
+        y_top = 0.
+        b_middle = 0.
+        b_top = 0.
+    elif (y >= h_low) and (y < h_mid):
+        y_base = h_low
+        y_middle = y - h_low
+        y_top = 0.
+        b_middle = 2 * m_base * h_low
+        b_top = 0.
+    elif (y >= h_mid):
+        y_base = h_low
+        y_middle = (h_mid - h_low)
+        y_top = y - h_mid
+        b_middle = 2 * m_base * h_low
+        b_top = b_middle + 2 * m_middle * (h_mid - h_low)
+    A_base = y_base * (m_base * y_base)
+    A_middle = y_middle * (b_middle + m_middle * y_middle)
+    A_top = y_top * (b_top + m_top * y_top)
+    A = A_base + A_middle + A_top
     return A
 
 
@@ -980,39 +993,49 @@ def Floodplain_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6):
     g1: np.ndarray
         Height of channel (meters)
     g2: np.ndarray
-        Height of floodplain section above channel bottom (meters)
+        Height of upper floodplain section above channel bottom (meters)
     g3: np.ndarray
-        Width of lower channel bottom (meters)
+        Height of lower floodplain section above channel bottom (meters)
     g4: np.ndarray
-        Width of upper channel bottom (meters)
-    g5: np.ndarray
-        Inverse slope of lower channel sides (run/rise)
-    g6: np.ndarray
         Inverse slope of upper channel sides (run/rise)
+    g5: np.ndarray
+        Inverse slope of middle channel sides (run/rise)
+    g6: np.ndarray
+        Inverse slope of lower channel sides (run/rise)
     """
-    y_max = g1
-    y_mid = g2
-    b_lower = g3
-    b_upper = g4
-    m_lower = g5
-    m_upper = g6
+    h_max = g1
+    h_mid = g2
+    h_low = g3
+    m_top = g4
+    m_middle = g5
+    m_base = g6
     y = (h_Ik + h_Ip1k) / 2
-    b_mid = b_lower + 2 * m_lower * y_mid
-    if y < 0:
-        y = 0
-    if y > y_max:
-        y = y_max
-    if y < y_mid:
-        y_lower = y
-        y_upper = 0.
-        k = 0.
-    elif y >= y_mid:
-        y_lower = y_mid
-        y_upper = y - y_mid
-        k = 1.
-    Pe_lower = b_lower + 2 * y_lower * np.sqrt(1 + m_lower**2)
-    Pe_upper = k * (b_upper - b_mid) + 2 * y_upper * np.sqrt(1 + m_upper**2)
-    Pe = Pe_lower + Pe_upper
+    if y < 0.:
+        y = 0.
+    if y > h_max:
+        y = h_max
+    if y < h_low:
+        y_base = y
+        y_middle = 0.
+        y_top = 0.
+        b_middle = 0.
+        b_top = 0.
+    elif (y >= h_low) and (y < h_mid):
+        y_base = h_low
+        y_middle = y - h_low
+        y_top = 0.
+        b_middle = 2 * m_base * h_low
+        b_top = 0.
+    elif (y >= h_mid):
+        y_base = h_low
+        y_middle = (h_mid - h_low)
+        y_top = y - h_mid
+        b_middle = 2 * m_base * h_low
+        b_top = 2 * m_middle * h_mid
+    Pe_base = 2 * y_base * np.sqrt(1 + m_base**2)
+    Pe_middle = 2 * y_middle * np.sqrt(1 + m_middle**2)
+    Pe_top = 2 * y_top * np.sqrt(1 + m_top**2)
+    Pe = Pe_base + Pe_middle + Pe_top
     return Pe
 
 @njit(float64(float64, float64),
@@ -1050,31 +1073,34 @@ def Floodplain_B_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6):
     g1: np.ndarray
         Height of channel (meters)
     g2: np.ndarray
-        Height of floodplain section above channel bottom (meters)
+        Height of upper floodplain section above channel bottom (meters)
     g3: np.ndarray
-        Width of lower channel bottom (meters)
+        Height of lower floodplain section above channel bottom (meters)
     g4: np.ndarray
-        Width of upper channel bottom (meters)
-    g5: np.ndarray
-        Inverse slope of lower channel sides (run/rise)
-    g6: np.ndarray
         Inverse slope of upper channel sides (run/rise)
+    g5: np.ndarray
+        Inverse slope of middle channel sides (run/rise)
+    g6: np.ndarray
+        Inverse slope of lower channel sides (run/rise)
     """
-    y_max = g1
-    y_mid = g2
-    b_lower = g3
-    b_upper = g4
-    m_lower = g5
-    m_upper = g6
+    h_max = g1
+    h_mid = g2
+    h_low = g3
+    m_top = g4
+    m_middle = g5
+    m_base = g6
     y = (h_Ik + h_Ip1k) / 2
     if y < 0:
-        y = 0
-    if y > y_max:
-        y = y_max
-    if y < y_mid:
-        y_lower = y
-        B = b_lower + 2 * m_lower * y_lower
-    elif y >= y_mid:
-        y_upper = y - y_mid
-        B = b_upper + 2 * m_upper * y_upper
+        y = 0.
+    if y > h_max:
+        y = h_max
+    if y < h_low:
+        B = 2 * m_base * y
+    elif (y >= h_low) and (y < h_mid):
+        b_middle = 2 * m_base * h_low
+        B = b_middle + (2 * m_middle * (y - h_low))
+    elif (y >= h_mid):
+        b_middle = 2 * m_base * h_low
+        b_top = 2 * m_middle * (h_mid - h_low)
+        B = b_middle + b_top + (2 * m_top * (y - h_mid))
     return B
