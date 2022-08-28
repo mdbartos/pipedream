@@ -932,22 +932,22 @@ def Floodplain_A_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6):
     g1: np.ndarray
         Height of channel (meters)
     g2: np.ndarray
-        Height of upper floodplain section above channel bottom (meters)
-    g3: np.ndarray
         Height of lower floodplain section above channel bottom (meters)
+    g3: np.ndarray
+        Height of upper floodplain section above lower floodplain section (meters)
     g4: np.ndarray
         Inverse slope of upper channel sides (run/rise)
     g5: np.ndarray
-        Inverse slope of middle channel sides (run/rise)
-    g6: np.ndarray
         Inverse slope of lower channel sides (run/rise)
+    g6: np.ndarray
+        Inverse slope of middle channel sides (run/rise)
     """
     h_max = g1
-    h_mid = g2
-    h_low = g3
+    h_low = g2
+    h_mid = g2 + g3
     m_top = g4
-    m_middle = g5
-    m_base = g6
+    m_base = g5
+    m_middle = g6
     y = (h_Ik + h_Ip1k) / 2
     if y < 0.:
         y = 0.
@@ -993,22 +993,22 @@ def Floodplain_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6):
     g1: np.ndarray
         Height of channel (meters)
     g2: np.ndarray
-        Height of upper floodplain section above channel bottom (meters)
-    g3: np.ndarray
         Height of lower floodplain section above channel bottom (meters)
+    g3: np.ndarray
+        Height of upper floodplain section above lower floodplain section (meters)
     g4: np.ndarray
         Inverse slope of upper channel sides (run/rise)
     g5: np.ndarray
-        Inverse slope of middle channel sides (run/rise)
-    g6: np.ndarray
         Inverse slope of lower channel sides (run/rise)
+    g6: np.ndarray
+        Inverse slope of middle channel sides (run/rise)
     """
     h_max = g1
-    h_mid = g2
-    h_low = g3
+    h_low = g2
+    h_mid = g2 + g3
     m_top = g4
-    m_middle = g5
-    m_base = g6
+    m_base = g5
+    m_middle = g6
     y = (h_Ik + h_Ip1k) / 2
     if y < 0.:
         y = 0.
@@ -1073,22 +1073,22 @@ def Floodplain_B_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6):
     g1: np.ndarray
         Height of channel (meters)
     g2: np.ndarray
-        Height of upper floodplain section above channel bottom (meters)
-    g3: np.ndarray
         Height of lower floodplain section above channel bottom (meters)
+    g3: np.ndarray
+        Height of upper floodplain section above lower floodplain section (meters)
     g4: np.ndarray
         Inverse slope of upper channel sides (run/rise)
     g5: np.ndarray
-        Inverse slope of middle channel sides (run/rise)
-    g6: np.ndarray
         Inverse slope of lower channel sides (run/rise)
+    g6: np.ndarray
+        Inverse slope of middle channel sides (run/rise)
     """
     h_max = g1
-    h_mid = g2
-    h_low = g3
+    h_low = g2
+    h_mid = g2 + g3
     m_top = g4
-    m_middle = g5
-    m_base = g6
+    m_base = g5
+    m_middle = g6
     y = (h_Ik + h_Ip1k) / 2
     if y < 0:
         y = 0.
