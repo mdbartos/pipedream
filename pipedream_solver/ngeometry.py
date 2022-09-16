@@ -913,7 +913,7 @@ def Force_Main_B_ik(h_Ik, h_Ip1k, g1, g2):
     B = pslot * d
     return B
 
-@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64, float64),
       cache=True)
 def Floodplain_A_ik(h_Ik, h_Ip1k, g0, g1, g2, g3, g4, g5, g6):
     """
@@ -980,7 +980,7 @@ def Floodplain_A_ik(h_Ik, h_Ip1k, g0, g1, g2, g3, g4, g5, g6):
     return A
 
 
-@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64, float64),
       cache=True)
 def Floodplain_Pe_ik(h_Ik, h_Ip1k, g0, g1, g2, g3, g4, g5, g6):
     """
@@ -1062,7 +1062,7 @@ def Floodplain_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64, float64),
       cache=True)
 def Floodplain_B_ik(h_Ik, h_Ip1k, g0, g1, g2, g3, g4, g5, g6):
     """
