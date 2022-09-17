@@ -730,18 +730,23 @@ class nSuperLink(SuperLink):
         H_j = self.H_j                 # Head at superjunction j
         _A_uk = self._A_uk             # Flow area at upstream end of superlink k
         _B_uk = self._B_uk             # Top width at upstream end of superlink k
+        _theta_uk = self._theta_uk
         # Placeholder discharge coefficient
         _C_uk = self._C_uk
         # Current upstream flows
         _Q_uk = self._Q_uk
         g = 9.81
+        # Compute theta indicator variables
+        _H_juk = H_j[_J_uk]
+        upstream_depth_above_invert = _H_juk >= _z_inv_uk
+        _theta_uk.fill(0.)
+        _theta_uk[upstream_depth_above_invert] = 1.
         if _bc_method == 'z':
             # Compute superlink upstream coefficients (Zahner)
             _gamma_uk = gamma_uk(_Q_uk, _C_uk, _A_uk, g)
             self._kappa_uk = _gamma_uk
-            # TODO: Clean this up
-            self._lambda_uk = np.ones(_gamma_uk.size, dtype=np.float64)
-            self._mu_uk = - _z_inv_uk
+            self._lambda_uk = _theta_uk
+            self._mu_uk = - _theta_uk * _z_inv_uk
         elif _bc_method == 'j':
             # Current upstream depth
             _h_uk = _h_Ik[_I_1k]
@@ -776,18 +781,23 @@ class nSuperLink(SuperLink):
         H_j = self.H_j                 # Head at superjunction j
         _A_dk = self._A_dk             # Flow area at downstream end of superlink k
         _B_dk = self._B_dk             # Top width at downstream end of superlink k
+        _theta_dk = self._theta_dk
         # Placeholder discharge coefficient
         _C_dk = self._C_dk
         # Current downstream flows
         _Q_dk = self._Q_dk
         g = 9.81
+        # Compute theta indicator variables
+        _H_jdk = H_j[_J_dk]
+        downstream_depth_above_invert = _H_jdk >= _z_inv_dk
+        _theta_dk.fill(0.)
+        _theta_dk[downstream_depth_above_invert] = 1.
         if _bc_method == 'z':
             # Compute superlink downstream coefficients (Zahner)
             _gamma_dk = gamma_dk(_Q_dk, _C_dk, _A_dk, g)
             self._kappa_dk = _gamma_dk
-            # TODO: Clean this up
-            self._lambda_dk = np.ones(_gamma_dk.size, dtype=np.float64)
-            self._mu_dk = - _z_inv_dk
+            self._lambda_dk = _theta_dk
+            self._mu_dk = - _theta_dk * _z_inv_dk
         elif _bc_method == 'j':
             # Downstream top width
             # Current downstream depth
@@ -852,40 +862,29 @@ class nSuperLink(SuperLink):
             _U_Nk = _U_Ik[_I_Nk] - _E_Ik[_I_Np1k]
             _V_Nk = _V_Ik[_I_Nk] + _D_Ik[_I_Np1k]
             _W_Nk = _W_Ik[_I_Nk]
-        # Compute theta indicator variables
-        _H_juk = H_j[_J_uk]
-        _H_jdk = H_j[_J_dk]
-        upstream_depth_above_invert = _H_juk >= _z_inv_uk
-        downstream_depth_above_invert = _H_jdk >= _z_inv_dk
-        _theta_uk.fill(0.)
-        _theta_dk.fill(0.)
-        _theta_uk[upstream_depth_above_invert] = 1.
-        _theta_dk[downstream_depth_above_invert] = 1.
-        # _theta_uk = np.where(_H_juk >= _z_inv_uk, 1.0, 0.0)
-        # _theta_dk = np.where(_H_jdk >= _z_inv_dk, 1.0, 0.0)
         # Compute D_k_star
         _D_k_star = numba_D_k_star(_X_1k, _kappa_uk, _U_Nk,
                                    _kappa_dk, _Z_1k, _W_Nk)
         # Compute upstream superlink flow coefficients
         _alpha_uk = numba_alpha_uk(_U_Nk, _kappa_dk, _X_1k,
                                    _Z_1k, _W_Nk, _D_k_star,
-                                   _lambda_uk, _theta_uk)
+                                   _lambda_uk)
         _beta_uk = numba_beta_uk(_U_Nk, _kappa_dk, _Z_1k,
-                                 _W_Nk, _D_k_star, _lambda_dk, _theta_dk)
+                                 _W_Nk, _D_k_star, _lambda_dk)
         _chi_uk = numba_chi_uk(_U_Nk, _kappa_dk, _Y_1k,
                                _X_1k, _mu_uk, _Z_1k,
                                _mu_dk, _V_Nk, _W_Nk,
-                               _D_k_star, _theta_uk, _theta_dk)
+                               _D_k_star)
         # Compute downstream superlink flow coefficients
         _alpha_dk = numba_alpha_dk(_X_1k, _kappa_uk, _W_Nk,
-                                   _D_k_star, _lambda_uk, _theta_uk)
+                                   _D_k_star, _lambda_uk)
         _beta_dk = numba_beta_dk(_X_1k, _kappa_uk, _U_Nk,
                                  _W_Nk, _Z_1k, _D_k_star,
-                                 _lambda_dk, _theta_dk)
+                                 _lambda_dk)
         _chi_dk = numba_chi_dk(_X_1k, _kappa_uk, _V_Nk,
                                _W_Nk, _mu_uk, _U_Nk,
                                _mu_dk, _Y_1k, _Z_1k,
-                               _D_k_star, _theta_uk, _theta_dk)
+                               _D_k_star)
         # Export instance variables
         self._D_k_star = _D_k_star
         self._alpha_uk = _alpha_uk
@@ -894,8 +893,6 @@ class nSuperLink(SuperLink):
         self._alpha_dk = _alpha_dk
         self._beta_dk = _beta_dk
         self._chi_dk = _chi_dk
-        self._theta_uk = _theta_uk
-        self._theta_dk = _theta_dk
 
     def orifice_flow_coefficients(self, u=None):
         """
@@ -2254,85 +2251,81 @@ def numba_D_k_star(X_1k, kappa_uk, U_Nk, kappa_dk, Z_1k, W_Nk):
     result = t_0 - t_1
     return result
 
-@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_alpha_uk(U_Nk, kappa_dk, X_1k, Z_1k, W_Nk, D_k_star, lambda_uk, theta_uk):
+def numba_alpha_uk(U_Nk, kappa_dk, X_1k, Z_1k, W_Nk, D_k_star, lambda_uk):
     """
     Compute superlink boundary condition coefficient 'alpha' for upstream end
     of superlink k.
     """
-    num = theta_uk * ((1 - U_Nk * kappa_dk) * X_1k * lambda_uk
-                        + (Z_1k * kappa_dk * W_Nk * lambda_uk))
-    den = D_k_star
-    result = safe_divide_vec(num, den)
-    return result
-
-@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
-      cache=True)
-def numba_beta_uk(U_Nk, kappa_dk, Z_1k, W_Nk, D_k_star, lambda_dk, theta_dk):
-    """
-    Compute superlink boundary condition coefficient 'beta' for upstream end
-    of superlink k.
-    """
-    num = theta_dk * ((1 - U_Nk * kappa_dk) * Z_1k * lambda_dk
-            + (Z_1k * kappa_dk * U_Nk * lambda_dk))
-    den = D_k_star
-    result = safe_divide_vec(num, den)
-    return result
-
-@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-                 float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
-      cache=True)
-def numba_chi_uk(U_Nk, kappa_dk, Y_1k, X_1k, mu_uk, Z_1k,
-                    mu_dk, V_Nk, W_Nk, D_k_star, theta_uk, theta_dk):
-    """
-    Compute superlink boundary condition coefficient 'chi' for upstream end
-    of superlink k.
-    """
-    t_0 = (1 - U_Nk * kappa_dk) * (Y_1k + theta_uk * X_1k * mu_uk + theta_dk * Z_1k * mu_dk)
-    t_1 = (Z_1k * kappa_dk) * (V_Nk + theta_uk * W_Nk * mu_uk + theta_dk * U_Nk * mu_dk)
-    num = t_0 + t_1
+    num = lambda_uk * ((1 - U_Nk * kappa_dk) * X_1k + (Z_1k * kappa_dk * W_Nk))
     den = D_k_star
     result = safe_divide_vec(num, den)
     return result
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_alpha_dk(X_1k, kappa_uk, W_Nk, D_k_star, lambda_uk, theta_uk):
+def numba_beta_uk(U_Nk, kappa_dk, Z_1k, W_Nk, D_k_star, lambda_dk):
     """
-    Compute superlink boundary condition coefficient 'alpha' for downstream end
+    Compute superlink boundary condition coefficient 'beta' for upstream end
     of superlink k.
     """
-    num = theta_uk * ((1 - X_1k * kappa_uk) * W_Nk * lambda_uk
-            + (W_Nk * kappa_uk * X_1k * lambda_uk))
-    den = D_k_star
-    result = safe_divide_vec(num, den)
-    return result
-
-@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
-      cache=True)
-def numba_beta_dk(X_1k, kappa_uk, U_Nk, W_Nk, Z_1k, D_k_star, lambda_dk, theta_dk):
-    """
-    Compute superlink boundary condition coefficient 'beta' for downstream end
-    of superlink k.
-    """
-    num = theta_dk * ((1 - X_1k * kappa_uk) * U_Nk * lambda_dk
-            + (W_Nk * kappa_uk * Z_1k * lambda_dk))
+    num = lambda_dk * ((1 - U_Nk * kappa_dk) * Z_1k + (Z_1k * kappa_dk * U_Nk))
     den = D_k_star
     result = safe_divide_vec(num, den)
     return result
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-                 float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+                 float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
+def numba_chi_uk(U_Nk, kappa_dk, Y_1k, X_1k, mu_uk, Z_1k,
+                 mu_dk, V_Nk, W_Nk, D_k_star):
+    """
+    Compute superlink boundary condition coefficient 'chi' for upstream end
+    of superlink k.
+    """
+    t_0 = (1 - U_Nk * kappa_dk) * (Y_1k + X_1k * mu_uk + Z_1k * mu_dk)
+    t_1 = (Z_1k * kappa_dk) * (V_Nk + W_Nk * mu_uk + U_Nk * mu_dk)
+    num = t_0 + t_1
+    den = D_k_star
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
+def numba_alpha_dk(X_1k, kappa_uk, W_Nk, D_k_star, lambda_uk):
+    """
+    Compute superlink boundary condition coefficient 'alpha' for downstream end
+    of superlink k.
+    """
+    num = lambda_uk * ((1 - X_1k * kappa_uk) * W_Nk + (W_Nk * kappa_uk * X_1k))
+    den = D_k_star
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
+      cache=True)
+def numba_beta_dk(X_1k, kappa_uk, U_Nk, W_Nk, Z_1k, D_k_star, lambda_dk):
+    """
+    Compute superlink boundary condition coefficient 'beta' for downstream end
+    of superlink k.
+    """
+    num = lambda_dk * ((1 - X_1k * kappa_uk) * U_Nk + (W_Nk * kappa_uk * Z_1k))
+    den = D_k_star
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+                 float64[:], float64[:], float64[:], float64[:]),
       cache=True)
 def numba_chi_dk(X_1k, kappa_uk, V_Nk, W_Nk, mu_uk, U_Nk,
-                    mu_dk, Y_1k, Z_1k, D_k_star, theta_uk, theta_dk):
+                    mu_dk, Y_1k, Z_1k, D_k_star):
     """
     Compute superlink boundary condition coefficient 'chi' for downstream end
     of superlink k.
     """
-    t_0 = (1 - X_1k * kappa_uk) * (V_Nk + theta_uk * W_Nk * mu_uk + theta_dk * U_Nk * mu_dk)
-    t_1 = (W_Nk * kappa_uk) * (Y_1k + theta_uk * X_1k * mu_uk + theta_dk * Z_1k * mu_dk)
+    t_0 = (1 - X_1k * kappa_uk) * (V_Nk + W_Nk * mu_uk + U_Nk * mu_dk)
+    t_1 = (W_Nk * kappa_uk) * (Y_1k + X_1k * mu_uk + Z_1k * mu_dk)
     num = t_0 + t_1
     den = D_k_star
     result = safe_divide_vec(num, den)
