@@ -11,7 +11,8 @@ geom_code = {
     'parabolic' : 6,
     'elliptical' : 7,
     'wide' : 8,
-    'force_main' : 9
+    'force_main' : 9,
+    'floodplain' : 10
 }
 
 # Machine precision
@@ -874,6 +875,27 @@ class Force_Main():
         pslot = g2
         B = d * pslot
         return B
+
+class Floodplain():
+    def __init__(self):
+        pass
+
+    @classmethod
+    def A_ik(self, h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    def R_ik(self, A_ik, Pe_ik):
+        raise NotImplementedError
+
+    @classmethod
+    def B_ik(self, h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, **kwargs):
+        raise NotImplementedError
+
 
 class Irregular():
     def __init__(self, x, y, horiz_points=100, vert_points=100):

@@ -408,9 +408,15 @@ class SuperLink():
             self._transect_ik = links['ts']
         else:
             self._transect_ik = None
-        self._g1_ik = links['g1'].values.astype(np.float64)
-        self._g2_ik = links['g2'].values.astype(np.float64)
-        self._g3_ik = links['g3'].values.astype(np.float64)
+        # Handle hydraulic geometries g1, g2, ..., g6
+        for i in range(1, 7):
+            geom_number = f'g{i}'
+            if geom_number in links.columns:
+                setattr(self, f'_{geom_number}_ik',
+                        links[geom_number].values.astype(np.float64))
+            else:
+                setattr(self, f'_{geom_number}_ik',
+                        np.zeros(links.shape[0], dtype=np.float64))
         self._Q_ik = links['Q_0'].values.astype(np.float64)
         self._dx_ik = links['dx'].values.astype(np.float64)
         # friction slope method
@@ -422,7 +428,7 @@ class SuperLink():
         try:
             assert _Sf_method.isin(Sf_map).all()
         except:
-            raise ValueError('Friction method must be one of cm, hw, dw.')    
+            raise ValueError('Friction method must be one of cm, hw, dw.')
         self._Sf_method = _Sf_method.map(Sf_map).astype(np.int64).values
         if 'roughness' in links:
             self._n_ik = links['roughness'].values.astype(np.float64)
@@ -951,8 +957,11 @@ class SuperLink():
         # Set parameters
         njunctions = internal_links + 1
         nlinks = njunctions - 1
-        link_ncols = 15
-        junction_ncols = 5
+        link_columns = ['A_c', 'C', 'Q_0', 'ctrl', 'dx', 'g1', 'g2', 'g3',
+                         'g4', 'g5', 'g6', 'id', 'j_0', 'j_1', 'k', 'n', 'shape']
+        junction_columns = ['A_s', 'h_0', 'id', 'k', 'z_inv']
+        link_ncols = len(link_columns)
+        junction_ncols = len(junction_columns)
         n_superlinks = len(superlinks)
         NJ = njunctions * n_superlinks
         NL = nlinks * n_superlinks
@@ -962,8 +971,7 @@ class SuperLink():
         downstream_nodes = np.cumsum(total_elems) - 2
         # Configure links
         links = pd.DataFrame(np.zeros((NL, link_ncols)))
-        links.columns = ['A_c', 'C', 'Q_0', 'ctrl', 'dx', 'g1', 'g2', 'g3', 'g4',
-                        'id', 'j_0', 'j_1', 'k', 'n', 'shape']
+        links.columns = link_columns
         links['A_c'] = np.repeat(superlinks['A_c'].values, nlinks)
         links['C'] = np.repeat(superlinks['C'].values, nlinks)
         links['Q_0'] = np.repeat(superlinks['Q_0'].values, nlinks)
@@ -971,17 +979,17 @@ class SuperLink():
         links['k'] = np.repeat(superlinks.index.values, nlinks)
         links['shape'] = np.repeat(superlinks['shape'].values, nlinks)
         links['n'] = np.repeat(superlinks['n'].values, nlinks)
-        links['g1'] = np.repeat(superlinks['g1'].values, nlinks)
-        links['g2'] = np.repeat(superlinks['g2'].values, nlinks)
-        links['g3'] = np.repeat(superlinks['g3'].values, nlinks)
-        links['g4'] = np.repeat(superlinks['g4'].values, nlinks)
+        for i in range(1, 7):
+            geom_number = f'g{i}'
+            if geom_number in superlinks.columns:
+                links[geom_number] = np.repeat(superlinks[geom_number].values, nlinks)
         links['id'] = links.index.values
         j = np.arange(NJ)
         links['j_0'] = np.delete(j, downstream_nodes + 1)
         links['j_1'] = np.delete(j, upstream_nodes)
         # Configure junctions
         junctions = pd.DataFrame(np.zeros((NJ, junction_ncols)))
-        junctions.columns = ['A_s', 'h_0', 'id', 'k', 'z_inv']
+        junctions.columns = junction_columns
         junctions['A_s'] = np.repeat(superlinks['A_s'].values, njunctions)
         junctions['h_0'] = np.repeat(superlinks['h_0'].values, njunctions)
         junctions['k'] = np.repeat(superlinks.index.values, njunctions)
@@ -1542,6 +1550,9 @@ class SuperLink():
         _g1_ik = self._g1_ik
         _g2_ik = self._g2_ik
         _g3_ik = self._g3_ik
+        _g4_ik = self._g4_ik
+        _g5_ik = self._g5_ik
+        _g6_ik = self._g6_ik
         nk = self.nk
         n_o = self.n_o
         # Set attributes
@@ -1610,6 +1621,9 @@ class SuperLink():
         self._g1_ik = _g1_ik
         self._g2_ik = _g2_ik
         self._g3_ik = _g3_ik
+        self._g4_ik = _g4_ik
+        self._g5_ik = _g5_ik
+        self._g6_ik = _g6_ik
         self._has_irregular = _has_irregular
         self._geom_factory = _geom_factory
         self._transect_factory = _transect_factory
