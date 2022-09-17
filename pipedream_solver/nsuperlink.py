@@ -385,6 +385,7 @@ class nSuperLink(SuperLink):
         _g4_ik = self._g4_ik           # Geometry 4 of link ik (other)
         _g5_ik = self._g5_ik           # Geometry 5 of link ik (other)
         _g6_ik = self._g6_ik           # Geometry 6 of link ik (other)
+        _g7_ik = self._g6_ik           # Geometry 7 of link ik (other)
         _geom_codes = self._geom_codes
         _ellipse_ix = self._ellipse_ix
         _transect_factory = self._transect_factory
@@ -396,7 +397,7 @@ class nSuperLink(SuperLink):
                                    _g1_ik, _g2_ik)
         # Compute hydraulic geometries for all other regular geometries
         numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
-                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik,
+                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                                  _geom_codes, _Ik, _ik)
         # Compute hydraulic geometry for irregular geometries
         if _has_irregular:
@@ -434,6 +435,7 @@ class nSuperLink(SuperLink):
         _g4_ik = self._g4_ik           # Geometry 4 of link ik (other)
         _g5_ik = self._g5_ik           # Geometry 5 of link ik (other)
         _g6_ik = self._g6_ik           # Geometry 6 of link ik (other)
+        _g7_ik = self._g7_ik           # Geometry 7 of link ik (other)        
         _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
         _J_uk = self._J_uk             # Index of junction upstream of superlink k
         H_j = self.H_j                 # Head at superjunction j
@@ -445,7 +447,7 @@ class nSuperLink(SuperLink):
         _geom_codes = self._geom_codes
         # Compute hydraulic geometry for regular geometries
         numba_boundary_geometry(_A_uk, _B_uk, _h_Ik, H_j, _z_inv_uk,
-                                _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik,
+                                _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                                 _geom_codes, _i_1k, _I_1k, _J_uk)
         # Compute hydraulic geometry for irregular geometries
         if _uk_has_irregular:
@@ -479,6 +481,7 @@ class nSuperLink(SuperLink):
         _g4_ik = self._g4_ik           # Geometry 4 of link ik (other)
         _g5_ik = self._g5_ik           # Geometry 5 of link ik (other)
         _g6_ik = self._g6_ik           # Geometry 6 of link ik (other)
+        _g7_ik = self._g7_ik           # Geometry 7 of link ik (other)        
         _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
         _J_dk = self._J_dk             # Index of junction downstream of superlink k
         H_j = self.H_j                 # Head at superjunction j
@@ -490,7 +493,7 @@ class nSuperLink(SuperLink):
         _geom_codes = self._geom_codes
         # Compute hydraulic geometry for regular geometries
         numba_boundary_geometry(_A_dk, _B_dk, _h_Ik, H_j, _z_inv_dk,
-                                _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik,
+                                _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik, 
                                 _geom_codes, _i_nk, _I_Np1k, _J_dk)
         # Compute hydraulic geometry for irregular geometries
         if _dk_has_irregular:
@@ -1544,11 +1547,11 @@ def handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik, _g1_ik, 
                                                             _g2_ik[_ik_g])
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             int64[:], int64[:], int64[:]),
       cache=True)
 def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
-                             _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik,
+                             _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                              _geom_codes, _Ik, _ik):
     n = len(_ik)
     for i in range(n):
@@ -1563,6 +1566,7 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
         g4_i = _g4_ik[i]
         g5_i = _g5_ik[i]
         g6_i = _g6_ik[i]
+        g7_i = _g7_ik[i]
         if geom_code:
             if geom_code == 1:
                 _A_ik[i] = pipedream_solver.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
@@ -1610,18 +1614,18 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _R_ik[i] = pipedream_solver.ngeometry.Force_Main_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Force_Main_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 10:
-                _A_ik[i] = pipedream_solver.ngeometry.Floodplain_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i)
-                _Pe_ik[i] = pipedream_solver.ngeometry.Floodplain_Pe_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i)
+                _A_ik[i] = pipedream_solver.ngeometry.Floodplain_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i, g7_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Floodplain_Pe_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i, g7_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Floodplain_R_ik(_A_ik[i], _Pe_ik[i])
-                _B_ik[i] = pipedream_solver.ngeometry.Floodplain_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i)
+                _B_ik[i] = pipedream_solver.ngeometry.Floodplain_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i, g7_i)
     return 1
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             int64[:], int64[:], int64[:], int64[:]),
       cache=True)
 def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
-                            _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik,
+                            _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                             _geom_codes, _i_bk, _I_bk, _J_bk):
     n = len(_i_bk)
     for k in range(n):
@@ -1638,6 +1642,7 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         g4_i = _g4_ik[i]
         g5_i = _g5_ik[i]
         g6_i = _g6_ik[i]
+        g7_i = _g7_ik[i]
         if geom_code:
             if geom_code == 1:
                 _A_bk[k] = pipedream_solver.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
@@ -1667,8 +1672,8 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
                 _A_bk[k] = pipedream_solver.ngeometry.Force_Main_A_ik(h_I, h_Ip1, g1_i, g2_i)
                 _B_bk[k] = pipedream_solver.ngeometry.Force_Main_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 10:
-                _A_bk[k] = pipedream_solver.ngeometry.Floodplain_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i)
-                _B_bk[k] = pipedream_solver.ngeometry.Floodplain_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Floodplain_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i, g7_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Floodplain_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i, g7_i)
     return 1
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
