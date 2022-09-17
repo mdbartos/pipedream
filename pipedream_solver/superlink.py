@@ -408,8 +408,8 @@ class SuperLink():
             self._transect_ik = links['ts']
         else:
             self._transect_ik = None
-        # Handle hydraulic geometries g1, g2, ..., g6
-        for i in range(1, 7):
+        # Handle hydraulic geometries g1, g2, ..., g6 , and g7
+        for i in range(1, 8):
             geom_number = f'g{i}'
             if geom_number in links.columns:
                 setattr(self, f'_{geom_number}_ik',
@@ -958,7 +958,7 @@ class SuperLink():
         njunctions = internal_links + 1
         nlinks = njunctions - 1
         link_columns = ['A_c', 'C', 'Q_0', 'ctrl', 'dx', 'g1', 'g2', 'g3',
-                         'g4', 'g5', 'g6', 'id', 'j_0', 'j_1', 'k', 'n', 'shape']
+                         'g4', 'g5', 'g6', 'g7', 'id', 'j_0', 'j_1', 'k', 'n', 'shape']
         junction_columns = ['A_s', 'h_0', 'id', 'k', 'z_inv']
         link_ncols = len(link_columns)
         junction_ncols = len(junction_columns)
@@ -979,7 +979,7 @@ class SuperLink():
         links['k'] = np.repeat(superlinks.index.values, nlinks)
         links['shape'] = np.repeat(superlinks['shape'].values, nlinks)
         links['n'] = np.repeat(superlinks['n'].values, nlinks)
-        for i in range(1, 7):
+        for i in range(1, 8):
             geom_number = f'g{i}'
             if geom_number in superlinks.columns:
                 links[geom_number] = np.repeat(superlinks[geom_number].values, nlinks)
@@ -1553,6 +1553,7 @@ class SuperLink():
         _g4_ik = self._g4_ik
         _g5_ik = self._g5_ik
         _g6_ik = self._g6_ik
+        _g7_ik = self._g7_ik
         nk = self.nk
         n_o = self.n_o
         # Set attributes
@@ -1624,6 +1625,7 @@ class SuperLink():
         self._g4_ik = _g4_ik
         self._g5_ik = _g5_ik
         self._g6_ik = _g6_ik
+        self._g7_ik = _g7_ik
         self._has_irregular = _has_irregular
         self._geom_factory = _geom_factory
         self._transect_factory = _transect_factory
