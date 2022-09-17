@@ -429,7 +429,7 @@ class SuperLink():
             assert _Sf_method.isin(Sf_map).all()
         except:
             raise ValueError('Friction method must be one of cm, hw, dw.')
-        self._Sf_method = _Sf_method.map(Sf_map).astype(np.int64).values
+        self._Sf_method_ik = _Sf_method.map(Sf_map).astype(np.int64).values
         if 'roughness' in links:
             self._n_ik = links['roughness'].values.astype(np.float64)
         else:
@@ -458,11 +458,19 @@ class SuperLink():
         if 'C_uk' in superlinks:
             self._C_uk = superlinks['C_uk'].values.astype(np.float64)
         else:
-            self._C_uk = 0.67 * np.ones(self.NK)
+            self._C_uk = 0.67 * np.ones(self.NK, dtype=np.float64)
         if 'C_dk' in superlinks:
             self._C_dk = superlinks['C_dk'].values.astype(np.float64)
         else:
-            self._C_dk = 0.67 * np.ones(self.NK)
+            self._C_dk = 0.67 * np.ones(self.NK, dtype=np.float64)
+        if 'dx_uk' in superlinks:
+            self._dx_uk = superlinks['dx_uk'].values.astype(np.float64)
+        else:
+            self._dx_uk = np.zeros(self.NK, dtype=np.float64)
+        if 'dx_dk' in superlinks:
+            self._dx_dk = superlinks['dx_dk'].values.astype(np.float64)
+        else:
+            self._dx_dk = np.zeros(self.NK, dtype=np.float64)
         self._h_Ik = junctions.loc[self._I, 'h_0'].values.astype(np.float64)
         self._A_SIk = junctions.loc[self._I, 'A_s'].values.astype(np.float64)
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(np.float64)
@@ -694,10 +702,25 @@ class SuperLink():
         self._Pe_dk = np.copy(self._Pe_ik[self._i_nk])
         self._R_uk = np.copy(self._R_ik[self._i_1k])
         self._R_dk = np.copy(self._R_ik[self._i_nk])
+        # End slopes
+        cond_uk = (self._dx_uk > 0.)
+        cond_dk = (self._dx_uk > 0.)
+        _S_o_uk = np.zeros(self.NK, dtype=np.float64)
+        _S_o_dk = np.zeros(self.NK, dtype=np.float64)
+        _S_o_uk[cond_uk] = (self._z_inv_j[self._J_uk] - self._z_inv_uk)[cond_uk] / self._dx_uk[cond_uk]
+        _S_o_dk[cond_dk] = (self._z_inv_dk - self._z_inv_j[self._J_dk])[cond_dk] / self._dx_uk[cond_dk]
+        self._S_o_uk = _S_o_uk
+        self._S_o_dk = _S_o_dk
+        # Boundary indexers
         self._link_start = np.zeros(self._ik.size, dtype=np.bool8)
         self._link_end = np.zeros(self._ik.size, dtype=np.bool8)
         self._link_start[self._i_1k] = True
         self._link_end[self._i_nk] = True
+        # End roughness
+        self._n_uk = np.copy(self._n_ik[self._i_1k])
+        self._n_dk = np.copy(self._n_ik[self._i_nk])
+        self._Sf_method_uk = np.copy(self._Sf_method_ik[self._i_1k])
+        self._Sf_method_dk = np.copy(self._Sf_method_ik[self._i_nk])
         self._h_c = np.zeros(self.NK)
         self._h_n = np.zeros(self.NK)
         # Set up hydraulic geometry computations

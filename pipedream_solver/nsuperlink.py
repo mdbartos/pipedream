@@ -427,6 +427,8 @@ class nSuperLink(SuperLink):
         _h_Ik = self._h_Ik             # Depth at junction Ik
         _A_uk = self._A_uk             # Flow area at upstream end of superlink k
         _B_uk = self._B_uk             # Top width at upstream end of superlink k
+        _Pe_uk = self._Pe_uk
+        _R_uk = self._R_uk
         _dx_ik = self._dx_ik           # Length of link ik
         _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
         _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
@@ -444,7 +446,7 @@ class nSuperLink(SuperLink):
         _I_1k = self._I_1k
         _geom_codes = self._geom_codes
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_uk, _B_uk, _h_Ik, H_j, _z_inv_uk,
+        numba_boundary_geometry(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik,
                                 _geom_codes, _i_1k, _I_1k, _J_uk)
         # Compute hydraulic geometry for irregular geometries
@@ -472,6 +474,8 @@ class nSuperLink(SuperLink):
         _h_Ik = self._h_Ik             # Depth at junction Ik
         _A_dk = self._A_dk             # Flow area at downstream end of superlink k
         _B_dk = self._B_dk             # Top width at downstream end of superlink k
+        _Pe_dk = self._Pe_dk
+        _R_dk = self._R_dk
         _dx_ik = self._dx_ik           # Length of link ik
         _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
         _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
@@ -489,7 +493,7 @@ class nSuperLink(SuperLink):
         _I_Np1k = self._I_Np1k
         _geom_codes = self._geom_codes
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_dk, _B_dk, _h_Ik, H_j, _z_inv_dk,
+        numba_boundary_geometry(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik,
                                 _geom_codes, _i_nk, _I_Np1k, _J_dk)
         # Compute hydraulic geometry for irregular geometries
@@ -602,7 +606,7 @@ class nSuperLink(SuperLink):
         _u_Ik = self._u_Ik         # Flow velocity at junction Ik
         _u_Ip1k = self._u_Ip1k     # Flow velocity at junction I + 1k
         _dx_ik = self._dx_ik       # Length of link ik
-        _Sf_method = self._Sf_method
+        _Sf_method_ik = self._Sf_method_ik
         _n_ik = self._n_ik         # Manning's roughness of link ik
         _Q_ik_prev = np.copy(self.states['Q_ik'])
         _Q_ik_next = self._Q_ik         # Flow rate at link ik
@@ -621,7 +625,8 @@ class nSuperLink(SuperLink):
         # Compute link coefficients
         _a_ik = numba_a_ik(_u_Ik, _sigma_ik)
         _c_ik = numba_c_ik(_u_Ip1k, _sigma_ik)
-        _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik_next, _A_ik, _R_ik, _A_c_ik, _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik, _Sf_method, g)
+        _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik_next, _A_ik, _R_ik, _A_c_ik,
+                           _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik, _Sf_method_ik, g)
         _P_ik = numba_P_ik(_Q_ik_prev, _dx_ik, _dt, _A_ik, _S_o_ik,
                            _sigma_ik, g)
         # Export to instance variables
@@ -730,11 +735,16 @@ class nSuperLink(SuperLink):
         H_j = self.H_j                 # Head at superjunction j
         _A_uk = self._A_uk             # Flow area at upstream end of superlink k
         _B_uk = self._B_uk             # Top width at upstream end of superlink k
+        _R_uk = self._R_uk
         _theta_uk = self._theta_uk
         # Placeholder discharge coefficient
         _C_uk = self._C_uk
         # Current upstream flows
-        _Q_uk = self._Q_uk
+        _Q_uk_next = self._Q_uk
+        _Q_uk_prev = np.copy(self.states['Q_uk'])
+        # Friction parameters
+        _n_uk = self._n_uk
+        _Sf_method_uk = self._Sf_method_uk
         g = 9.81
         # Compute theta indicator variables
         _H_juk = H_j[_J_uk]
@@ -743,24 +753,16 @@ class nSuperLink(SuperLink):
         _theta_uk[upstream_depth_above_invert] = 1.
         if _bc_method == 'z':
             # Compute superlink upstream coefficients (Zahner)
-            _gamma_uk = gamma_uk(_Q_uk, _C_uk, _A_uk, g)
+            _gamma_uk = gamma_uk(_Q_uk_next, _C_uk, _A_uk, g)
             self._kappa_uk = _gamma_uk
             self._lambda_uk = _theta_uk
             self._mu_uk = - _theta_uk * _z_inv_uk
-        elif _bc_method == 'j':
-            # Current upstream depth
-            _h_uk = _h_Ik[_I_1k]
-            # Junction head
-            _H_juk = H_j[_J_uk]
-            # Head difference
-            _dH_uk = _H_juk - _h_uk - _z_inv_uk
-            # Compute superlink upstream coefficients (Ji)
-            _kappa_uk = self.kappa_uk(_A_uk, _dH_uk, _Q_uk, _B_uk)
-            _lambda_uk = self.lambda_uk(_A_uk, _dH_uk, _B_uk)
-            _mu_uk = self.mu_uk(_A_uk, _dH_uk, _B_uk, _z_inv_uk)
-            self._kappa_uk = _kappa_uk
-            self._lambda_uk = _lambda_uk
-            self._mu_uk = _mu_uk
+        elif _bc_method == 'b':
+            # Compute superlink upstream coefficients (momentum)
+            self._kappa_uk = kappa_uk(_Q_uk_next, _dx_uk, _A_uk, _C_uk,
+                                      _R_uk, _n_uk, _Sf_method_uk, dt, g)
+            self._lambda_uk = _theta_uk
+            self._mu_uk = mu_uk(_Q_uk_prev, _dx_uk, _A_uk, _theta_uk, _z_inv_uk, _S_o_uk, dt, g)
         else:
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
 
@@ -781,11 +783,16 @@ class nSuperLink(SuperLink):
         H_j = self.H_j                 # Head at superjunction j
         _A_dk = self._A_dk             # Flow area at downstream end of superlink k
         _B_dk = self._B_dk             # Top width at downstream end of superlink k
+        _R_dk = self._R_dk
         _theta_dk = self._theta_dk
         # Placeholder discharge coefficient
         _C_dk = self._C_dk
         # Current downstream flows
-        _Q_dk = self._Q_dk
+        _Q_dk_next = self._Q_dk
+        _Q_dk_prev = np.copy(self.states['Q_dk'])
+        # Friction parameters
+        _n_dk = self._n_dk
+        _Sf_method_dk = self._Sf_method_dk
         g = 9.81
         # Compute theta indicator variables
         _H_jdk = H_j[_J_dk]
@@ -794,25 +801,16 @@ class nSuperLink(SuperLink):
         _theta_dk[downstream_depth_above_invert] = 1.
         if _bc_method == 'z':
             # Compute superlink downstream coefficients (Zahner)
-            _gamma_dk = gamma_dk(_Q_dk, _C_dk, _A_dk, g)
+            _gamma_dk = gamma_dk(_Q_dk_next, _C_dk, _A_dk, g)
             self._kappa_dk = _gamma_dk
             self._lambda_dk = _theta_dk
             self._mu_dk = - _theta_dk * _z_inv_dk
-        elif _bc_method == 'j':
-            # Downstream top width
-            # Current downstream depth
-            _h_dk = _h_Ik[_I_Np1k]
-            # Junction head
-            _H_jdk = H_j[_J_dk]
-            # Head difference
-            _dH_dk = _h_dk + _z_inv_dk - _H_jdk
-            # Compute superlink upstream coefficients (Ji)
-            _kappa_dk = self.kappa_dk(_A_dk, _dH_dk, _Q_dk, _B_dk)
-            _lambda_dk = self.lambda_dk(_A_dk, _dH_dk, _B_dk)
-            _mu_dk = self.mu_dk(_A_dk, _dH_dk, _B_dk, _z_inv_dk)
-            self._kappa_dk = _kappa_dk
-            self._lambda_dk = _lambda_dk
-            self._mu_dk = _mu_dk
+        elif _bc_method == 'b':
+            # Compute superlink upstream coefficients (momentum)
+            self._kappa_dk = kappa_dk(_Q_dk_next, _dx_dk, _A_dk, _C_dk,
+                                      _R_dk, _n_dk, _Sf_method_dk, dt, g)
+            self._lambda_dk = _theta_dk
+            self._mu_dk = mu_dk(_Q_dk_prev, _dx_dk, _A_dk, _theta_dk, _z_inv_dk, _S_o_dk, dt, g)
         else:
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
 
@@ -1613,11 +1611,11 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _B_ik[i] = pipedream_solver.ngeometry.Floodplain_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i)
     return 1
 
-@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:],
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             int64[:], int64[:], int64[:], int64[:]),
       cache=True)
-def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
+def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
                             _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik,
                             _geom_codes, _i_bk, _I_bk, _J_bk):
     n = len(_i_bk)
@@ -1638,33 +1636,52 @@ def numba_boundary_geometry(_A_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         if geom_code:
             if geom_code == 1:
                 _A_bk[k] = pipedream_solver.ngeometry.Circular_A_ik(h_I, h_Ip1, g1_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Circular_Pe_ik(h_I, h_Ip1, g1_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Circular_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Circular_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 2:
                 _A_bk[k] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Rect_Closed_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Rect_Closed_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
             elif geom_code == 3:
                 _A_bk[k] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Rect_Open_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Rect_Open_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Rect_Open_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 4:
                 _A_bk[k] = pipedream_solver.ngeometry.Triangular_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Triangular_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Triangular_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Triangular_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 5:
                 _A_bk[k] = pipedream_solver.ngeometry.Trapezoidal_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Trapezoidal_Pe_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Trapezoidal_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Trapezoidal_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i)
             elif geom_code == 6:
                 _A_bk[k] = pipedream_solver.ngeometry.Parabolic_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Parabolic_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Parabolic_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Parabolic_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 7:
                 _A_bk[k] = pipedream_solver.ngeometry.Elliptical_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Elliptical_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Elliptical_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 8:
                 _A_bk[k] = pipedream_solver.ngeometry.Wide_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Wide_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Wide_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Wide_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 9:
                 _A_bk[k] = pipedream_solver.ngeometry.Force_Main_A_ik(h_I, h_Ip1, g1_i, g2_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Force_Main_Pe_ik(h_I, h_Ip1, g1_i, g2_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Force_Main_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Force_Main_B_ik(h_I, h_Ip1, g1_i, g2_i)
             elif geom_code == 10:
                 _A_bk[k] = pipedream_solver.ngeometry.Floodplain_A_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Floodplain_Pe_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i)
+                _R_bk[k] = pipedream_solver.ngeometry.Floodplain_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Floodplain_B_ik(h_I, h_Ip1, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i)
     return 1
 
@@ -1783,6 +1800,31 @@ def numba_compute_tabular_storage_volumes(h_j, V_sj, hs, As, Vs, sjs, sts, inds,
             V_sj[sj] = (1 - frac) * V_range[ix - 1] + (frac) * V_range[ix]
     return V_sj
 
+@njit(float64(float64, float64, float64, float64, float64, float64, float64))
+def friction_slope(Q_ik_t, dx_ik, A_ik, R_ik, n_ik, Sf_method_ik, g=9.81):
+    if A_ik > 0:
+        # Chezy-Manning eq.
+        if Sf_method_ik == 0:
+            t_1 = (g * n_ik**2 * np.abs(Q_ik_t) * dx_ik
+                   / A_ik / R_ik**(4/3))
+        # Hazen-Williams eq.
+        elif Sf_method_ik == 1:
+            t_1 = (1.354 * g * np.abs(Q_ik_t)**0.85 * dx_ik
+                   / A_ik**0.85 / n_ik**1.85 / R_ik**1.1655)
+        # Darcy-Weisbach eq.
+        elif Sf_method_ik == 2:
+            # kinematic viscosity(meter^2/sec), we can consider this is constant.
+            nu = 0.0000010034
+            Re = (np.abs(Q_ik_t) / A_ik) * 4 * R_ik / nu
+            f = 0.25 / (np.log10(n_ik / (3.7 * 4 * R_ik) + 5.74 / (Re**0.9)))**2
+            t_1 = (0.01274 * g * f * np.abs(Q_ik_t) * dx_ik
+                   / (A_ik * R_ik))
+        else:
+            raise ValueError('Invalid friction method.')
+        return t_1
+    else:
+        return 0.
+
 @njit(float64[:](float64[:], float64[:]),
       cache=True)
 def numba_a_ik(u_Ik, sigma_ik):
@@ -1803,34 +1845,17 @@ def numba_c_ik(u_Ip1k, sigma_ik):
                  float64[:], float64[:], float64[:], float64[:], boolean[:], float64[:], int64[:], float64),
       cache=True)
 def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
-               A_c_ik, C_ik, a_ik, c_ik, ctrl, sigma_ik, Sf_method, g=9.81):
+               A_c_ik, C_ik, a_ik, c_ik, ctrl, sigma_ik, Sf_method_ik, g=9.81):
     """
     Compute link coefficient 'b' for link i, superlink k.
     """
     # TODO: Clean up
     t_0 = (dx_ik / dt) * sigma_ik
     t_1 = np.zeros(Q_ik_t.size)
-    
-    k = len(Sf_method)
+    k = len(Sf_method_ik)
     for n in range(k):
-        if A_ik[n] > 0:
-            if Sf_method[n] == 0:   # Chezy-Manning eq.
-                t_1[n] = (g * n_ik[n]**2 * np.abs(Q_ik_t[n]) * dx_ik[n]
-                          / A_ik[n] / R_ik[n]**(4/3))
-            elif Sf_method[n] == 1:   # Hazen-Williams eq.
-                t_1[n] = (1.354 * g * np.abs(Q_ik_t[n])**0.85 * dx_ik[n]
-                          / A_ik[n]**0.85 / n_ik[n]**1.85 / R_ik[n]**1.1655)
-            elif Sf_method[n] == 2:   # Darcy-Weisbach eq.
-                nu = 0.0000010034     # kinematic viscosity(meter^2/sec), we can consider this is constant.
-                Re = (np.abs(Q_ik_t[n])/A_ik[n])*4*R_ik[n]/nu
-                f = 0.25/(np.log10(n_ik[n]/(3.7*4*R_ik[n]) + 5.74/(Re**0.9)))**2
-                t_1[n] = (0.01274*g*f*np.abs(Q_ik_t[n])*dx_ik[n]
-                          /(A_ik[n] * R_ik[n]))
-            else:
-                raise ValueError('Invalid friction method.')
-        else:
-            t_1[n] = 0.0
-
+        t_1[n] = friction_slope(Q_ik_t[n], dx_ik[n], A_ik[n], R_ik[n],
+                                n_ik[n], Sf_method_ik[n], g)
     t_2 = np.zeros(ctrl.size)
     cond = ctrl
     t_2[cond] = A_ik[cond] * np.abs(Q_ik_t[cond]) / A_c_ik[cond]**2 / C_ik[cond]**2
@@ -2051,6 +2076,58 @@ def numba_u_Ip1k(_dx_ik, _u_ik, _link_end, _u_Ip1k):
             else:
                 _u_Ip1k[i] = 0
     return _u_Ip1k
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+                 int64[:], float64, float64), cache=True)
+def kappa_uk(Q_uk, dx_uk, A_uk, C_uk, R_uk, n_uk, Sf_method_uk, dt, g=9.81):
+    """
+    Compute boundary coefficient 'kappa' for upstream end of superlink k.
+    """
+    k = Q_uk.size
+    t_0 = - dx_uk / g / A_uk / dt
+    t_1 = np.zeros(k, dtype=np.float64)
+    for n in range(k):
+        t_1[n] = friction_slope(Q_uk[n], dx_uk[n], A_uk[n], R_uk[n],
+                                n_uk[n], Sf_method_uk[n], g)
+    t_2 = - np.abs(Q_uk) / g / C_uk**2 / A_uk**2
+    return t_0 + t_1 + t_2
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+                 int64[:], float64, float64), cache=True)
+def kappa_dk(Q_dk, dx_dk, A_dk, C_dk, R_dk, n_dk, Sf_method_dk, dt, g=9.81):
+    """
+    Compute boundary coefficient 'kappa' for downstream end of superlink k.
+    """
+    k = Q_dk.size
+    t_0 = dx_dk / g / A_dk / dt
+    t_1 = np.zeros(k, dtype=np.float64)
+    for n in range(k):
+        t_1[n] = friction_slope(Q_dk[n], dx_dk[n], A_dk[n], R_dk[n],
+                                n_dk[n], Sf_method_dk[n], g)
+    t_2 = np.abs(Q_dk) / g / C_dk**2 / A_dk**2
+    return t_0 + t_1 + t_2
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:],
+                 float64[:], float64, float64), cache=True)
+def mu_uk(Q_uk_t, dx_uk, A_uk, theta_uk, z_inv_uk, S_o_uk, dt, g=9.81):
+    """
+    Compute boundary coefficient 'mu' for upstream end of superlink k.
+    """
+    t_0 = Q_uk_t * dx_uk / g / A_uk / dt
+    t_1 = - theta_uk * z_inv_uk
+    t_2 = dx_uk * S_o_uk
+    return t_0 + t_1 + t_2
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:],
+                 float64[:], float64, float64), cache=True)
+def mu_dk(Q_dk_t, dx_dk, A_dk, theta_dk, z_inv_dk, S_o_dk, dt, g=9.81):
+    """
+    Compute boundary coefficient 'mu' for downstream end of superlink k.
+    """
+    t_0 = - Q_dk_t * dx_dk / g / A_dk / dt
+    t_1 = - theta_dk * z_inv_dk
+    t_2 = - dx_dk * S_o_dk
+    return t_0 + t_1 + t_2
 
 @njit(float64(float64, float64, float64, float64, float64),
       cache=True)
