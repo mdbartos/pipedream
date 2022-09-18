@@ -650,6 +650,11 @@ class nSuperLink(SuperLink):
         _h_Ik_prev = np.copy(self.states['h_Ik'])         # Depth at junction Ik
         _E_Ik = self._E_Ik                   # Continuity coefficient E_Ik
         _D_Ik = self._D_Ik                   # Continuity coefficient D_Ik
+        _B_uk = self._B_uk
+        _B_dk = self._B_dk
+        _dx_uk = self._dx_uk
+        _dx_dk = self._dx_dk
+        _kI = self._kI
         # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
@@ -658,6 +663,7 @@ class nSuperLink(SuperLink):
             _Q_0Ik = np.zeros(_h_Ik_prev.size)
         # Compute E_Ik and D_Ik
         numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik_prev, _dx_ik, _A_SIk,
+                          _B_uk, _B_dk, _dx_uk, _dx_dk, _kI,
                           _dt, forward_I_i, backward_I_i, _is_start, _is_end)
         # Export instance variables
         self._E_Ik = _E_Ik
@@ -1908,23 +1914,26 @@ def D_Ik(Q_0IK, B_ik, dx_ik, B_im1k, dx_im1k, A_SIk, h_Ik_t, dt):
     t_4 = h_Ik_t / dt
     return t_0 + ((t_1 + t_2 + t_3) * t_4)
 
-@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64,
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], int64[:], float64,
             int64[:], int64[:], boolean[:], boolean[:]),
       cache=True)
-def numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk, _dt,
+def numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk,
+                      _B_uk, _B_dk, _dx_uk, _dx_dk, _kI, _dt,
                       _forward_I_i, _backward_I_i, _is_start, _is_end):
     N = _h_Ik.size
     for I in range(N):
+        k = _kI[I]
         if _is_start[I]:
             i = _forward_I_i[I]
-            _E_Ik[I] = E_Ik(_B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I], _dt)
-            _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], 0.0, 0.0, _A_SIk[I],
+            _E_Ik[I] = E_Ik(_B_ik[i], _dx_ik[i], _B_uk[k], _dx_uk[k], _A_SIk[I], _dt)
+            _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_ik[i], _dx_ik[i], _B_uk[k], _dx_uk[k], _A_SIk[I],
                             _h_Ik[I], _dt)
         elif _is_end[I]:
             im1 = _backward_I_i[I]
-            _E_Ik[I] = E_Ik(0.0, 0.0, _B_ik[im1], _dx_ik[im1],
+            _E_Ik[I] = E_Ik(_B_dk[k], _dx_dk[k], _B_ik[im1], _dx_ik[im1],
                             _A_SIk[I], _dt)
-            _D_Ik[I] = D_Ik(_Q_0Ik[I], 0.0, 0.0, _B_ik[im1],
+            _D_Ik[I] = D_Ik(_Q_0Ik[I], _B_dk[k], _dx_dk[k], _B_ik[im1],
                             _dx_ik[im1], _A_SIk[I], _h_Ik[I], _dt)
         else:
             i = _forward_I_i[I]
