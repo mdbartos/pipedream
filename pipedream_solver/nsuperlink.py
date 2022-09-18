@@ -1868,7 +1868,7 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
                                 n_ik[n], Sf_method_ik[n], g)
     t_2 = np.zeros(ctrl.size)
     cond = ctrl
-    t_2[cond] = A_ik[cond] * np.abs(Q_ik_t[cond]) / A_c_ik[cond]**2 / C_ik[cond]**2
+    t_2[cond] = C_ik[cond] * A_ik[cond] * np.abs(Q_ik_t[cond]) / A_c_ik[cond]**2
     t_3 = a_ik
     t_4 = c_ik
     return t_0 + t_1 + t_2 - t_3 - t_4
@@ -2099,7 +2099,7 @@ def kappa_uk(Q_uk, dx_uk, A_uk, C_uk, R_uk, n_uk, Sf_method_uk, dt, g=9.81):
     for n in range(k):
         t_1[n] = friction_slope(Q_uk[n], dx_uk[n], A_uk[n], R_uk[n],
                                 n_uk[n], Sf_method_uk[n], g)
-    t_2 = - np.abs(Q_uk) / g / C_uk**2 / A_uk**2 / 2
+    t_2 = - C_uk * np.abs(Q_uk) / 2 / g / A_uk**2
     return t_0 + t_1 + t_2
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
@@ -2114,7 +2114,7 @@ def kappa_dk(Q_dk, dx_dk, A_dk, C_dk, R_dk, n_dk, Sf_method_dk, dt, g=9.81):
     for n in range(k):
         t_1[n] = friction_slope(Q_dk[n], dx_dk[n], A_dk[n], R_dk[n],
                                 n_dk[n], Sf_method_dk[n], g)
-    t_2 = np.abs(Q_dk) / g / C_dk**2 / A_dk**2 / 2
+    t_2 = C_dk * np.abs(Q_dk) / 2 / g / A_dk**2
     return t_0 + t_1 + t_2
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:],
@@ -2457,8 +2457,8 @@ def gamma_uk(Q_uk_t, C_uk, A_uk, g=9.81):
     """
     Compute flow coefficient 'gamma' for upstream end of superlink k
     """
-    num = -np.abs(Q_uk_t)
-    den = 2 * (C_uk**2) * (A_uk**2) * g
+    num = -np.abs(Q_uk_t) * C_uk
+    den = 2 * (A_uk**2) * g
     result = safe_divide_vec(num, den)
     return result
 
@@ -2468,8 +2468,8 @@ def gamma_dk(Q_dk_t, C_dk, A_dk, g=9.81):
     """
     Compute flow coefficient 'gamma' for downstream end of superlink k
     """
-    num = np.abs(Q_dk_t)
-    den = 2 * (C_dk**2) * (A_dk**2) * g
+    num = np.abs(Q_dk_t) * C_dk
+    den = 2 * (A_dk**2) * g
     result = safe_divide_vec(num, den)
     return result
 

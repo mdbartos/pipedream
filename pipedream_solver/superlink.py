@@ -458,11 +458,11 @@ class SuperLink():
         if 'C_uk' in superlinks:
             self._C_uk = superlinks['C_uk'].values.astype(np.float64)
         else:
-            self._C_uk = 0.67 * np.ones(self.NK, dtype=np.float64)
+            self._C_uk = (1 / (0.67**2)) * np.ones(self.NK, dtype=np.float64)
         if 'C_dk' in superlinks:
             self._C_dk = superlinks['C_dk'].values.astype(np.float64)
         else:
-            self._C_dk = 0.67 * np.ones(self.NK, dtype=np.float64)
+            self._C_dk = (1 / (0.67**2)) * np.ones(self.NK, dtype=np.float64)
         if 'dx_uk' in superlinks:
             self._dx_uk = superlinks['dx_uk'].values.astype(np.float64)
         else:
