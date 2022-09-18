@@ -718,7 +718,7 @@ class nSuperLink(SuperLink):
         self._Y_Ik = _Y_Ik
         self._Z_Ik = _Z_Ik
 
-    def superlink_upstream_head_coefficients(self):
+    def superlink_upstream_head_coefficients(self, _dt=None):
         """
         Compute upstream head coefficients for superlinks: kappa_uk, lambda_uk, and mu_uk.
         """
@@ -736,6 +736,8 @@ class nSuperLink(SuperLink):
         _A_uk = self._A_uk             # Flow area at upstream end of superlink k
         _B_uk = self._B_uk             # Top width at upstream end of superlink k
         _R_uk = self._R_uk
+        _dx_uk = self._dx_uk
+        _S_o_uk = self._S_o_uk
         _theta_uk = self._theta_uk
         # Placeholder discharge coefficient
         _C_uk = self._C_uk
@@ -746,6 +748,9 @@ class nSuperLink(SuperLink):
         _n_uk = self._n_uk
         _Sf_method_uk = self._Sf_method_uk
         g = 9.81
+        # If time step not specified, use instance time
+        if _dt is None:
+            _dt = self._dt
         # Compute theta indicator variables
         _H_juk = H_j[_J_uk]
         upstream_depth_above_invert = _H_juk >= _z_inv_uk
@@ -760,13 +765,14 @@ class nSuperLink(SuperLink):
         elif _bc_method == 'b':
             # Compute superlink upstream coefficients (momentum)
             self._kappa_uk = kappa_uk(_Q_uk_next, _dx_uk, _A_uk, _C_uk,
-                                      _R_uk, _n_uk, _Sf_method_uk, dt, g)
+                                      _R_uk, _n_uk, _Sf_method_uk, _dt, g)
             self._lambda_uk = _theta_uk
-            self._mu_uk = mu_uk(_Q_uk_prev, _dx_uk, _A_uk, _theta_uk, _z_inv_uk, _S_o_uk, dt, g)
+            self._mu_uk = mu_uk(_Q_uk_prev, _dx_uk, _A_uk, _theta_uk, _z_inv_uk,
+                                _S_o_uk, _dt, g)
         else:
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
 
-    def superlink_downstream_head_coefficients(self):
+    def superlink_downstream_head_coefficients(self, _dt=None):
         """
         Compute downstream head coefficients for superlinks: kappa_dk, lambda_dk, and mu_dk.
         """
@@ -784,6 +790,8 @@ class nSuperLink(SuperLink):
         _A_dk = self._A_dk             # Flow area at downstream end of superlink k
         _B_dk = self._B_dk             # Top width at downstream end of superlink k
         _R_dk = self._R_dk
+        _dx_dk = self._dx_dk
+        _S_o_dk = self._S_o_dk
         _theta_dk = self._theta_dk
         # Placeholder discharge coefficient
         _C_dk = self._C_dk
@@ -794,6 +802,8 @@ class nSuperLink(SuperLink):
         _n_dk = self._n_dk
         _Sf_method_dk = self._Sf_method_dk
         g = 9.81
+        if _dt is None:
+            _dt = self._dt
         # Compute theta indicator variables
         _H_jdk = H_j[_J_dk]
         downstream_depth_above_invert = _H_jdk >= _z_inv_dk
@@ -808,9 +818,9 @@ class nSuperLink(SuperLink):
         elif _bc_method == 'b':
             # Compute superlink upstream coefficients (momentum)
             self._kappa_dk = kappa_dk(_Q_dk_next, _dx_dk, _A_dk, _C_dk,
-                                      _R_dk, _n_dk, _Sf_method_dk, dt, g)
+                                      _R_dk, _n_dk, _Sf_method_dk, _dt, g)
             self._lambda_dk = _theta_dk
-            self._mu_dk = mu_dk(_Q_dk_prev, _dx_dk, _A_dk, _theta_dk, _z_inv_dk, _S_o_dk, dt, g)
+            self._mu_dk = mu_dk(_Q_dk_prev, _dx_dk, _A_dk, _theta_dk, _z_inv_dk, _S_o_dk, _dt, g)
         else:
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
 
@@ -2089,7 +2099,7 @@ def kappa_uk(Q_uk, dx_uk, A_uk, C_uk, R_uk, n_uk, Sf_method_uk, dt, g=9.81):
     for n in range(k):
         t_1[n] = friction_slope(Q_uk[n], dx_uk[n], A_uk[n], R_uk[n],
                                 n_uk[n], Sf_method_uk[n], g)
-    t_2 = - np.abs(Q_uk) / g / C_uk**2 / A_uk**2
+    t_2 = - np.abs(Q_uk) / g / C_uk**2 / A_uk**2 / 2
     return t_0 + t_1 + t_2
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
@@ -2104,7 +2114,7 @@ def kappa_dk(Q_dk, dx_dk, A_dk, C_dk, R_dk, n_dk, Sf_method_dk, dt, g=9.81):
     for n in range(k):
         t_1[n] = friction_slope(Q_dk[n], dx_dk[n], A_dk[n], R_dk[n],
                                 n_dk[n], Sf_method_dk[n], g)
-    t_2 = np.abs(Q_dk) / g / C_dk**2 / A_dk**2
+    t_2 = np.abs(Q_dk) / g / C_dk**2 / A_dk**2 / 2
     return t_0 + t_1 + t_2
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:],

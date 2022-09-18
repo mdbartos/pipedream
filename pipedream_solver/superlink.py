@@ -4006,8 +4006,8 @@ class SuperLink():
         self.node_coeffs(_Q_0Ik=Q_0Ik, _dt=dt, first_iter=first_iter)
         self.forward_recurrence()
         self.backward_recurrence()
-        self.superlink_upstream_head_coefficients()
-        self.superlink_downstream_head_coefficients()
+        self.superlink_upstream_head_coefficients(_dt=dt)
+        self.superlink_downstream_head_coefficients(_dt=dt)
         self.superlink_flow_coefficients()
         if self.orifices is not None:
             self.orifice_flow_coefficients(u=u_o)
