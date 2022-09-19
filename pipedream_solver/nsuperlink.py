@@ -385,7 +385,7 @@ class nSuperLink(SuperLink):
         _g4_ik = self._g4_ik           # Geometry 4 of link ik (other)
         _g5_ik = self._g5_ik           # Geometry 5 of link ik (other)
         _g6_ik = self._g6_ik           # Geometry 6 of link ik (other)
-        _g7_ik = self._g6_ik           # Geometry 7 of link ik (other)
+        _g7_ik = self._g7_ik           # Geometry 7 of link ik (other)
         _geom_codes = self._geom_codes
         _ellipse_ix = self._ellipse_ix
         _transect_factory = self._transect_factory
