@@ -348,6 +348,11 @@ class SuperLink():
             self.superlink_names = self.superlinks['name'].values
         else:
             self.superlink_names = self.superlinks.index.values
+        if not 'friction_method' in self.superlinks.columns:
+            self.superlinks['friction_method'] = 'cm'
+        if 'n' in self.superlinks.columns:
+            if not 'roughness' in self.superlinks.columns:
+                self.superlinks = self.superlinks.rename(columns={'n' : 'roughness'})
         # If internal links and junctions are not provided, create them
         self.mobile_elements = mobile_elements
         if (links is None) or (junctions is None):
@@ -981,7 +986,8 @@ class SuperLink():
         njunctions = internal_links + 1
         nlinks = njunctions - 1
         link_columns = ['A_c', 'C', 'Q_0', 'ctrl', 'dx', 'g1', 'g2', 'g3',
-                         'g4', 'g5', 'g6', 'id', 'j_0', 'j_1', 'k', 'n', 'shape']
+                         'g4', 'g5', 'g6', 'id', 'j_0', 'j_1', 'k', 'n',
+                        'shape', 'friction_method']
         junction_columns = ['A_s', 'h_0', 'id', 'k', 'z_inv']
         link_ncols = len(link_columns)
         junction_ncols = len(junction_columns)
@@ -1001,7 +1007,8 @@ class SuperLink():
         links['ctrl'] = np.repeat(superlinks['ctrl'].values, nlinks)
         links['k'] = np.repeat(superlinks.index.values, nlinks)
         links['shape'] = np.repeat(superlinks['shape'].values, nlinks)
-        links['n'] = np.repeat(superlinks['n'].values, nlinks)
+        links['roughness'] = np.repeat(superlinks['roughness'].values, nlinks)
+        links['friction_method'] = np.repeat(superlinks['friction_method'].values, nlinks)
         for i in range(1, 7):
             geom_number = f'g{i}'
             if geom_number in superlinks.columns:
