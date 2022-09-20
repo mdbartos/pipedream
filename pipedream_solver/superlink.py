@@ -348,6 +348,11 @@ class SuperLink():
             self.superlink_names = self.superlinks['name'].values
         else:
             self.superlink_names = self.superlinks.index.values
+        if not 'friction_method' in self.superlinks.columns:
+            self.superlinks['friction_method'] = 'cm'
+        if 'n' in self.superlinks.columns:
+            if not 'roughness' in self.superlinks.columns:
+                self.superlinks = self.superlinks.rename(columns={'n' : 'roughness'})
         # If internal links and junctions are not provided, create them
         self.mobile_elements = mobile_elements
         if (links is None) or (junctions is None):
@@ -429,7 +434,7 @@ class SuperLink():
             assert _Sf_method.isin(Sf_map).all()
         except:
             raise ValueError('Friction method must be one of cm, hw, dw.')
-        self._Sf_method = _Sf_method.map(Sf_map).astype(np.int64).values
+        self._Sf_method_ik = _Sf_method.map(Sf_map).astype(np.int64).values
         if 'roughness' in links:
             self._n_ik = links['roughness'].values.astype(np.float64)
         else:
@@ -458,11 +463,19 @@ class SuperLink():
         if 'C_uk' in superlinks:
             self._C_uk = superlinks['C_uk'].values.astype(np.float64)
         else:
-            self._C_uk = 0.67 * np.ones(self.NK)
+            self._C_uk = (1 / (0.67**2)) * np.ones(self.NK, dtype=np.float64)
         if 'C_dk' in superlinks:
             self._C_dk = superlinks['C_dk'].values.astype(np.float64)
         else:
-            self._C_dk = 0.67 * np.ones(self.NK)
+            self._C_dk = (1 / (0.67**2)) * np.ones(self.NK, dtype=np.float64)
+        if 'dx_uk' in superlinks:
+            self._dx_uk = superlinks['dx_uk'].values.astype(np.float64)
+        else:
+            self._dx_uk = np.zeros(self.NK, dtype=np.float64)
+        if 'dx_dk' in superlinks:
+            self._dx_dk = superlinks['dx_dk'].values.astype(np.float64)
+        else:
+            self._dx_dk = np.zeros(self.NK, dtype=np.float64)
         self._h_Ik = junctions.loc[self._I, 'h_0'].values.astype(np.float64)
         self._A_SIk = junctions.loc[self._I, 'A_s'].values.astype(np.float64)
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(np.float64)
@@ -694,10 +707,25 @@ class SuperLink():
         self._Pe_dk = np.copy(self._Pe_ik[self._i_nk])
         self._R_uk = np.copy(self._R_ik[self._i_1k])
         self._R_dk = np.copy(self._R_ik[self._i_nk])
+        # End slopes
+        cond_uk = (self._dx_uk > 0.)
+        cond_dk = (self._dx_uk > 0.)
+        _S_o_uk = np.zeros(self.NK, dtype=np.float64)
+        _S_o_dk = np.zeros(self.NK, dtype=np.float64)
+        _S_o_uk[cond_uk] = (self._z_inv_j[self._J_uk] - self._z_inv_uk)[cond_uk] / self._dx_uk[cond_uk]
+        _S_o_dk[cond_dk] = (self._z_inv_dk - self._z_inv_j[self._J_dk])[cond_dk] / self._dx_uk[cond_dk]
+        self._S_o_uk = _S_o_uk
+        self._S_o_dk = _S_o_dk
+        # Boundary indexers
         self._link_start = np.zeros(self._ik.size, dtype=np.bool8)
         self._link_end = np.zeros(self._ik.size, dtype=np.bool8)
         self._link_start[self._i_1k] = True
         self._link_end[self._i_nk] = True
+        # End roughness
+        self._n_uk = np.copy(self._n_ik[self._i_1k])
+        self._n_dk = np.copy(self._n_ik[self._i_nk])
+        self._Sf_method_uk = np.copy(self._Sf_method_ik[self._i_1k])
+        self._Sf_method_dk = np.copy(self._Sf_method_ik[self._i_nk])
         self._h_c = np.zeros(self.NK)
         self._h_n = np.zeros(self.NK)
         # Set up hydraulic geometry computations
@@ -958,7 +986,8 @@ class SuperLink():
         njunctions = internal_links + 1
         nlinks = njunctions - 1
         link_columns = ['A_c', 'C', 'Q_0', 'ctrl', 'dx', 'g1', 'g2', 'g3',
-                         'g4', 'g5', 'g6', 'g7', 'id', 'j_0', 'j_1', 'k', 'n', 'shape']
+                         'g4', 'g5', 'g6', 'g7', 'id', 'j_0', 'j_1', 'k', 'n',
+                        'shape', 'friction_method']
         junction_columns = ['A_s', 'h_0', 'id', 'k', 'z_inv']
         link_ncols = len(link_columns)
         junction_ncols = len(junction_columns)
@@ -978,7 +1007,8 @@ class SuperLink():
         links['ctrl'] = np.repeat(superlinks['ctrl'].values, nlinks)
         links['k'] = np.repeat(superlinks.index.values, nlinks)
         links['shape'] = np.repeat(superlinks['shape'].values, nlinks)
-        links['n'] = np.repeat(superlinks['n'].values, nlinks)
+        links['roughness'] = np.repeat(superlinks['roughness'].values, nlinks)
+        links['friction_method'] = np.repeat(superlinks['friction_method'].values, nlinks)
         for i in range(1, 8):
             geom_number = f'g{i}'
             if geom_number in superlinks.columns:
@@ -3101,11 +3131,9 @@ class SuperLink():
         _Q_dk = self._Q_dk              # Flow rate at downstream end of superlink k
         H_j = self.H_j                  # Head at superjunction j
         min_depth = self.min_depth      # Minimum allowable depth at boundaries
-        _theta_uk = self._theta_uk      # Upstream indicator variable
-        _theta_dk = self._theta_dk      # Downstream indicator variable
         # Compute flow at next time step
-        _h_uk_next = _kappa_uk * _Q_uk + _theta_uk * (_lambda_uk * H_j[_J_uk] + _mu_uk)
-        _h_dk_next = _kappa_dk * _Q_dk + _theta_dk * (_lambda_dk * H_j[_J_dk] + _mu_dk)
+        _h_uk_next = _kappa_uk * _Q_uk + _lambda_uk * H_j[_J_uk] + _mu_uk
+        _h_dk_next = _kappa_dk * _Q_dk + _lambda_dk * H_j[_J_dk] + _mu_dk
         # Set minimum values
         # TODO: Is this causing the difference between normal/numba versions?
         # _h_uk_next[_h_uk_next < min_depth] = min_depth
@@ -3987,8 +4015,8 @@ class SuperLink():
         self.node_coeffs(_Q_0Ik=Q_0Ik, _dt=dt, first_iter=first_iter)
         self.forward_recurrence()
         self.backward_recurrence()
-        self.superlink_upstream_head_coefficients()
-        self.superlink_downstream_head_coefficients()
+        self.superlink_upstream_head_coefficients(_dt=dt)
+        self.superlink_downstream_head_coefficients(_dt=dt)
         self.superlink_flow_coefficients()
         if self.orifices is not None:
             self.orifice_flow_coefficients(u=u_o)
