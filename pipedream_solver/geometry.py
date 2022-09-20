@@ -881,11 +881,11 @@ class Floodplain():
         pass
 
     @classmethod
-    def A_ik(self, h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, **kwargs):
+    def A_ik(self, h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7, **kwargs):
         raise NotImplementedError
 
     @classmethod
-    def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, **kwargs):
+    def Pe_ik(self, h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7, **kwargs):
         raise NotImplementedError
 
     @classmethod
@@ -893,7 +893,7 @@ class Floodplain():
         raise NotImplementedError
 
     @classmethod
-    def B_ik(self, h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, **kwargs):
+    def B_ik(self, h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7, **kwargs):
         raise NotImplementedError
 
 
