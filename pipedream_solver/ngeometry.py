@@ -976,7 +976,7 @@ def Floodplain_A_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     A_base = y_base * (m_base * y_base)
     A_middle = y_middle * (b_middle + m_middle * y_middle)
     A_top = y_top * (b_top + m_top * y_top)
-    A = A_base + A_middle + A_top + 2*g7*y*(y>0)
+    A = A_base + A_middle + A_top + g7*y*(y>0)
     return A
 
 
@@ -1039,7 +1039,7 @@ def Floodplain_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     Pe_base = 2 * y_base * np.sqrt(1 + m_base**2)
     Pe_middle = 2 * y_middle * np.sqrt(1 + m_middle**2)
     Pe_top = 2 * y_top * np.sqrt(1 + m_top**2)
-    Pe = Pe_base + Pe_middle + Pe_top + 2*g7*(y>0)
+    Pe = Pe_base + Pe_middle + Pe_top + g7*(y>0)
     return Pe
 
 @njit(float64(float64, float64),
@@ -1101,12 +1101,12 @@ def Floodplain_B_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     if y > h_max:
         y = h_max
     if y < h_low:
-        B = 2 * m_base * y + 2*g7*(y>0)
+        B = 2 * m_base * y + g7*(y>0)
     elif (y >= h_low) and (y < h_mid):
         b_middle = 2 * m_base * h_low
-        B = b_middle + (2 * m_middle * (y - h_low)) + 2*g7*(y>0)
+        B = b_middle + (2 * m_middle * (y - h_low)) + g7*(y>0)
     elif (y >= h_mid):
         b_middle = 2 * m_base * h_low
         b_top = 2 * m_middle * (h_mid - h_low)
-        B = b_middle + b_top + (2 * m_top * (y - h_mid)) + 2*g7*(y>0)
+        B = b_middle + b_top + (2 * m_top * (y - h_mid)) + g7*(y>0)
     return B
