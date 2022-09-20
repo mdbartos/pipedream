@@ -1636,7 +1636,7 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
             int64[:], int64[:], int64[:], int64[:]),
       cache=True)
 def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
-                            _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, g7_ik,
+                            _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                             _geom_codes, _i_bk, _I_bk, _J_bk):
     n = len(_i_bk)
     for k in range(n):
