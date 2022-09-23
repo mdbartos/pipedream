@@ -986,8 +986,9 @@ class nSuperLink(SuperLink):
         _z_p = self._z_p            # Offset of pump inlet above upstream invert elevation
         _dHp_max = self._dHp_max    # Maximum pump head difference
         _dHp_min = self._dHp_min    # Minimum pump head difference
-        _ap_h = self._ap_h          # Horizontal axis length of elliptical pump curve
-        _ap_q = self._ap_q          # Vertical axis length of elliptical pump curve
+        _a_p = self._a_p            # Pump curve parameter `a`
+        _b_p = self._b_p            # Pump curve parameter `b`
+        _c_p = self._c_p            # Pump curve parameter `c`
         _Qp = self._Qp              # Current flow rate through pump p
         _alpha_p = self._alpha_p    # Pump flow coefficient alpha_p
         _beta_p = self._beta_p      # Pump flow coefficient beta_p
@@ -999,7 +1000,7 @@ class nSuperLink(SuperLink):
         assert (_dHp_min <= _dHp_max).all()
         # Compute pump flow coefficients
         numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, u,
-                                     _z_p, _dHp_max, _dHp_min, _ap_q, _ap_h, _J_up, _J_dp)
+                                     _z_p, _dHp_max, _dHp_min, _a_p, _b_p, _c_p, _J_up, _J_dp)
         # Export instance variables
         self._alpha_p = _alpha_p
         self._beta_p = _beta_p
@@ -2456,12 +2457,12 @@ def gamma_w(Q_w_t, H_w_t, L_w, s_w, Cwr, Cwt):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def gamma_p(Q_p_t, dH_p_t, a_q, a_h):
+def gamma_p(Q_p_t, b_p, c_p, u):
     """
     Compute flow coefficient 'gamma' for pump p.
     """
-    num = a_q**2 * np.abs(dH_p_t)
-    den = a_h**2 * np.abs(Q_p_t)
+    num = u
+    den = b * np.abs(Q_p_t)**(c_p - 1)
     result = safe_divide_vec(num, den)
     return result
 
@@ -2669,33 +2670,37 @@ def numba_solve_weir_flows(_Hw, _Qw, H_j, _z_inv_j, _z_w, _y_max_w, u, _L_w,
     return _Qw_next
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:]),
+            float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            int64[:], int64[:]),
       cache=True)
 def numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, u,
-                                 _z_p, _dHp_max, _dHp_min, _ap_q, _ap_h, _J_up, _J_dp):
+                                 _z_p, _dHp_max, _dHp_min, _a_p, _b_p, _c_p,
+                                 _J_up, _J_dp):
     # Get upstream and downstream heads and invert elevation
     _H_up = H_j[_J_up]
     _H_dp = H_j[_J_dp]
     _z_inv_up = _z_inv_j[_J_up]
     # Compute effective head
     _dHp = _H_dp - _H_up
+    # Condition 0: Upstream head is above inlet height
     cond_0 = _H_up > _z_inv_up + _z_p
+    # Condition 1: Head difference is within range of pump curve
     cond_1 = (_dHp > _dHp_min) & (_dHp < _dHp_max)
     _dHp[_dHp > _dHp_max] = _dHp_max
     _dHp[_dHp < _dHp_min] = _dHp_min
     # Compute universal coefficients
-    _gamma_p = gamma_p(_Qp, _dHp, _ap_q, _ap_h)
+    _gamma_p = gamma_p(_Qp, _b_p, _c_p, u)
     # Fill coefficient arrays
     # Head in pump curve range
     a = (cond_0 & cond_1)
-    _alpha_p[a] = _gamma_p[a] * u[a]**2
-    _beta_p[a] = -_gamma_p[a] * u[a]**2
-    _chi_p[a] = (_gamma_p[a] * _ap_h[a]**2 / np.abs(_dHp[a])) * u[a]**2
+    _alpha_p[a] = _gamma_p[a]
+    _beta_p[a] = -_gamma_p[a]
+    _chi_p[a] = _gamma_p[a] * a_p[a]
     # Head outside of pump curve range
     b = (cond_0 & ~cond_1)
     _alpha_p[b] = 0.0
     _beta_p[b] = 0.0
-    _chi_p[b] = np.sqrt(np.maximum(_ap_q[b]**2 * (1 - _dHp[b]**2 / _ap_h[b]**2), 0.0)) * u[b]
+    _chi_p[b] = _gamma_[b] * (_a_p[b] - _dHp[b])
     # Depth below inlet
     c = (~cond_0)
     _alpha_p[c] = 0.0
