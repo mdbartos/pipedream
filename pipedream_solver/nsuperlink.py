@@ -2700,7 +2700,7 @@ def numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, 
     b = (cond_0 & ~cond_1)
     _alpha_p[b] = 0.0
     _beta_p[b] = 0.0
-    _chi_p[b] = _gamma_[b] * (_a_p[b] - _dHp[b])
+    _chi_p[b] = _gamma_p[b] * (_a_p[b] - _dHp[b])
     # Depth below inlet
     c = (~cond_0)
     _alpha_p[c] = 0.0
