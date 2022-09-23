@@ -2695,7 +2695,7 @@ def numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, 
     a = (cond_0 & cond_1)
     _alpha_p[a] = _gamma_p[a]
     _beta_p[a] = -_gamma_p[a]
-    _chi_p[a] = _gamma_p[a] * a_p[a]
+    _chi_p[a] = _gamma_p[a] * _a_p[a]
     # Head outside of pump curve range
     b = (cond_0 & ~cond_1)
     _alpha_p[b] = 0.0
