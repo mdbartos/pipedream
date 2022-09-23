@@ -2462,7 +2462,7 @@ def gamma_p(Q_p_t, b_p, c_p, u):
     Compute flow coefficient 'gamma' for pump p.
     """
     num = u
-    den = b * np.abs(Q_p_t)**(c_p - 1)
+    den = b_p * np.abs(Q_p_t)**(c_p - 1)
     result = safe_divide_vec(num, den)
     return result
 
