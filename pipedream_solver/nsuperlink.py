@@ -1464,15 +1464,16 @@ class nSuperLink(SuperLink):
         _z_p = self._z_p            # Offset of pump inlet above upstream invert
         _dHp_max = self._dHp_max    # Maximum pump head difference
         _dHp_min = self._dHp_min    # Minimum pump head difference
-        _ap_h = self._ap_h          # Horizontal axis length of elliptical pump curve
-        _ap_q = self._ap_q          # Vertical axis length of elliptical pump curve
+        _a_p = self._a_p            # Pump curve parameter `a`
+        _b_p = self._b_p            # Pump curve parameter `b`
+        _c_p = self._c_p            # Pump curve parameter `c`
         _Qp = self._Qp              # Current flow rate through pump p
         # If no input signal, assume pump is closed
         if u is None:
             u = np.zeros(self.n_p, dtype=np.float64)
         # Compute pump flows
         _Qp_next = numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max,
-                                          _dHp_min, _ap_q, _ap_h, _J_up, _J_dp)
+                                          _dHp_min, _a_p, _b_p, _c_p, _J_up, _J_dp)
         self._Qp = _Qp_next
 
     def compute_storage_volumes(self):
@@ -2708,10 +2709,10 @@ def numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, 
     _chi_p[c] = 0.0
     return 1
 
-@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-                 int64[:], int64[:]),
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+                 float64[:], float64[:], float64[:], int64[:], int64[:]),
       cache=True)
-def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _ap_q, _ap_h,
+def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _a_p, _b_p, _c_p,
                            _J_up, _J_dp):
     _H_up = H_j[_J_up]
     _H_dp = H_j[_J_dp]
@@ -2722,7 +2723,7 @@ def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _ap_q, _a
     _dHp[_dHp < _dHp_min] = _dHp_min
     cond_0 = _H_up > _z_inv_up + _z_p
     # Compute universal coefficients
-    _Qp_next = u * np.sqrt(np.maximum(_ap_q**2 * (1 - (_dHp)**2 / _ap_h**2), 0.0))
+    _Qp_next = (u / _b_p * (_a_p - _dHp))**(1 / _c_p)
     _Qp_next[~cond_0] = 0.0
     return _Qp_next
 
