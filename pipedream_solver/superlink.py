@@ -581,8 +581,9 @@ class SuperLink():
             self._J_up = self.pumps['sj_0'].values.astype(np.int64)
             self._J_dp = self.pumps['sj_1'].values.astype(np.int64)
             self._z_p = self.pumps['z_p'].values.astype(np.float64)
-            self._ap_h = self.pumps['a_h'].values.astype(np.float64)
-            self._ap_q = self.pumps['a_q'].values.astype(np.float64)
+            self._a_p = self.pumps['a_p'].values.astype(np.float64)
+            self._b_p = self.pumps['b_p'].values.astype(np.float64)
+            self._c_p = self.pumps['c_p'].values.astype(np.float64)
             self._dHp_max = self.pumps['dH_max'].values.astype(np.float64)
             self._dHp_min = self.pumps['dH_min'].values.astype(np.float64)
             self.n_p = self.pumps.shape[0]
