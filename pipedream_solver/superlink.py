@@ -1065,15 +1065,15 @@ class SuperLink():
             except:
                 raise ValueError('If using mobile elements, must have more than one internal link.')
             if (njunctions % 2):
-                _x0 = (dx_j / 2)
+                _xc = (dx_j / 2)
             else:
-                _x0 = (dx_j / 2) + (dx_j / nlinks / 2)
+                _xc = (dx_j / 2) + (dx_j / nlinks / 2)
             xx[:, :-1] = np.vstack([np.linspace(0, i, njunctions - 1)
                                     for i in dx_j])
             # xx[:, :-1] = np.vstack([np.linspace(j, i + j + k, njunctions - 1)
             #                         for i, j, k in zip(dx_j, _dx_uk, _dx_dk)])
-            xx[:, -1] = _x0
-            _z0 = _m * _x0 + _b0
+            xx[:, -1] = _xc
+            _zc = _m * _xc + _b0
             zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
             ix = np.argsort(xx)
             _fixed = (ix < nlinks)
@@ -1095,8 +1095,8 @@ class SuperLink():
             #                       for i, j, k in zip(dx_j, _dx_uk, _dx_dk)])
             zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
             _fixed = np.ones(xx.shape, dtype=np.bool8)
-            _x0 = None
-            _z0 = None
+            _xc = None
+            _zc = None
             c = None
         dxdx = np.diff(xx)
         junctions['z_inv'] = zz.ravel()
@@ -1115,8 +1115,8 @@ class SuperLink():
         self._b0 = _b0
         self._b1 = _b1
         self._m = _m
-        self._x0 = _x0
-        self._z0 = _z0
+        self._xc = _xc
+        self._zc = _zc
 
     def safe_divide(function):
         """
@@ -3646,8 +3646,8 @@ class SuperLink():
         _b0 = self._b0                # Vertical coordinate of upstream end of superlink k
         _b1 = self._b1                # Vertical coordinate of downstream end of superlink k
         _m = self._m                  # Slope of superlink k
-        _x0 = self._x0                # Horizontal coordinate of center of superlink k
-        _z0 = self._z0                # Invert elevation of center of superlink k
+        _xc = self._xc                # Horizontal coordinate of center of superlink k
+        _zc = self._zc                # Invert elevation of center of superlink k
         _fixed = self._fixed          # Junction Ik is fixed (y/n)
         _h_Ik = self._h_Ik            # Depth at junction Ik
         _Q_ik = self._Q_ik            # Flow rate at link ik
@@ -3677,8 +3677,8 @@ class SuperLink():
         Q_ix = np.tile(np.arange(nlinks), len(QQ)).reshape(-1, nlinks)
         # TODO: Add case where position of movable coord is exactly equal to fixed coord
         move_junction = (_H_dk > _z_inv_Ik[_I_Np1k]) & (_H_dk < _z_inv_Ik[_I_1k])
-        z_m = np.where(move_junction, _H_dk, _z0)
-        x_m = np.where(move_junction, (_H_dk - _b0) / _m, _x0)
+        z_m = np.where(move_junction, _H_dk, _zc)
+        x_m = np.where(move_junction, (_H_dk - _b0) / _m, _xc)
         # TODO: Use instance variable
         r = np.arange(len(xx))
         c = np.array(list(map(np.searchsorted, xx, x_m)))
