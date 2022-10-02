@@ -780,6 +780,7 @@ class nSuperLink(SuperLink):
                                 _S_o_uk, _dt, g)
         else:
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
+        self._theta_uk = _theta_uk
 
     def superlink_downstream_head_coefficients(self, _dt=None):
         """
@@ -832,6 +833,7 @@ class nSuperLink(SuperLink):
             self._mu_dk = mu_dk(_Q_dk_prev, _dx_dk, _A_dk, _theta_dk, _z_inv_dk, _S_o_dk, _dt, g)
         else:
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
+        self._theta_dk = _theta_dk
 
     def superlink_flow_coefficients(self):
         """
@@ -1027,6 +1029,12 @@ class nSuperLink(SuperLink):
         _chi_dkm = self._chi_dkm         # Summation of superlink flow coefficients
         _F_jj = self._F_jj
         _A_sj = self._A_sj               # Surface area of superjunction j
+        _dx_uk = self._dx_uk
+        _dx_dk = self._dx_dk
+        _B_uk = self._B_uk
+        _B_dk = self._B_dk
+        _theta_uk = self._theta_uk
+        _theta_dk = self._theta_dk
         NK = self.NK
         n_o = self.n_o                   # Number of orifices in system
         n_w = self.n_w                   # Number of weirs in system
@@ -1087,17 +1095,22 @@ class nSuperLink(SuperLink):
         # If no control input signal specified assume zero input
         if u is None:
             u = 0
+        # Compute upstream/downstream link volume parameters
+        _xi_uk = xi_uk(_dx_uk, _B_uk, _theta_uk, _dt)
+        _xi_dk = xi_dk(_dx_dk, _B_dk, _theta_dk, _dt)
         # Clear old data
         _F_jj.fill(0)
         D.fill(0)
         numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
         # Create A matrix
         numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
-                              _alpha_dk, _beta_uk, _beta_dk, _A_sj, _dt,
-                              M, NK)
+                              _alpha_dk, _beta_uk, _beta_dk, _xi_uk, _xi_dk,
+                              _A_sj, _dt, M, NK)
         # Create D vector
         numba_add_at(D, _J_uk, -_chi_uk)
         numba_add_at(D, _J_dk, _chi_dk)
+        numba_add_at(D, _J_uk, _xi_uk * H_j_prev[_J_uk])
+        numba_add_at(D, _J_dk, _xi_dk * H_j_prev[_J_dk])
         # Compute control matrix
         if n_o:
             _alpha_uo = _alpha_o
@@ -1520,8 +1533,8 @@ class nSuperLink(SuperLink):
         _b0 = self._b0                # Vertical coordinate of upstream end of superlink k
         _b1 = self._b1                # Vertical coordinate of downstream end of superlink k
         _m = self._m                  # Slope of superlink k
-        _x0 = self._x0                # Horizontal coordinate of center of superlink k
-        _z0 = self._z0                # Invert elevation of center of superlink k
+        _xc = self._xc                # Horizontal coordinate of center of superlink k
+        _zc = self._zc                # Invert elevation of center of superlink k
         _h_Ik = self._h_Ik            # Depth at junction Ik
         _Q_ik = self._Q_ik            # Flow rate at link ik
         _J_dk = self._J_dk            # Index of superjunction downstream of superlink k
@@ -1546,7 +1559,7 @@ class nSuperLink(SuperLink):
             reposition = np.ones(NK, dtype=np.bool8)
         # Reposition junctions
         numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
-                                    _b0, _z0, _x0, _m, _elem_pos, _i_1k, _I_1k,
+                                    _b0, _zc, _xc, _m, _elem_pos, _i_1k, _I_1k,
                                     _I_Np1k, nk, NK, reposition)
 
 def handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik, _g1_ik, _g2_ik):
@@ -2489,6 +2502,22 @@ def gamma_dk(Q_dk_t, C_dk, A_dk, g=9.81):
     result = safe_divide_vec(num, den)
     return result
 
+@njit(float64[:](float64[:], float64[:], float64[:], float64),
+      cache=True)
+def xi_uk(dx_uk, B_uk, theta_uk, dt):
+    num = dx_uk * B_uk * theta_uk
+    den = 2 * dt
+    result = num / den
+    return result
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64),
+      cache=True)
+def xi_dk(dx_dk, B_dk, theta_dk, dt):
+    num = dx_dk * B_dk * theta_dk
+    den = 2 * dt
+    result = num / den
+    return result
+
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:]),
       cache=True)
@@ -2832,14 +2861,17 @@ def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
             A[_J_d, _J_u] = 0.0
 
 @njit(void(float64[:, :], float64[:], boolean[:], int64[:], int64[:], float64[:],
-           float64[:], float64[:], float64[:], float64[:], float64, int64, int64),
+           float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+           float64, int64, int64),
       cache=True,
       fastmath=True)
 def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
-                          _alpha_dk, _beta_uk, _beta_dk, _A_sj, _dt,
-                          M, NK):
+                          _alpha_dk, _beta_uk, _beta_dk, _xi_uk, _xi_dk,
+                          _A_sj, _dt, M, NK):
     numba_add_at(_F_jj, _J_uk, _alpha_uk)
     numba_add_at(_F_jj, _J_dk, -_beta_dk)
+    numba_add_at(_F_jj, _J_uk, _xi_uk)
+    numba_add_at(_F_jj, _J_dk, _xi_dk)
     _F_jj += (_A_sj / _dt)
     # Set diagonal of A matrix
     for i in range(M):
@@ -2914,7 +2946,7 @@ def numba_Q_im1k_next_f(U_Ik, h_Ik, V_Ik, W_Ik, h_1k, _Ik, _ki, n):
            int64[:], int64[:], int64, boolean[:]),
       cache=True)
 def numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
-                               _b0, _z0, _x0, _m, _elem_pos, _i_1k, _I_1k,
+                               _b0, _zc, _xc, _m, _elem_pos, _i_1k, _I_1k,
                                _I_Np1k, nk, NK, reposition):
     for k in range(NK):
         if reposition[k]:
@@ -2938,13 +2970,11 @@ def numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
             move_junction = (_H_d > _z_inv_Np1) & (_H_d < _z_inv_1)
             if move_junction:
                 z_m = _H_d
-                x_m = (_H_d - _b0[k]) / _m[k]
+                _x0 = _x_I[_I_1]
+                x_m = (_H_d - _b0[k]) / _m[k] + _x0
             else:
-                z_m = _z0[k]
-                x_m = _x0[k]
-                # NOTE: Changing this to not move instead
-                # z_m = _z_inv_I[pos_prev]
-                # x_m = _x_I[pos_prev]
+                z_m = _zc[k]
+                x_m = _xc[k]
             # Determine new x-position of junction
             c = np.searchsorted(_x_I, x_m)
             cm1 = c - 1
@@ -2971,8 +3001,6 @@ def numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
             _elem_pos[k] = pos_next
             shifted = (pos_prev != pos_next)
             # If position has shifted interpolate flow
-            # TODO: For testing only, remove this later
-            # r = 0.5
             if shifted:
                 ix = np.arange(nlinks)
                 ix[pos_prev] = pos_next

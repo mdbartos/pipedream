@@ -353,6 +353,28 @@ class SuperLink():
         if 'n' in self.superlinks.columns:
             if not 'roughness' in self.superlinks.columns:
                 self.superlinks = self.superlinks.rename(columns={'n' : 'roughness'})
+        if 'dx_uk' in self.superlinks:
+            self._dx_uk = self.superlinks['dx_uk'].values.astype(np.float64)
+        else:
+            self._dx_uk = np.zeros(self.NK, dtype=np.float64)
+        if 'dx_dk' in self.superlinks:
+            self._dx_dk = self.superlinks['dx_dk'].values.astype(np.float64)
+        else:
+            self._dx_dk = np.zeros(self.NK, dtype=np.float64)
+        # Handle invert elevations
+        self.min_depth = min_depth
+        self._z_inv_j = self.superjunctions['z_inv'].values.astype(np.float64)
+        self.H_j = self.superjunctions['h_0'].values.astype(np.float64) + self._z_inv_j
+        # Enforce minimum depth
+        self.H_j = np.maximum(self.H_j, self._z_inv_j + self.min_depth)
+        # Coefficients for head at upstream ends of superlink k
+        self._J_uk = self.superlinks['sj_0'].values.astype(np.int64)
+        # Coefficients for head at downstream ends of superlink k
+        self._J_dk = self.superlinks['sj_1'].values.astype(np.int64)
+        in_offset = superlinks['in_offset'].values.astype(np.float64)
+        out_offset = superlinks['out_offset'].values.astype(np.float64)
+        self._z_inv_uk = self._z_inv_j[self._J_uk] + in_offset
+        self._z_inv_dk = self._z_inv_j[self._J_dk] + out_offset
         # If internal links and junctions are not provided, create them
         self.mobile_elements = mobile_elements
         if (links is None) or (junctions is None):
@@ -378,7 +400,6 @@ class SuperLink():
         self._end_method = end_method
         self._exit_hydraulics = exit_hydraulics
         self.inertial_damping = inertial_damping
-        self.min_depth = min_depth
         self._I = junctions.index.values.astype(np.int64)
         self._ik = links.index.values.astype(np.int64)
         self._i = self._ik
@@ -468,21 +489,14 @@ class SuperLink():
             self._C_dk = superlinks['C_dk'].values.astype(np.float64)
         else:
             self._C_dk = (1 / (0.67**2)) * np.ones(self.NK, dtype=np.float64)
-        if 'dx_uk' in superlinks:
-            self._dx_uk = superlinks['dx_uk'].values.astype(np.float64)
-        else:
-            self._dx_uk = np.zeros(self.NK, dtype=np.float64)
-        if 'dx_dk' in superlinks:
-            self._dx_dk = superlinks['dx_dk'].values.astype(np.float64)
-        else:
-            self._dx_dk = np.zeros(self.NK, dtype=np.float64)
         self._h_Ik = junctions.loc[self._I, 'h_0'].values.astype(np.float64)
         self._A_SIk = junctions.loc[self._I, 'A_s'].values.astype(np.float64)
         self._z_inv_Ik = junctions.loc[self._I, 'z_inv'].values.astype(np.float64)
         self._S_o_ik = ((self._z_inv_Ik[self._Ik] - self._z_inv_Ik[self._Ip1k])
                         / self._dx_ik)
         self._x_Ik = np.zeros(self._I.size, dtype=np.float64)
-        self._x_Ik[~self._is_start] = links.groupby('k')['dx'].cumsum().values
+        self._x_Ik[~self._is_start] = links.groupby('k')['dx'].cumsum().values + self._dx_uk[self._ki]
+        self._x_Ik[self._is_start] = self._dx_uk
         # TODO: Allow specifying initial flows
         self._Q_0Ik = np.zeros(self._I.size, dtype=np.float64)
         # Handle orifices
@@ -649,16 +663,16 @@ class SuperLink():
         self._Y_Ik = np.zeros(self._I.size)
         self._Z_Ik = np.zeros(self._I.size)
         # Head at superjunctions
-        self._z_inv_j = self.superjunctions['z_inv'].values.astype(np.float64)
-        self.H_j = self.superjunctions['h_0'].values.astype(np.float64) + self._z_inv_j
+        # self._z_inv_j = self.superjunctions['z_inv'].values.astype(np.float64)
+        # self.H_j = self.superjunctions['h_0'].values.astype(np.float64) + self._z_inv_j
         # Enforce minimum depth
-        self.H_j = np.maximum(self.H_j, self._z_inv_j + self.min_depth)
+        # self.H_j = np.maximum(self.H_j, self._z_inv_j + self.min_depth)
         # Coefficients for head at upstream ends of superlink k
-        self._J_uk = self.superlinks['sj_0'].values.astype(np.int64)
-        self._z_inv_uk = np.copy(self._z_inv_Ik[self._I_1k])
+        # self._J_uk = self.superlinks['sj_0'].values.astype(np.int64)
+        # self._z_inv_uk = np.copy(self._z_inv_Ik[self._I_1k])
         # Coefficients for head at downstream ends of superlink k
-        self._J_dk = self.superlinks['sj_1'].values.astype(np.int64)
-        self._z_inv_dk = np.copy(self._z_inv_Ik[self._I_Np1k])
+        # self._J_dk = self.superlinks['sj_1'].values.astype(np.int64)
+        # self._z_inv_dk = np.copy(self._z_inv_Ik[self._I_Np1k])
         # Sparse matrix coefficients
         if sparse:
             self.A = scipy.sparse.lil_matrix((self.M, self.M))
@@ -713,8 +727,8 @@ class SuperLink():
         cond_dk = (self._dx_uk > 0.)
         _S_o_uk = np.zeros(self.NK, dtype=np.float64)
         _S_o_dk = np.zeros(self.NK, dtype=np.float64)
-        _S_o_uk[cond_uk] = (self._z_inv_j[self._J_uk] - self._z_inv_uk)[cond_uk] / self._dx_uk[cond_uk]
-        _S_o_dk[cond_dk] = (self._z_inv_dk - self._z_inv_j[self._J_dk])[cond_dk] / self._dx_uk[cond_dk]
+        _S_o_uk[cond_uk] = (self._z_inv_uk - self._z_inv_Ik[self._I_1k])[cond_uk] / self._dx_uk[cond_uk]
+        _S_o_dk[cond_dk] = (self._z_inv_Ik[self._I_Np1k] - self._z_inv_dk)[cond_dk] / self._dx_dk[cond_dk]
         self._S_o_uk = _S_o_uk
         self._S_o_dk = _S_o_dk
         # Boundary indexers
@@ -1037,27 +1051,29 @@ class SuperLink():
         hh = h.reshape(-1, njunctions)
         QQ = Q.reshape(-1, nlinks)
         dx_j = superlinks['dx'].values
-        _z_inv_j = superjunctions['z_inv'].values.astype(np.float64)
-        inoffset = superlinks['in_offset'].values.astype(np.float64)
-        outoffset = superlinks['out_offset'].values.astype(np.float64)
-        _J_uk = superlinks['sj_0'].values.astype(np.int64)
-        _J_dk = superlinks['sj_1'].values.astype(np.int64)
-        _b0 = _z_inv_j[_J_uk] + inoffset
-        _b1 = _z_inv_j[_J_dk] + outoffset
-        _m = (_b1 - _b0) / dx_j
+        _z_inv_uk = self._z_inv_uk
+        _z_inv_dk = self._z_inv_dk
+        _dx_uk = self._dx_uk
+        _dx_dk = self._dx_dk
+        # TODO: Should dx_uk, dx_dk be generated instead? Probably no, because then orifice cannot be represented.
+        _m = (_z_inv_dk - _z_inv_uk) / (dx_j + _dx_uk + _dx_dk)
+        _b0 = _z_inv_uk + _m * _dx_uk
+        _b1 = _z_inv_dk - _m * _dx_dk
         if mobile_elements:
             try:
                 assert (internal_links > 1)
             except:
                 raise ValueError('If using mobile elements, must have more than one internal link.')
             if (njunctions % 2):
-                _x0 = (dx_j / 2)
+                _xc = (dx_j / 2)
             else:
-                _x0 = (dx_j / 2) + (dx_j / nlinks / 2)
+                _xc = (dx_j / 2) + (dx_j / nlinks / 2)
             xx[:, :-1] = np.vstack([np.linspace(0, i, njunctions - 1)
                                     for i in dx_j])
-            xx[:, -1] = _x0
-            _z0 = _m * _x0 + _b0
+            # xx[:, :-1] = np.vstack([np.linspace(j, i + j + k, njunctions - 1)
+            #                         for i, j, k in zip(dx_j, _dx_uk, _dx_dk)])
+            xx[:, -1] = _xc
+            _zc = _m * _xc + _b0
             zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
             ix = np.argsort(xx)
             _fixed = (ix < nlinks)
@@ -1074,11 +1090,13 @@ class SuperLink():
             hh = np.take_along_axis(hh, ix, axis=-1)
         else:
             xx[:, :] = np.vstack([np.linspace(0, i, njunctions)
-                                for i in dx_j])
+                                  for i in dx_j])
+            # xx[:, :] = np.vstack([np.linspace(j, i + j + k, njunctions)
+            #                       for i, j, k in zip(dx_j, _dx_uk, _dx_dk)])
             zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
             _fixed = np.ones(xx.shape, dtype=np.bool8)
-            _x0 = None
-            _z0 = None
+            _xc = None
+            _zc = None
             c = None
         dxdx = np.diff(xx)
         junctions['z_inv'] = zz.ravel()
@@ -1097,8 +1115,8 @@ class SuperLink():
         self._b0 = _b0
         self._b1 = _b1
         self._m = _m
-        self._x0 = _x0
-        self._z0 = _z0
+        self._xc = _xc
+        self._zc = _zc
 
     def safe_divide(function):
         """
@@ -3628,8 +3646,8 @@ class SuperLink():
         _b0 = self._b0                # Vertical coordinate of upstream end of superlink k
         _b1 = self._b1                # Vertical coordinate of downstream end of superlink k
         _m = self._m                  # Slope of superlink k
-        _x0 = self._x0                # Horizontal coordinate of center of superlink k
-        _z0 = self._z0                # Invert elevation of center of superlink k
+        _xc = self._xc                # Horizontal coordinate of center of superlink k
+        _zc = self._zc                # Invert elevation of center of superlink k
         _fixed = self._fixed          # Junction Ik is fixed (y/n)
         _h_Ik = self._h_Ik            # Depth at junction Ik
         _Q_ik = self._Q_ik            # Flow rate at link ik
@@ -3659,8 +3677,8 @@ class SuperLink():
         Q_ix = np.tile(np.arange(nlinks), len(QQ)).reshape(-1, nlinks)
         # TODO: Add case where position of movable coord is exactly equal to fixed coord
         move_junction = (_H_dk > _z_inv_Ik[_I_Np1k]) & (_H_dk < _z_inv_Ik[_I_1k])
-        z_m = np.where(move_junction, _H_dk, _z0)
-        x_m = np.where(move_junction, (_H_dk - _b0) / _m, _x0)
+        z_m = np.where(move_junction, _H_dk, _zc)
+        x_m = np.where(move_junction, (_H_dk - _b0) / _m, _xc)
         # TODO: Use instance variable
         r = np.arange(len(xx))
         c = np.array(list(map(np.searchsorted, xx, x_m)))
