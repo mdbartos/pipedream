@@ -1,0 +1,8 @@
+z_inv,h_0,A_sj,max_depth,map_x,map_y,a,b,c,bc,id,storage,table,name
+100,0.2,1,10,700,700,0,0,1.2,FALSE,0,functional,*,storage
+99,0.2,1,10,600,600,0,0,1.2,FALSE,1,functional,*,J2
+98,0.2,1,10,500,500,0,0,1.2,FALSE,2,functional,*,J3
+97,0.2,1,10,400,400,0,0,1.2,FALSE,3,functional,*,J4
+96,0.2,1,10,300,300,0,0,1.2,FALSE,4,functional,*,J5
+95,0.2,1,10,200,200,0,0,1.2,FALSE,5,functional,*,J6
+94,0.19,1,10,100,100,0,0,1000000000,FALSE,6,functional,*,OF
