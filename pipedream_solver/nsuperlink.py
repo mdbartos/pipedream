@@ -555,6 +555,7 @@ class nSuperLink(SuperLink):
         _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
         _J_uk = self._J_uk             # Index of junction upstream of superlink k
         H_j = self.H_j                 # Head at superjunction j
+        _theta_uk = self._theta_uk
         _is_irregular = self._is_irregular
         _uk_has_irregular = self._uk_has_irregular
         _i_1k = self._i_1k
@@ -569,12 +570,12 @@ class nSuperLink(SuperLink):
         _transect_inds = self._transect_inds
         _transect_lens = self._transect_lens
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk,
+        numba_boundary_geometry(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk, _theta_uk,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                                 _geom_codes, _i_1k, _I_1k, _J_uk)
         # Compute hydraulic geometry for irregular geometries
         if _uk_has_irregular:
-            numba_boundary_transect(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk,
+            numba_boundary_transect(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk, _theta_uk,
                                     _is_irregular, _transect_zs, _transect_As, _transect_Bs,
                                     _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
                                     _transect_lens, _I_1k, _i_1k, _J_uk)
@@ -606,6 +607,7 @@ class nSuperLink(SuperLink):
         _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
         _J_dk = self._J_dk             # Index of junction downstream of superlink k
         H_j = self.H_j                 # Head at superjunction j
+        _theta_dk = self._theta_dk
         _is_irregular = self._is_irregular
         _dk_has_irregular = self._dk_has_irregular
         _i_nk = self._i_nk
@@ -620,12 +622,12 @@ class nSuperLink(SuperLink):
         _transect_inds = self._transect_inds
         _transect_lens = self._transect_lens
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk,
+        numba_boundary_geometry(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk, _theta_dk,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                                 _geom_codes, _i_nk, _I_Np1k, _J_dk)
         # Compute hydraulic geometry for irregular geometries
         if _dk_has_irregular:
-            numba_boundary_transect(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk,
+            numba_boundary_transect(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk, _theta_dk,
                                     _is_irregular, _transect_zs, _transect_As, _transect_Bs,
                                     _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
                                     _transect_lens, _I_Np1k, _i_nk, _J_dk)
@@ -1768,11 +1770,11 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                                                                       g3_i, g4_i, g5_i, g6_i, g7_i)
     return 1
 
-@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             int64[:], int64[:], int64[:], int64[:]),
       cache=True)
-def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
+def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk, _theta_bk,
                             _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                             _geom_codes, _i_bk, _I_bk, _J_bk):
     n = len(_i_bk)
@@ -1782,7 +1784,7 @@ def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         j = _J_bk[k]
         # TODO: This should incorporate theta
         h_I = _h_Ik[I]
-        h_Ip1 = _H_j[j] - _z_inv_bk[k]
+        h_Ip1 = _theta_bk[k] * (_H_j[j] - _z_inv_bk[k])
         geom_code = _geom_codes[i]
         g1_i = _g1_ik[i]
         g2_i = _g2_ik[i]
@@ -1910,12 +1912,12 @@ def numba_transect_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik, _is_irregular, _
     return 1
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-            boolean[:], float64[:], float64[:], float64[:],
+            float64[:], boolean[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], int64[:], int64[:],
             int64[:], int64[:], int64[:], int64[:]),
       cache=True)
 def numba_boundary_transect(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
-                            _is_irregular, _transect_zs, _transect_As, _transect_Bs,
+                            _theta_bk, _is_irregular, _transect_zs, _transect_As, _transect_Bs,
                             _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
                             _transect_lens, _I_bk, _i_bk, _J_bk):
     n = len(_i_bk)
@@ -1927,7 +1929,7 @@ def numba_boundary_transect(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         if is_irregular_bk:
             h_I = _h_Ik[I]
             # TODO: This should incorporate theta
-            h_Ip1 = _H_j[j] - _z_inv_bk[k]
+            h_Ip1 = _theta_bk[k] * (_H_j[j] - _z_inv_bk[k])
             transect_code = _transect_codes[i]
             h_i = (h_I + h_Ip1) / 2
             start = _transect_inds[transect_code]
