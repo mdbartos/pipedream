@@ -21,7 +21,7 @@ Data_swmm_flow = pd.read_csv(f'{input_path}/N_comparison(5sec)/Data_swmm_flow.cs
 Data_swmm_tss = pd.read_csv(f'{input_path}/N_comparison(5sec)/Data_swmm_tss.csv')
 
 dt = 5
-internal_links = 60
+internal_links = 70
 superlink = SuperLink(superlinks, superjunctions,orifices=orifices,
                       internal_links=internal_links, bc_method = 'b', min_depth=10e-4, mobile_elements=False)
 waterquality = QualityBuilder(superlink, 
