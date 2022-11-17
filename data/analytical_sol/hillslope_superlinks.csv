@@ -1,0 +1,2 @@
+name,id,sj_0,sj_1,in_offset,out_offset,dx,n,shape,g1,g2,g3,g4,Q_0,h_0,ctrl,A_s,A_c,C,C_uk,C_dk,dx_uk,dx_dk
+0,0,0,1,0,0,1000,0.035,rect_open,10,5,0,0,0,2.77E-01,FALSE,0,0,0,0.67,0.67,0.1,0.1

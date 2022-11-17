@@ -8,7 +8,7 @@ import matplotlib.cm
 import seaborn as sns
 from pipedream_solver.simulation import Simulation
 
-input_path = '../data/scenario_00(control)'
+input_path = '../data/scenario_00_50'
 superjunctions = pd.read_csv(f'{input_path}/superjunctions.csv')
 superlinks = pd.read_csv(f'{input_path}/superlinks.csv')
 superlink_wq_params = pd.read_csv(f'{input_path}/superlink_wq_params.csv')
