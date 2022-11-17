@@ -210,8 +210,9 @@ class QualityBuilder():
         self._D_Ik = np.zeros(self._I.size, dtype=np.float64)
         self._A_Ik_next = np.zeros(self._I.size, dtype=np.float64)
         # Variables for Kalman filter
+        self.A_L_kf = np.zeros((self.M, self.M))
         self.A1_k = np.zeros((self.M, self.M))
-        self.H_k  = np.zeros([1,self.M])
+        self.H_k  = np.zeros((1,self.M))
         self.x_hat = np.zeros(self.M)
         self.P_k = np.zeros((self.M, self.M))
         self.K_k = np.zeros((self.M, self.M))
@@ -457,9 +458,7 @@ class QualityBuilder():
         _D_ik = self._D_ik
         _K_ik = self._K_ik
         _c_ik = self._c_ik
-        _Q_uk_next = self._Q_uk_next
         _A_uk_next = self._A_uk_next
-        _Q_dk_next = self._Q_dk_next
         _A_dk_next = self._A_dk_next
         _A_ik_next = self._A_ik_next
         _Q_uk_up_next = self._Q_uk_up_next
@@ -884,6 +883,7 @@ class QualityBuilder():
         _c_j_next = np.minimum(_c_j_next, _c_max)
         # Export instance variables
         self._c_j = _c_j_next
+        self.A_L_kf = l
 
     def solve_banded_matrix(self, u=None, implicit=True):
         # Import instance variables
@@ -919,6 +919,7 @@ class QualityBuilder():
         _c_j_next = np.minimum(_c_j_next, _c_max)
         # Export instance variables
         self._c_j = _c_j_next
+        self.A_L_kf = l
 
     def solve_boundary_states(self):
         """
@@ -1113,7 +1114,6 @@ class QualityBuilder():
     def Kalman_Filter_WQ1(self, _dt):
         # This code is for making the artificial measurement data with the random noise.
         # No data assimilation = No feedback from x_hat to c_j
-        
         self.hydraulics = self.hydraulics
         _M = self.M
         x_hat = self.x_hat
@@ -1122,44 +1122,38 @@ class QualityBuilder():
         H_k = self.H_k
         K_k = self.K_k
         _c_j = self._c_j
+        _c_j_prev_kf = self._c_j_prev_kf
         Observation_point = self.Observation_point
+        H_k[0,Observation_point] = 1 
         N_process_sigma = self.N_process_sigma
         N_measure_sigma = self.N_measure_sigma
         A_sj_k = self.hydraulics.A_sj
-        H_j_k = self.hydraulics.H_j - self.hydraulics.z_inv_j
-
-        Noise_process = N_process_sigma*np.random.randn(_M)
-        Q_cov = (N_process_sigma**2)*np.eye(_M, _M)
-        _c_j = _c_j + Noise_process
-
-        # Define the matrices : A, B, C
-        I_k = np.arange(0, _M, 1)
-        A1_k[I_k,I_k] = A_sj_k*H_j_k/_dt
-        Bu_k = self.b - A1_k[I_k,I_k]*_c_j    # All external inputs : Bu(t) = b - A1x[t]  where x[t]=c_j[t]
-        
-        # calculate the Kalman Filter matrices
-        A_inv = np.linalg.inv(self.A)
-        A_k = A_inv @ A1_k
-        B_k = A_inv @ Bu_k
-        
+        H_j_k_next = self._H_j_next - self._z_inv_j
         # Add measurement noise and calculate the covariance
         Noise_measurement = N_measure_sigma*np.random.randn()
         Z = _c_j[Observation_point] + Noise_measurement
         R_cov = (N_measure_sigma**2)*np.ones((1,1))
-        H_k[0,Observation_point] = 1 
-        
+        Q_cov = (N_process_sigma**2)*np.eye(_M, _M)
+        # Define the matrices : A, B, C
+        I_k = np.arange(0, _M, 1)
+        A1_k[I_k,I_k] = A_sj_k*H_j_k_next/_dt
+        Bu_k = self.b - A1_k @ _c_j_prev_kf    # All external inputs : Bu(t) = b - A1x[t]  where x[t]=c_j[t]
+        A_inv = np.linalg.inv(self.A_L_kf)
+        A_k = A_inv @ A1_k
+        B_k = A_inv @ Bu_k
         # Kalman Filtering Algorithm
         x_hat_k = A_k @ x_hat + B_k
         P_k = A_k @ P_k @ A_k.T + Q_cov
         K_k = P_k @ H_k.T @ np.linalg.inv(H_k @ P_k @ H_k.T + R_cov)
         P_k = P_k - K_k @ H_k @ P_k
         x_hat = x_hat_k + K_k @ (Z - H_k @ x_hat_k)
-        
         # Save the results in this time step
         x_hat[x_hat < 0.0] = 0
         self.x_hat = x_hat
         self.P_k = P_k
         self.Z = Z
+        self._c_j_prev_kf = self._c_j
+        self.H_j_k_prev = self.hydraulics.H_j - self.hydraulics.z_inv_j
     
     def Kalman_Filter_WQ2(self, measure, _dt):
         # Applying the external input measurement data and data assimilation
@@ -1172,36 +1166,28 @@ class QualityBuilder():
         K_k = self.K_k
         _c_j_prev_kf = self._c_j_prev_kf
         Observation_point = self.Observation_point
+        H_k[0,Observation_point] = 1 
         N_process_sigma = self.N_process_sigma
         N_measure_sigma = self.N_measure_sigma
         A_sj_k = self.hydraulics.A_sj
-        H_j_k = self.hydraulics.H_j - self.hydraulics.z_inv_j
-
-        Noise_process = N_process_sigma*np.random.randn(_M)
+        H_j_k_next = self._H_j_next - self._z_inv_j
+        # covariance matrices
+        R_cov = (N_measure_sigma**2)*np.ones((1,1))
         Q_cov = (N_process_sigma**2)*np.eye(_M, _M)
-        _c_j_prev_kf = _c_j_prev_kf + Noise_process
-
         # Define the matrices : A, B, C
         I_k = np.arange(0, _M, 1)
-        A1_k[I_k,I_k] = A_sj_k*H_j_k/_dt
-        Bu_k = self.b - A1_k[I_k,I_k]*_c_j_prev_kf    # All external inputs : Bu(t) = b - A1x[t]  where x[t]=c_j[t]
-
-        # calculatge the Kalman Filter matrices
-        A_inv = np.linalg.inv(self.A)
+        A1_k[I_k,I_k] = A_sj_k*H_j_k_next/_dt
+        Bu_k = self.b - A1_k@_c_j_prev_kf    # All external inputs : Bu(t) = b - A1x[t]  where x[t]=c_j[t]
+        # calculate the Kalman Filter matrices
+        A_inv = np.linalg.inv(self.A_L_kf)
         A_k = A_inv @ A1_k
         B_k = A_inv @ Bu_k
-        
-        # Measurement noise covariance
-        R_cov = (N_measure_sigma**2)*np.ones((1,1))
-        H_k[0,Observation_point] = 1 
-
         # Kalman Filtering Algorithm
         x_hat_k = A_k @ x_hat + B_k
         P_k = A_k @ P_k @ A_k.T + Q_cov
         K_k = P_k @ H_k.T @ np.linalg.inv(H_k @ P_k @ H_k.T + R_cov)
         P_k = P_k - K_k @ H_k @ P_k
         x_hat = x_hat_k + K_k @ (measure - H_k @ x_hat_k)
-        
         # Data assimilation from x_hat to c_j / Save the results in this time step
         x_hat[x_hat < 0.0] = 0
         self.x_hat = x_hat
