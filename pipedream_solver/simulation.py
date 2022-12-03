@@ -205,6 +205,7 @@ class Simulation():
             assert isinstance(H, np.ndarray)
             self.H = H
         self.P_x_k_k = self.C @ self.Qcov @ self.C.T
+        self.A_1 = None
         # Progress bar checkpoints
         if np.isfinite(self.t_end):
             self._checkpoints = np.linspace(self.t_start, self.t_end)
@@ -484,6 +485,7 @@ class Simulation():
         b_hat, P_x_k_k = _kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
                                                Qcov, Rcov)
         self.P_x_k_k = P_x_k_k
+        self.A_1 = A_1
         self.model.b = b_hat
         self.model.iter_count -= 1
         self.model.t -= dt
