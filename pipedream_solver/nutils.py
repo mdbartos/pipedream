@@ -1,5 +1,5 @@
 import numpy as np
-import SciPy
+import scipy
 from numba import njit
 
 @njit
