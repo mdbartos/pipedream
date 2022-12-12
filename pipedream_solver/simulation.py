@@ -207,7 +207,7 @@ class Simulation():
         if Pxx is None:
             self.P_x_k_k = self.C @ self.Qcov @ self.C.T
         else: 
-            self.P_x_k_k = Pxx.copy(deep=True)
+            self.P_x_k_k = Pxx.copy()
         self.A_1 = None
         # Progress bar checkpoints
         if np.isfinite(self.t_end):
