@@ -11,9 +11,9 @@ try:
 except:
     _HAS_NUMBA = False
 if _HAS_NUMBA:
-    from pipedream_solver.nutils import interpolate_sample, _kalman_semi_implicit
+    from pipedream_solver.nutils import interpolate_sample, _kalman_semi_implicit, _square_root_kalman_semi_implicit
 else:
-    from pipedream_solver.utils import interpolate_sample, _kalman_semi_implicit
+    from pipedream_solver.utils import interpolate_sample, _kalman_semi_implicit, _square_root_kalman_semi_implicit
 
 eps = np.finfo(float).eps
 
