@@ -134,7 +134,6 @@ def _kalman_semi_implicit(Z_next, P_x_k_k, A_1, A_2, b, H, C,
     b_hat = A_1 @ x_hat
     return b_hat, P_x_k1_k1
 
-@njit
 def _square_root_kalman_semi_implicit(Z_next, P_x_k_k, A_1, A_2, b, H, C,
                           Qcov, Rcov):
     """
