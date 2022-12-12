@@ -86,7 +86,7 @@ class Simulation():
     def __init__(self, model, Q_in=None, H_bc=None, Q_Ik=None, t_start=None,
                  t_end=None, dt=None, max_iter=None, min_dt=1, max_dt=200,
                  tol=0.01, min_rel_change=1e-10, max_rel_change=1e10, safety_factor=0.9,
-                 Qcov=None, Rcov=None, C=None, H=None, interpolation_method='linear'):
+                 Pxx = None, Qcov=None, Rcov=None, C=None, H=None, interpolation_method='linear'):
         self.model = model
         if Q_in is not None:
             self.Q_in = Q_in.copy(deep=True)
@@ -204,7 +204,10 @@ class Simulation():
         else:
             assert isinstance(H, np.ndarray)
             self.H = H
-        self.P_x_k_k = self.C @ self.Qcov @ self.C.T
+        if Pxx is None:
+            self.P_x_k_k = self.C @ self.Qcov @ self.C.T
+        else: 
+            self.P_x_k_k = Pxx.copy(deep=True)
         self.A_1 = None
         # Progress bar checkpoints
         if np.isfinite(self.t_end):
