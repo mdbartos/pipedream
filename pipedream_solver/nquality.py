@@ -212,6 +212,7 @@ class QualityBuilder():
         # Variables for Kalman filter
         self.A_L_kf = np.zeros((self.M, self.M))
         self.A1_k = np.zeros((self.M, self.M))
+        self.A_k = np.zeros((self.M, self.M))
         self.H_k  = np.zeros((1,self.M))
         self.x_hat = np.zeros(self.M)
         self.P_k = np.zeros((self.M, self.M))
@@ -1062,10 +1063,11 @@ class QualityBuilder():
         # covariance matrices
         R_cov = (N_measure_sigma**2)*np.ones((1,1))
         Q_cov = (N_process_sigma**2)*np.eye(_M, _M)
+        #Q_cov = (N_process_sigma**2)*np.ones((_M, _M))  # Test Code
         # Define the matrices : A, B, C
         I_k = np.arange(0, _M, 1)
         A1_k[I_k,I_k] = A_sj_k*H_j_k_next/_dt
-        self.x_hat, self.P_k = KF_WQ2(A1_k, I_k, A_sj_k, H_j_k_next, _dt, self.b, _c_j_prev_kf, x_hat, P_k, H_k, K_k, self.A_L_kf, Q_cov, R_cov, measure)
+        self.x_hat, self.P_k, self.A_k = KF_WQ2(A1_k, I_k, A_sj_k, H_j_k_next, _dt, self.b, _c_j_prev_kf, x_hat, P_k, H_k, K_k, self.A_L_kf, Q_cov, R_cov, measure)
         self._c_j = self.x_hat
         self._c_j_prev_kf = self.x_hat
 @njit
@@ -1761,4 +1763,4 @@ def KF_WQ2(A1_k, I_k, A_sj_k, H_j_k_next, _dt, b, _c_j_prev_kf, x_hat, P_k, H_k,
     x_hat = x_hat_k + K_k @ (measure - H_k @ x_hat_k)
     # Data assimilation from x_hat to c_j / Save the results in this time step
     x_hat[x_hat < 0.0] = 0
-    return x_hat, P_k
+    return x_hat, P_k, A_k
