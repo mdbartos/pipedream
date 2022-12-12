@@ -485,7 +485,7 @@ class Simulation():
         if Rcov is None:
             Rcov = self.Rcov
         A_1, A_2, b = self.model._semi_implicit_system(_dt=dt)
-        b_hat, P_x_k_k = _kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
+        b_hat, P_x_k_k = _square_root_kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
                                                Qcov, Rcov)
         self.P_x_k_k = P_x_k_k
         self.A_1 = A_1
