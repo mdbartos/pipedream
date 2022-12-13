@@ -5,15 +5,15 @@ from itertools import count
 from collections import deque
 import numpy as np
 import pandas as pd
-#try:
-#    import numba
-#    _HAS_NUMBA = True
-#except:
-#    _HAS_NUMBA = False
-#if _HAS_NUMBA:
-#    from pipedream_solver.nutils import interpolate_sample, _kalman_semi_implicit, _square_root_kalman_semi_implicit
-#else:
-from pipedream_solver.utils import interpolate_sample, _kalman_semi_implicit, _square_root_kalman_semi_implicit
+try:
+    import numba
+    _HAS_NUMBA = True
+except:
+    _HAS_NUMBA = False
+if _HAS_NUMBA:
+    from pipedream_solver.nutils import interpolate_sample, _kalman_semi_implicit, _square_root_kalman_semi_implicit
+else:
+    from pipedream_solver.utils import interpolate_sample, _kalman_semi_implicit, _square_root_kalman_semi_implicit
 
 eps = np.finfo(float).eps
 
