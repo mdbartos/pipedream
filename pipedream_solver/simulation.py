@@ -451,7 +451,7 @@ class Simulation():
         return dt_np1
 
     def kalman_filter(self, Z, H=None, C=None, Qcov=None, Rcov=None, P_x_k_k=None,
-                      dt=None, SR=True, **kwargs):
+                      dt=None, SR=False, **kwargs):
         """
         Apply Kalman Filter to fuse observed data into model.
 
@@ -486,10 +486,10 @@ class Simulation():
             Rcov = self.Rcov
         A_1, A_2, b = self.model._semi_implicit_system(_dt=dt)
         if SR:
-            b_hat, P_x_k_k = _square_root_kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
+            b_hat, P_x_k_k = _kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
                                                Qcov, Rcov)
         else:
-            b_hat, P_x_k_k = _kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
+            b_hat, P_x_k_k = _square_root_kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
                                                Qcov, Rcov)
         self.P_x_k_k = P_x_k_k
         self.A_1 = A_1
