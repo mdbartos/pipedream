@@ -1042,6 +1042,8 @@ class QualityBuilder():
         x_hat[x_hat < 0.0] = 0
         self.x_hat = x_hat
         self.P_k = P_k
+        self.A_k = A_k
+        self.B_k = B_k
         self.Z = Z
         self._c_j_prev_kf = self._c_j
         self.H_j_k_prev = self.hydraulics.H_j - self.hydraulics.z_inv_j
@@ -1064,7 +1066,6 @@ class QualityBuilder():
         # covariance matrices
         R_cov = (N_measure_sigma**2)*np.ones((1,1))
         Q_cov = (N_process_sigma**2)*np.eye(_M, _M)
-        #Q_cov = (N_process_sigma**2)*np.ones((_M, _M))  # Test Code
         # Define the matrices : A, B, C
         I_k = np.arange(0, _M, 1)
         A1_k[I_k,I_k] = A_sj_k*H_j_k_next/_dt
@@ -1646,7 +1647,7 @@ def geometry_WQ1(Ix_ik, _geom_codes, _g1_ik, _h_Ik_next, _Ik, _Ip1k, _B_ik):
     else:
         raise ValueError('Geometries of conduit should be [circular] or [rect_open] in this version of WQ solver.')    
     return _A_ik_next
-#N, _KI, _is_start, _is_end, _forward_I_i, _backward_I_i, _J_uk, _J_dk, _Q_uk_next, _B_uk, _dx_uk, _h_Ik.next, _h_Ik_prev, _dt, _geom_codes, _g1_ik, _H_j_next, _z_inv_j, _H_j_prev, _Q_dk_next, _B_dk, _dx_dk
+
 @njit
 def geometry_WQ2(N, _kI,  _is_start, _is_end, _forward_I_i, _backward_I_i, _J_uk, _J_dk, _Q_uk_next, _B_uk, _dx_uk, 
                  _h_Ik_next, _h_Ik_prev, _dt, _geom_codes, _g1_ik, _H_j_next, _z_inv_j, _H_j_prev, _Q_dk_next,
