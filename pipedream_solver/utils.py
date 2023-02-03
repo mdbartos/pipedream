@@ -129,10 +129,11 @@ def _kalman_semi_implicit(Z_next, P_x_k_k, A_1, A_2, b, H, C,
     x_k1_k = A_1_inv @ b
     P_x_k1_k = A_1_inv @ A_2 @ P_x_k_k @ A_2.T @ A_1_inv.T + C @ Qcov @ C.T
     L_x_k1 = P_x_k1_k @ H.T @ np.linalg.inv((H @ P_x_k1_k @ H.T) + Rcov)
+    P_zz = (H @ P_x_k1_k @ H.T) + Rcov
     P_x_k1_k1 = (I - L_x_k1 @ H) @ P_x_k1_k
     x_hat = x_k1_k + L_x_k1 @ (Z_next - H @ x_k1_k)
     b_hat = A_1 @ x_hat
-    return b_hat, P_x_k1_k1
+    return b_hat, P_x_k1_k1, P_zz
 
 def _square_root_kalman_semi_implicit(Z_next, P_x_k_k, A_1, A_2, b, H, C,
                           Qcov, Rcov):
