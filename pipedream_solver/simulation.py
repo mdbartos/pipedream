@@ -209,6 +209,7 @@ class Simulation():
         else: 
             self.P_x_k_k = Pxx.copy()
         self.A_1 = None
+        self.P_zz = None
         # Progress bar checkpoints
         if np.isfinite(self.t_end):
             self._checkpoints = np.linspace(self.t_start, self.t_end)
@@ -486,12 +487,13 @@ class Simulation():
             Rcov = self.Rcov
         A_1, A_2, b = self.model._semi_implicit_system(_dt=dt)
         if SR == False:
-            b_hat, P_x_k_k = _kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
+            b_hat, P_x_k_k, P_zz = _kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
                                                Qcov, Rcov)
         else:
-            b_hat, P_x_k_k = _square_root_kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
+            b_hat, P_x_k_k, P_zz = _square_root_kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
                                                Qcov, Rcov)
         self.P_x_k_k = P_x_k_k
+        self.P_zz = P_zz
         self.A_1 = A_1
         self.model.b = b_hat
         self.model.iter_count -= 1
