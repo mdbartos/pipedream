@@ -327,6 +327,7 @@ class nSuperLink(SuperLink):
         # Handle irregular geometries
         _transect_inds = np.array([])
         _transect_lens = np.array([])
+        _transect_codes = np.array([])
         _transect_As = np.array([])
         _transect_Bs = np.array([])
         _transect_Pes = np.array([])
@@ -643,7 +644,6 @@ class nSuperLink(SuperLink):
         _g1_o = self._g1_o           # Geometry 1 of link ik (vertical)
         _g2_o = self._g2_o           # Geometry 2 of link ik (horizontal)
         _g3_o = self._g3_o           # Geometry 3 of link ik (other)
-        _geom_factory_o = self._geom_factory_o
         _geom_codes_o = self._geom_codes_o
         n_o = self.n_o
         _z_o = self._z_o
