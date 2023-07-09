@@ -86,7 +86,7 @@ with Simulation(superlink, Q_in=Q_in, H_bc=H_bc) as simulation:
     # While simulation time has not expired...
     while simulation.t <= simulation.t_end:
         # Step model forward in time
-        simulation.step(dt=dt)
+        simulation.step(dt=dt, num_iter=1)
         # Record internal depth and flow states
         simulation.record_state()
         # Print progress bar
