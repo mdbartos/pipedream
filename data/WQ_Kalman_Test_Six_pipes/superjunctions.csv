@@ -1,7 +1,0 @@
-id,z_inv,h_0,bc,storage,a,b,c,name
-0,10.7,0.00E+00,FALSE,functional,0,0,10,A
-1,10.4,0.00E+00,FALSE,functional,0,0,10,B
-2,10,0.00E+00,FALSE,functional,0,0,10,C
-3,9.5,2.00E-01,TRUE,functional,0,0,0,D
-4,10.1,0.00E+00,FALSE,functional,0,0,10,E
-5,9.3,2.00E-01,TRUE,functional,0,0,0,F
