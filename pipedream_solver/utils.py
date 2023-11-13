@@ -124,13 +124,58 @@ def _kalman_semi_implicit(Z_next, P_x_k_k, A_1, A_2, b, H, C,
         Measurement noise covariance
     """
     I = np.eye(A_1.shape[0])
-    y_k1_k = b
     A_1_inv = np.linalg.inv(A_1)
-    H_1 = H @ A_1_inv
-    P_y_k1_k = A_2 @ P_x_k_k @ A_2.T + C @ Qcov @ C.T
-    L_y_k1 = P_y_k1_k @ H_1.T @ np.linalg.inv((H_1 @ P_y_k1_k @ H_1.T) + Rcov)
-    P_y_k1_k1 = (I - L_y_k1 @ H_1) @ P_y_k1_k
-    b_hat = y_k1_k + L_y_k1 @ (Z_next - H_1 @ y_k1_k)
-    P_x_k1_k1 = A_1_inv @ P_y_k1_k1 @ A_1_inv.T
-    return b_hat, P_x_k1_k1
+    
+    x_k1_k = A_1_inv @ b
+    P_x_k1_k = A_1_inv @ A_2 @ P_x_k_k @ A_2.T @ A_1_inv.T + C @ Qcov @ C.T
+    L_x_k1 = P_x_k1_k @ H.T @ np.linalg.inv((H @ P_x_k1_k @ H.T) + Rcov)
+    P_zz = (H @ P_x_k1_k @ H.T) + Rcov
+    P_x_k1_k1 = (I - L_x_k1 @ H) @ P_x_k1_k
+    x_hat = x_k1_k + L_x_k1 @ (Z_next - H @ x_k1_k)
+    b_hat = A_1 @ x_hat
+    return b_hat, P_x_k1_k1, P_zz
 
+def _square_root_kalman_semi_implicit(Z_next, P_x_k_k, A_1, A_2, b, H, C,
+                          Qcov, Rcov):
+    """
+    Perform Kalman filtering to estimate state and error covariance.
+    Inputs:
+    -------
+    Z_next : np.ndarray (b x 1)
+        Observed data
+    P_x_k_k : np.ndarray (M x M)
+        Posterior error covariance estimate at previous timestep
+    A_1 : np.ndarray (M x M)
+        Left state transition matrix
+    A_2 : np.ndarray (M x M)
+        Right state transition matrix
+    b : np.ndarray (M x 1)
+        Right-hand side solution vector
+    H : np.ndarray (M x b)
+        Observation matrix
+    C : np.ndarray (a x M)
+        Signal-input matrix
+    Qcov : np.ndarray (M x M)
+        Process noise covariance
+    Rcov : np.ndarray (M x M)
+        Measurement noise covariance
+    """
+    I = np.eye(A_1.shape[0])
+    A_1_inv = np.linalg.inv(A_1)
+    Rq = np.linalg.cholesky(Qcov)
+    Rr = np.linalg.cholesky(Rcov)
+    F = np.linalg.cholesky(P_x_k_k)
+    
+    x_k1_k = A_1_inv @ b
+    Fbar = np.linalg.qr(np.vstack((F@A_2.T@A_1_inv.T, Rq)), mode='r')
+    
+    G = np.linalg.qr(np.block([[Fbar@H.T], [Rr]]), mode='r')
+    
+    L_x_k1 = (np.linalg.inv(G)@(np.linalg.inv(G).T@H)@Fbar.T@Fbar).T
+    
+    Fhat = np.linalg.qr(np.block([[Fbar@(I - L_x_k1@H).T], [Rr@L_x_k1.T]]), mode='r')
+    x_hat = x_k1_k + L_x_k1 @ (Z_next - H @ x_k1_k)
+    
+    P_x_k1_k1 = Fhat.T@Fhat
+    b_hat = A_1 @ x_hat
+    return b_hat, P_x_k1_k1
