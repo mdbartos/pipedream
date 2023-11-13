@@ -409,8 +409,8 @@ class SuperLink():
         self._ki = links['k'].values.astype(np.int64)
         self.start_nodes = self.superlinks['j_0'].values.astype(np.int64)
         self.end_nodes = self.superlinks['j_1'].values.astype(np.int64)
-        self._is_start = np.zeros(self._I.size, dtype=np.bool8)
-        self._is_end = np.zeros(self._I.size, dtype=np.bool8)
+        self._is_start = np.zeros(self._I.size, dtype=np.bool_)
+        self._is_end = np.zeros(self._I.size, dtype=np.bool_)
         self._is_start[self.start_nodes] = True
         self._is_end[self.end_nodes] = True
         self.middle_nodes = self._I[(~self._is_start) & (~self._is_end)]
@@ -460,7 +460,7 @@ class SuperLink():
             self._n_ik = links['roughness'].values.astype(np.float64)
         else:
             self._n_ik = links['n'].values.astype(np.float64)
-        self._ctrl = links['ctrl'].values.astype(np.bool8)
+        self._ctrl = links['ctrl'].values.astype(np.bool_)
         self._A_c_ik = links['A_c'].values.astype(np.float64)
         self._C_ik = links['C'].values.astype(np.float64)
         self._storage_type = superjunctions['storage']
@@ -521,6 +521,10 @@ class SuperLink():
                 self._g1_o = np.sqrt(self._Ao_max)
                 self._g2_o = np.sqrt(self._Ao_max)
                 self._g3_o = np.zeros(self.n_o)
+            if 'unidir' in self.orifices.columns:
+                self._unidir_o = self.orifices['unidir'].values.astype(np.bool_)
+            else:
+                self._unidir_o = np.zeros(self.n_o, dtype=np.bool_)
             self._Qo = np.zeros(self.n_o, dtype=np.float64)
             self._alpha_o = np.zeros(self.n_o, dtype=np.float64)
             self._beta_o = np.zeros(self.n_o, dtype=np.float64)
@@ -642,7 +646,7 @@ class SuperLink():
         self._E_Ik = np.zeros(self._I.size)
         self._D_Ik = np.zeros(self._I.size)
         # Forward recurrence relations
-        self._I_end = np.zeros(self._I.size, dtype=np.bool8)
+        self._I_end = np.zeros(self._I.size, dtype=np.bool_)
         self._I_end[self.end_nodes] = True
         self._I_1k = self.start_nodes
         self._I_2k = self.forward_I_I[self._I_1k]
@@ -653,7 +657,7 @@ class SuperLink():
         self._V_Ik = np.zeros(self._I.size)
         self._W_Ik = np.zeros(self._I.size)
         # Backward recurrence relations
-        self._I_start = np.zeros(self._I.size, dtype=np.bool8)
+        self._I_start = np.zeros(self._I.size, dtype=np.bool_)
         self._I_start[self.start_nodes] = True
         self._I_Np1k = self.end_nodes
         self._I_Nk = self.backward_I_I[self._I_Np1k]
@@ -680,7 +684,7 @@ class SuperLink():
             self.A = np.zeros((self.M, self.M))
         self.b = np.zeros(self.M)
         self.D = np.zeros(self.M)
-        self.bc = self.superjunctions['bc'].values.astype(np.bool8)
+        self.bc = self.superjunctions['bc'].values.astype(np.bool_)
         if sparse:
             self.B = scipy.sparse.lil_matrix((self.M, self.n_o))
             self.O = scipy.sparse.lil_matrix((self.M, self.M))
@@ -732,8 +736,8 @@ class SuperLink():
         self._S_o_uk = _S_o_uk
         self._S_o_dk = _S_o_dk
         # Boundary indexers
-        self._link_start = np.zeros(self._ik.size, dtype=np.bool8)
-        self._link_end = np.zeros(self._ik.size, dtype=np.bool8)
+        self._link_start = np.zeros(self._ik.size, dtype=np.bool_)
+        self._link_end = np.zeros(self._ik.size, dtype=np.bool_)
         self._link_start[self._i_1k] = True
         self._link_end[self._i_nk] = True
         # End roughness
@@ -1094,7 +1098,7 @@ class SuperLink():
             # xx[:, :] = np.vstack([np.linspace(j, i + j + k, njunctions)
             #                       for i, j, k in zip(dx_j, _dx_uk, _dx_dk)])
             zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
-            _fixed = np.ones(xx.shape, dtype=np.bool8)
+            _fixed = np.ones(xx.shape, dtype=np.bool_)
             _xc = None
             _zc = None
             c = None
