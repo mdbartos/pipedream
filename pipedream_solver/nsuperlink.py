@@ -2716,8 +2716,8 @@ def numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, 
     cond_0 = _H_up > _z_inv_up + _z_p
     # Condition 1: Head difference is within range of pump curve
     cond_1 = (_dHp > _dHp_min) & (_dHp < _dHp_max)
-    _dHp[_dHp > _dHp_max] = _dHp_max
-    _dHp[_dHp < _dHp_min] = _dHp_min
+    _dHp[_dHp > _dHp_max] = _dHp_max[_dHp > _dHp_max]
+    _dHp[_dHp < _dHp_min] = _dHp_min[_dHp < _dHp_min]
     # Compute universal coefficients
     _gamma_p = gamma_p(_Qp, _b_p, _c_p, u)
     # Fill coefficient arrays
@@ -2748,8 +2748,8 @@ def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _a_p, _b_
     _z_inv_up = _z_inv_j[_J_up]
     # Create conditionals
     _dHp = _H_dp - _H_up
-    _dHp[_dHp > _dHp_max] = _dHp_max
-    _dHp[_dHp < _dHp_min] = _dHp_min
+    _dHp[_dHp > _dHp_max] = _dHp_max[_dHp > _dHp_max]
+    _dHp[_dHp < _dHp_min] = _dHp_min[_dHp < _dHp_min]
     cond_0 = _H_up > _z_inv_up + _z_p
     # Compute universal coefficients
     _Qp_next = (u / _b_p * (_a_p - _dHp))**(1 / _c_p)
