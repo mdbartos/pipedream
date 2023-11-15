@@ -932,12 +932,13 @@ class nSuperLink(SuperLink):
         _alpha_o = self._alpha_o     # Orifice flow coefficient alpha_o
         _beta_o = self._beta_o       # Orifice flow coefficient beta_o
         _chi_o = self._chi_o         # Orifice flow coefficient chi_o
+        _unidir_o = self._unidir_o
         # If no input signal, assume orifice is closed
         if u is None:
             u = np.zeros(self.n_o, dtype=np.float64)
         # Specify orifice heads at previous timestep
         numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_inv_j,
-                                        _z_o, _tau_o, _Co, _Ao, _y_max_o, _J_uo, _J_do)
+                                        _z_o, _tau_o, _Co, _Ao, _y_max_o, _unidir_o, _J_uo, _J_do)
         # Export instance variables
         self._alpha_o = _alpha_o
         self._beta_o = _beta_o
@@ -1424,13 +1425,14 @@ class nSuperLink(SuperLink):
         _Co = self._Co                # Discharge coefficient of orifice o
         _Ao = self._Ao                # Maximum flow area of orifice o
         _V_sj = self._V_sj
+        _unidir_o = self._unidir_o
         g = 9.81
         # If no input signal, assume orifice is closed
         if u is None:
             u = np.zeros(self.n_o, dtype=np.float64)
         # Compute orifice flows
         _Qo_next = numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o, _tau_o, _y_max_o, _Co, _Ao,
-                                             _J_uo, _J_do, g)
+                                             _unidir_o, _J_uo, _J_do, g)
         # TODO: Move this inside numba function
         upstream_ctrl = (H_j[_J_uo] > H_j[_J_do])
         _Qo_max = np.where(upstream_ctrl, _V_sj[_J_uo], _V_sj[_J_do]) / dt
@@ -2519,10 +2521,12 @@ def xi_dk(dx_dk, B_dk, theta_dk, dt):
     return result
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:]),
+            float64[:], float64[:], float64[:], float64[:], float64[:], boolean[:],
+             int64[:], int64[:]),
       cache=True)
 def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_inv_j,
-                                    _z_o, _tau_o, _Co, _Ao, _y_max_o, _J_uo, _J_do):
+                                    _z_o, _tau_o, _Co, _Ao, _y_max_o, _unidir_o,
+                                     _J_uo, _J_do):
     g = 9.81
     _H_uo = H_j[_J_uo]
     _H_do = H_j[_J_do]
@@ -2539,6 +2543,7 @@ def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_i
                 _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
     cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
                 _z_o + _z_inv_uo)
+    cond_3 = (_H_do >= _H_uo) & _unidir_o
     # Fill coefficient arrays
     # Submerged on both sides
     a = (cond_0 & cond_1)
@@ -2559,17 +2564,18 @@ def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_i
     _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
                                     * (- _z_inv_uo[c] - _z_o[c]))
     # No flow
-    d = (~cond_0 & ~cond_2)
+    d = (~cond_0 & ~cond_2) | cond_3
     _alpha_o[d] = 0.0
     _beta_o[d] = 0.0
     _chi_o[d] = 0.0
     return 1
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], float64[:], int64[:], int64[:], float64),
+            float64[:], float64[:], float64[:], float64[:], boolean[:],
+            int64[:], int64[:], float64),
       cache=True)
 def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
-                              _tau_o, _y_max_o, _Co, _Ao, _J_uo, _J_do, g=9.81):
+                              _tau_o, _y_max_o, _Co, _Ao, _unidir_o, _J_uo, _J_do, g=9.81):
     # Specify orifice heads at previous timestep
     _H_uo = H_j[_J_uo]
     _H_do = H_j[_J_do]
@@ -2590,6 +2596,7 @@ def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
                 _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
     cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
                 _z_o + _z_inv_uo)
+    cond_3 = (_H_do >= _H_uo) & _unidir_o
     # Fill coefficient arrays
     # Submerged on both sides
     a = (cond_0 & cond_1)
@@ -2610,7 +2617,7 @@ def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
     _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
                                     * (- _z_inv_uo[c] - _z_o[c]))
     # No flow
-    d = (~cond_0 & ~cond_2)
+    d = (~cond_0 & ~cond_2) | cond_3
     _alpha_o[d] = 0.0
     _beta_o[d] = 0.0
     _chi_o[d] = 0.0
@@ -2716,8 +2723,8 @@ def numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, 
     cond_0 = _H_up > _z_inv_up + _z_p
     # Condition 1: Head difference is within range of pump curve
     cond_1 = (_dHp > _dHp_min) & (_dHp < _dHp_max)
-    _dHp[_dHp > _dHp_max] = _dHp_max
-    _dHp[_dHp < _dHp_min] = _dHp_min
+    _dHp[_dHp > _dHp_max] = _dHp_max[_dHp > _dHp_max]
+    _dHp[_dHp < _dHp_min] = _dHp_min[_dHp < _dHp_min]
     # Compute universal coefficients
     _gamma_p = gamma_p(_Qp, _b_p, _c_p, u)
     # Fill coefficient arrays
@@ -2748,8 +2755,8 @@ def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _a_p, _b_
     _z_inv_up = _z_inv_j[_J_up]
     # Create conditionals
     _dHp = _H_dp - _H_up
-    _dHp[_dHp > _dHp_max] = _dHp_max
-    _dHp[_dHp < _dHp_min] = _dHp_min
+    _dHp[_dHp > _dHp_max] = _dHp_max[_dHp > _dHp_max]
+    _dHp[_dHp < _dHp_min] = _dHp_min[_dHp < _dHp_min]
     cond_0 = _H_up > _z_inv_up + _z_p
     # Compute universal coefficients
     _Qp_next = (u / _b_p * (_a_p - _dHp))**(1 / _c_p)
