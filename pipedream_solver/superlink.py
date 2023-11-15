@@ -173,6 +173,7 @@ class SuperLink():
         | A           | float | m^2  | Full area of orifice                                 |
         | y_max       | float | m    | Full height of orifice                               |
         | z_o         | float | m    | Offset of bottom above upstream superjunction invert |
+        | oneway      | bool  |      | Is the flow one-way only? (upstream to downstream)   |
         |-------------+-------+------+------------------------------------------------------|
 
     weirs: pd.DataFrame (optional)
@@ -521,8 +522,8 @@ class SuperLink():
                 self._g1_o = np.sqrt(self._Ao_max)
                 self._g2_o = np.sqrt(self._Ao_max)
                 self._g3_o = np.zeros(self.n_o)
-            if 'unidir' in self.orifices.columns:
-                self._unidir_o = self.orifices['unidir'].values.astype(np.bool_)
+            if 'oneway' in self.orifices.columns:
+                self._unidir_o = self.orifices['oneway'].values.astype(np.bool_)
             else:
                 self._unidir_o = np.zeros(self.n_o, dtype=np.bool_)
             self._Qo = np.zeros(self.n_o, dtype=np.float64)
