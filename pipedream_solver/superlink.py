@@ -138,8 +138,7 @@ class SuperLink():
                 {
                     'x' : <x-coordinates of cross-section (list of floats)>,
                     'y' : <y-coordinates of cross-section (list of floats)>,
-                    'horiz_points' : <Number of horizontal sampling points (int)>
-                    'vert_points' : <Number of vertical sampling points (int)>
+                    'sample_points' : <Number of sampling points for interpolation (int)>
                 }
             ...
         }
@@ -339,6 +338,8 @@ class SuperLink():
             self.superjunctions['map_x'] = 0.
         if not 'map_y' in self.superjunctions.columns:
             self.superjunctions['map_y'] = 0.
+        if not 'transect' in self.superlinks.columns:
+            self.superlinks['transect'] = ''
         self._map_x_j = self.superjunctions['map_x'].values.astype(np.float64)
         self._map_y_j = self.superjunctions['map_y'].values.astype(np.float64)
         if 'name' in self.superjunctions.columns:
@@ -430,9 +431,9 @@ class SuperLink():
         self.forward_I_i[self.end_nodes] = self.backward_I_i[self.start_nodes]
         self.backward_I_i[self.start_nodes] = self.forward_I_i[self.start_nodes]
         # Handle channel geometries
-        self._shape_ik = links['shape']
+        self._shape_ik = links['shape'].str.lower().values
         if transects:
-            self._transect_ik = links['ts']
+            self._transect_ik = links['transect']
         else:
             self._transect_ik = None
         # Handle hydraulic geometries g1, g2, ..., g6 , and g7
@@ -513,7 +514,7 @@ class SuperLink():
             self._orient_o = self.orifices['orientation'].values
             self._tau_o = (self._orient_o == 'side').astype(np.float64)
             if 'shape' in self.orifices.columns:
-                self._shape_o = self.orifices['shape']
+                self._shape_o = self.orifices['shape'].str.lower().values
                 self._g1_o = self.orifices['g1'].values.astype(np.float64)
                 self._g2_o = self.orifices['g2'].values.astype(np.float64)
                 self._g3_o = self.orifices['g3'].values.astype(np.float64)
@@ -1007,7 +1008,7 @@ class SuperLink():
         nlinks = njunctions - 1
         link_columns = ['A_c', 'C', 'Q_0', 'ctrl', 'dx', 'g1', 'g2', 'g3',
                          'g4', 'g5', 'g6', 'g7', 'id', 'j_0', 'j_1', 'k', 'n',
-                        'shape', 'friction_method']
+                        'shape', 'friction_method', 'transect']
         junction_columns = ['A_s', 'h_0', 'id', 'k', 'z_inv']
         link_ncols = len(link_columns)
         junction_ncols = len(junction_columns)
@@ -1029,6 +1030,7 @@ class SuperLink():
         links['shape'] = np.repeat(superlinks['shape'].values, nlinks)
         links['roughness'] = np.repeat(superlinks['roughness'].values, nlinks)
         links['friction_method'] = np.repeat(superlinks['friction_method'].values, nlinks)
+        links['transect'] = np.repeat(superlinks['transect'].values, nlinks)
         for i in range(1, 8):
             geom_number = f'g{i}'
             if geom_number in superlinks.columns:
@@ -1075,8 +1077,6 @@ class SuperLink():
                 _xc = (dx_j / 2) + (dx_j / nlinks / 2)
             xx[:, :-1] = np.vstack([np.linspace(0, i, njunctions - 1)
                                     for i in dx_j])
-            # xx[:, :-1] = np.vstack([np.linspace(j, i + j + k, njunctions - 1)
-            #                         for i, j, k in zip(dx_j, _dx_uk, _dx_dk)])
             xx[:, -1] = _xc
             _zc = _m * _xc + _b0
             zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
@@ -1096,8 +1096,6 @@ class SuperLink():
         else:
             xx[:, :] = np.vstack([np.linspace(0, i, njunctions)
                                   for i in dx_j])
-            # xx[:, :] = np.vstack([np.linspace(j, i + j + k, njunctions)
-            #                       for i, j, k in zip(dx_j, _dx_uk, _dx_dk)])
             zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
             _fixed = np.ones(xx.shape, dtype=np.bool_)
             _xc = None

@@ -942,7 +942,7 @@ def Floodplain_A_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     g6: np.ndarray
         Inverse slope of middle channel sides (run/rise)
     g7: np.ndarray
-        bottom width of channel (meters)    
+        bottom width of channel (meters)
     """
     h_max = g1
     h_low = g2
@@ -1005,7 +1005,7 @@ def Floodplain_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     g6: np.ndarray
         Inverse slope of middle channel sides (run/rise)
     g7: np.ndarray
-        bottom width of channel (meters)    
+        bottom width of channel (meters)
     """
     h_max = g1
     h_low = g2
@@ -1087,7 +1087,7 @@ def Floodplain_B_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     g6: np.ndarray
         Inverse slope of middle channel sides (run/rise)
     g7: np.ndarray
-        bottom width of channel (meters)            
+        bottom width of channel (meters)
     """
     h_max = g1
     h_low = g2
@@ -1110,3 +1110,126 @@ def Floodplain_B_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
         b_top = 2 * m_middle * (h_mid - h_low)
         B = b_middle + b_top + (2 * m_top * (y - h_mid)) + g7*(y>0)
     return B
+
+@njit(float64(float64, float64[:], float64[:]), cache=True)
+def Transect_B_ik(w, x, y):
+    n = len(x)
+    B = 0.
+    for i in range(n - 1):
+        x0 = x[i]
+        x1 = x[i + 1]
+        y0 = y[i]
+        y1 = y[i + 1]
+        dx = x1 - x0
+        dy = y1 - y0
+        # If water level is below both transect y-coordinates...
+        if (y0 > w) and (y1 > w):
+            pass
+        # If water level is above both transect y-coordinates...
+        elif (y0 <= w) and (y1 <= w):
+            B += dx
+        # If water level is below left side but above right side...
+        elif (y0 > w) and (y1 <= w):
+            B += (dx / dy) * (y1 - w)
+        # If water level is above left side but below right side...
+        elif (y0 <= w) and (y1 > w):
+            B += (dx / dy) * (w - y0)
+    return B
+
+@njit(float64(float64, float64[:], float64[:]), cache=True)
+def Transect_Pe_ik(w, x, y):
+    n = len(x)
+    Pe = 0.
+    for i in range(n - 1):
+        x0 = x[i]
+        x1 = x[i + 1]
+        y0 = y[i]
+        y1 = y[i + 1]
+        dx = x1 - x0
+        dy = y1 - y0
+        # If water level is below both transect y-coordinates...
+        if (y0 > w) and (y1 > w):
+            pass
+        # If water level is above both transect y-coordinates...
+        elif (y0 <= w) and (y1 <= w):
+            Pe += np.sqrt(dx**2 + dy**2)
+        # If water level is below left side but above right side...
+        elif (y0 > w) and (y1 <= w):
+            dxp = (dx / dy) * (y1 - w)
+            dyp = (w - y1)
+            Pe += np.sqrt(dxp**2 + dyp**2)
+        # If water level is above left side but below right side...
+        elif (y0 <= w) and (y1 > w):
+            dxp = (dx / dy) * (w - y0)
+            dyp = (w - y0)
+            Pe += np.sqrt(dxp**2 + dyp**2)
+    return Pe
+
+@njit(float64(float64, float64[:], float64[:]), cache=True)
+def Transect_A_ik(w, x, y):
+    n = len(x)
+    A = 0.
+    for i in range(n - 1):
+        x0 = x[i]
+        x1 = x[i + 1]
+        y0 = y[i]
+        y1 = y[i + 1]
+        dx = x1 - x0
+        dy = y1 - y0
+        # If water level is below both transect y-coordinates...
+        if (y0 > w) and (y1 > w):
+            pass
+        # If water level is above both transect y-coordinates...
+        elif (y0 <= w) and (y1 <= w):
+            A_rec = dx * (w - max(y0, y1))
+            A_tri = np.abs(dx * dy / 2.)
+            A += A_rec + A_tri
+        # If water level is below left side but above right side...
+        elif (y0 > w) and (y1 <= w):
+            dxp = (dx / dy) * (y1 - w)
+            dyp = (w - y1)
+            A_tri = np.abs(dxp * dyp / 2.)
+            A += A_tri
+        # If water level is above left side but below right side...
+        elif (y0 <= w) and (y1 > w):
+            dxp = (dx / dy) * (w - y0)
+            dyp = (w - y0)
+            A_tri = np.abs(dxp * dyp / 2.)
+            A += A_tri
+    return A
+
+@njit(float64(float64, float64[:], float64[:], int64), cache=True)
+def interpolate_geometry(x, xp, fp, method=1):
+    """
+    Interpolate a sample `fp` over domain `xp` at point `x`.
+
+    Inputs:
+    -------
+    x : float
+        The x-coordinate at which to evaluate the interpolated value
+    xp: np.ndarray (float)
+        The x-coordinates of the data points
+    fp: np.ndarray (float)
+        The y-coordinates of the data points
+    method: int [0 or 1]
+        Use nearest neighbor (0) or linear (1) interpolation.
+    """
+    n = xp.size
+    ix = np.searchsorted(xp, x)
+    if (ix == 0):
+        result = fp[0]
+    elif (ix >= n):
+        result = fp[n - 1]
+    else:
+        dx_0 = x - xp[ix - 1]
+        dx_1 = xp[ix] - x
+        if method == 1:
+            frac = dx_0 / (dx_0 + dx_1)
+            result = (1 - frac) * fp[ix - 1] + (frac) * fp[ix]
+        elif method == 0:
+            if abs(dx_0) <= abs(dx_1):
+                result = fp[ix - 1]
+            else:
+                result = fp[ix]
+    return result
+
