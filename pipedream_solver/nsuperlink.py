@@ -284,14 +284,14 @@ class nSuperLink(SuperLink):
     def __init__(self, superlinks, superjunctions,
                  links=None, junctions=None,
                  transects={}, storages={},
-                 orifices=None, weirs=None, pumps=None,
+                 orifices=None, weirs=None, pumps=None, prvs = None,
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False, auto_permute=False,
                  end_length=None, end_method='b', internal_links=4, mobile_elements=False):
         super().__init__(superlinks, superjunctions,
                          links, junctions, transects, storages,
-                         orifices, weirs, pumps, dt, sparse,
+                         orifices, weirs, pumps, prvs, dt, sparse,
                          min_depth, method, inertial_damping,
                          bc_method, exit_hydraulics, auto_permute,
                          end_length, end_method, internal_links, mobile_elements)
@@ -566,8 +566,9 @@ class nSuperLink(SuperLink):
         _storage_codes = self._storage_codes
         # Compute storage areas
         _h_j = np.maximum(H_j - _z_inv_j, min_depth)
-        numba_compute_functional_storage_areas(_h_j, _A_sj, _storage_a, _storage_b,
-                                                _storage_c, _functional)
+#        print(_h_j, _A_sj, _storage_a, _storage_b,
+#                                                _storage_c, _functional)
+        numba_compute_functional_storage_areas(_h_j, _A_sj, _storage_a, _storage_b,_storage_c, _functional)
         if _tabular.any():
             numba_compute_tabular_storage_areas(_h_j, _A_sj, _storage_hs, _storage_As,
                                                 _storage_js, _storage_codes,
@@ -932,13 +933,12 @@ class nSuperLink(SuperLink):
         _alpha_o = self._alpha_o     # Orifice flow coefficient alpha_o
         _beta_o = self._beta_o       # Orifice flow coefficient beta_o
         _chi_o = self._chi_o         # Orifice flow coefficient chi_o
-        _unidir_o = self._unidir_o
         # If no input signal, assume orifice is closed
         if u is None:
             u = np.zeros(self.n_o, dtype=np.float64)
         # Specify orifice heads at previous timestep
         numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_inv_j,
-                                        _z_o, _tau_o, _Co, _Ao, _y_max_o, _unidir_o, _J_uo, _J_do)
+                                        _z_o, _tau_o, _Co, _Ao, _y_max_o, _J_uo, _J_do)
         # Export instance variables
         self._alpha_o = _alpha_o
         self._beta_o = _beta_o
@@ -984,8 +984,8 @@ class nSuperLink(SuperLink):
         # Import instance variables
         H_j = self.H_j              # Head at superjunction j
         _z_inv_j = self._z_inv_j    # Invert elevation at superjunction j
-        _J_up = self._J_up          # Index of superjunction upstream of pump p
-        _J_dp = self._J_dp          # Index of superjunction downstream of pump p
+        _J_up = self._J_up          # Index of superjunction upstream of prv
+        _J_dp = self._J_dp          # Index of superjunction downstream of prv
         _z_p = self._z_p            # Offset of pump inlet above upstream invert elevation
         _dHp_max = self._dHp_max    # Maximum pump head difference
         _dHp_min = self._dHp_min    # Minimum pump head difference
@@ -998,16 +998,56 @@ class nSuperLink(SuperLink):
         _chi_p = self._chi_p        # Pump flow coefficient chi_p
         # If no input signal, assume pump is closed
         if u is None:
-            u = np.zeros(self.n_p, dtype=np.float64)
+            u = np.ones(self.n_p, dtype=np.float64) # changed this from zeros
         # Check max/min head differences
         assert (_dHp_min <= _dHp_max).all()
-        # Compute pump flow coefficients
-        numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j, _z_inv_j, _Qp, u,
-                                     _z_p, _dHp_max, _dHp_min, _a_p, _b_p, _c_p, _J_up, _J_dp)
+        # Compute prv flow coefficients
+        numba_pump_flow_coefficients(_alpha_p, _beta_p, _chi_p, H_j,
+                                     _z_inv_j, _Qp, u,_z_p,
+                                     _dHp_max, _dHp_min, 
+                                     _a_p, _b_p, _c_p,
+                                     _J_up, 
+                                     _J_dp)
         # Export instance variables
         self._alpha_p = _alpha_p
         self._beta_p = _beta_p
         self._chi_p = _chi_p
+        
+    def prv_flow_coefficients(self, u=None):
+        """
+        Compute orifice flow coefficients: alpha_uo, beta_uo, chi_uo,
+        alpha_do, beta_do, chi_do.
+        """
+        # Import instance variables
+        H_j = self.H_j               # Head at superjunction j
+        _z_inv_j = self._z_inv_j     # Invert elevation at superjunction j
+        _H_set = self._H_set
+        _J_uprv = self._J_uprv           # Index of superjunction upstream of orifice o
+        _J_dprv = self._J_dprv           # Index of superjunction downstream of orifice o
+        _z_prv = self._z_prv             # Elevation offset of bottom of orifice o
+        _tau_prv = self._tau_prv         # Orientation of orifice o (side/bottom)
+        _y_max_prv = self._y_max_prv     # Maximum height of orifice o
+        _Qprv = self._Qprv               # Current flow rate of orifice o
+        _Cprv_open = self._Cprv_open               # Discharge coefficient of orifice o
+        _Cprv_active = self._Cprv_active               # Discharge coefficient of orifice o
+        _Aprv = self._Aprv               # Maximum flow area of orifice o
+        _alpha_prv = self._alpha_prv     # Orifice flow coefficient alpha_o
+        _beta_prv = self._beta_prv       # Orifice flow coefficient beta_o
+        _chi_prv = self._chi_prv         # Orifice flow coefficient chi_o
+        bc = self.bc               # Boundary conditions
+        # If no input signal, assume orifice is closed
+        if u is None:
+            u = np.zeros(self.n_o, dtype=np.float64)
+        # Specify orifice heads at previous timestep
+        numba_prv_flow_coefficients(_alpha_prv, _beta_prv, _chi_prv, H_j, _Qprv, u, _z_inv_j, _H_set,
+                                            _z_prv, _tau_prv, _Cprv_active, _Cprv_open, _Aprv, _y_max_prv, _J_uprv, _J_dprv, bc)
+        # Export instance variables
+        self._alpha_prv = _alpha_prv
+        self._beta_prv = _beta_prv
+        self._chi_prv = _chi_prv
+        self.bc = bc               # Boundary conditions
+        #H_j = self.H_j               # Head at superjunction j
+
 
     def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
@@ -1040,6 +1080,7 @@ class nSuperLink(SuperLink):
         n_o = self.n_o                   # Number of orifices in system
         n_w = self.n_w                   # Number of weirs in system
         n_p = self.n_p                   # Number of pumps in system
+        n_prv = self.n_prv                   # Number of pumps in system
         A = self.A
         if n_o:
             O = self.O
@@ -1077,6 +1118,20 @@ class nSuperLink(SuperLink):
             _chi_upl = self._chi_upl         # Summation of pump flow coefficients
             _chi_dpm = self._chi_dpm         # Summation of pump flow coefficients
             _P_diag = self._P_diag           # Diagonal elements of matrix P
+        if n_prv:
+            PRV = self.PRV
+            _J_uprv = self._J_uprv               # Index of superjunction upstream of pump p
+            _J_dprv = self._J_dprv               # Index of superjunction downstream of pump p
+            _alpha_prv = self._alpha_prv         # Pump flow coefficient
+            #print('alpha in sparse', _alpha_prv)
+            _beta_prv = self._beta_prv           # Pump flow coefficient
+            _chi_prv = self._chi_prv             # Pump flow coefficient
+            _alpha_uprvm = self._alpha_uprvm     # Summation of pump flow coefficients
+            _beta_dprvl = self._beta_dprvl       # Summation of pump flow coefficients
+            _chi_uprvl = self._chi_uprvl         # Summation of pump flow coefficients
+            _chi_dprvm = self._chi_dprvm         # Summation of pump flow coefficients
+            _PRV_diag = self._PRV_diag           # Diagonal elements of matrix P
+            bc = self.bc # added this
         _sparse = self._sparse           # Use sparse matrix data structures (y/n)
         M = self.M                       # Number of superjunctions in system
         H_j_next = self.H_j                   # Head at superjunction j
@@ -1158,6 +1213,21 @@ class nSuperLink(SuperLink):
             # Set right-hand side
             numba_add_at(D, _J_up, -_chi_up)
             numba_add_at(D, _J_dp, _chi_dp)
+        if n_prv:
+            _alpha_uprv = _alpha_prv
+            _alpha_dprv = _alpha_prv
+            _beta_uprv = _beta_prv
+            _beta_dprv = _beta_prv
+            _chi_uprv = _chi_prv
+            _chi_dprv = _chi_prv
+            _PRV_diag.fill(0)
+            numba_clear_off_diagonals(PRV, bc, _J_uprv, _J_dprv, n_prv)
+            # Set diagonal
+            numba_create_OWP_matrix(PRV, _PRV_diag, bc, _J_uprv, _J_dprv, _alpha_uprv,
+                                    _alpha_dprv, _beta_uprv, _beta_dprv, M, n_prv)
+            # Set right-hand side
+            numba_add_at(D, _J_uprv, -_chi_uprv)
+            numba_add_at(D, _J_dprv, _chi_dprv)
         b.fill(0)
         # TODO: Which A_sj? Might need to apply product rule here.
         b = (_A_sj * H_j_prev / _dt) + _Q_0j + D
@@ -1184,19 +1254,21 @@ class nSuperLink(SuperLink):
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
         P = self.P                    # Pump matrix
+        PRV = self.PRV                    # Pump matrix
         n_o = self.n_o                # Number of orifices
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
+        n_prv = self.n_prv                # Number of pumps
         _z_inv_j = self._z_inv_j      # Invert elevation of superjunction j
         _sparse = self._sparse        # Use sparse data structures (y/n)
         min_depth = self.min_depth    # Minimum depth at superjunctions
         max_depth = self.max_depth    # Maximum depth at superjunctions
         # Does the system have control assets?
-        has_control = n_o + n_w + n_p
+        has_control = n_o + n_w + n_p + n_prv
         # Get right-hand size
         if has_control:
             if implicit:
-                l = A + O + W + P
+                l = A + O + W + P + PRV
                 r = b
             else:
                 # TODO: Broken
@@ -1227,9 +1299,11 @@ class nSuperLink(SuperLink):
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
         P = self.P                    # Pump matrix
+        PRV = self.PRV                    # Pump matrix
         n_o = self.n_o                # Number of orifices
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
+        n_prv = self.n_prv                # Number of pumps
         _z_inv_j = self._z_inv_j      # Invert elevation of superjunction j
         _sparse = self._sparse        # Use sparse data structures (y/n)
         min_depth = self.min_depth    # Minimum depth at superjunctions
@@ -1237,11 +1311,11 @@ class nSuperLink(SuperLink):
         bandwidth = self.bandwidth
         M = self.M
         # Does the system have control assets?
-        has_control = n_o + n_w + n_p
+        has_control = n_o + n_w + n_p + n_prv
         # Get right-hand size
         if has_control:
             if implicit:
-                l = A + O + W + P
+                l = A + O + W + P + PRV
                 r = b
             else:
                 raise NotImplementedError
@@ -1425,14 +1499,13 @@ class nSuperLink(SuperLink):
         _Co = self._Co                # Discharge coefficient of orifice o
         _Ao = self._Ao                # Maximum flow area of orifice o
         _V_sj = self._V_sj
-        _unidir_o = self._unidir_o
         g = 9.81
         # If no input signal, assume orifice is closed
         if u is None:
             u = np.zeros(self.n_o, dtype=np.float64)
         # Compute orifice flows
         _Qo_next = numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o, _tau_o, _y_max_o, _Co, _Ao,
-                                             _unidir_o, _J_uo, _J_do, g)
+                                             _J_uo, _J_do, g)
         # TODO: Move this inside numba function
         upstream_ctrl = (H_j[_J_uo] > H_j[_J_do])
         _Qo_max = np.where(upstream_ctrl, _V_sj[_J_uo], _V_sj[_J_do]) / dt
@@ -1490,6 +1563,41 @@ class nSuperLink(SuperLink):
         _Qp_next = numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max,
                                           _dHp_min, _a_p, _b_p, _c_p, _J_up, _J_dp)
         self._Qp = _Qp_next
+        
+    def solve_prv_flows(self, dt, u=None):
+        """
+        Solve for pump discharges given superjunction heads at time t + dt.
+        """
+        # Import instance variables
+        H_j = self.H_j                # Head at superjunction j
+        bc = self.bc                # Boundary conditions
+        _z_inv_j = self._z_inv_j      # Invert elevation at superjunction j
+        _J_uprv = self._J_uprv            # Index of superjunction upstream of orifice o
+        _J_dprv = self._J_dprv            # Index of superjunction downstream of orifice o
+        _z_prv = self._z_prv              # Offset of orifice above upstream invert elevation
+        _tau_prv = self._tau_prv          # Orientation of orifice o (bottom/side)
+        _y_max_prv = self._y_max_prv      # Maximum height of orifice o
+        _Cprv_open = self._Cprv_open                # Discharge coefficient of orifice o
+        _Cprv_active = self._Cprv_active               # Discharge coefficient of orifice o
+        _Aprv = self._Aprv                # Maximum flow area of orifice o
+        _V_sj = self._V_sj
+        _H_set = self._H_set
+        g = 9.81
+        # If no input signal, assume orifice is closed
+        if u is None:
+            u = np.zeros(self.n_o, dtype=np.float64)
+        # Compute orifice flows
+        # Compute pump flows
+        _Qprv_next = numba_solve_prv_flows(H_j, _H_set, u, _z_inv_j, _z_prv,
+                                      _tau_prv, _y_max_prv, _Cprv_open, _Cprv_active, _Aprv, _J_uprv, _J_dprv, bc, g=9.81)
+# what's this!!        # TODO: Move this inside numba function
+        upstream_ctrl = (H_j[_J_uprv] > H_j[_J_dprv])
+        #_Qprv_max = np.where(upstream_ctrl, _V_sj[_J_uprv], _V_sj[_J_dprv]) / dt
+        #_Qprv_next = np.sign(_Qprv_next) * np.minimum(np.abs(_Qprv_next), _Qprv_max)
+        # Export instance variables       
+        self._Qprv = _Qprv_next
+        #print(_Qprv_next)
+        self.bc = bc         # Boundary conditions
 
     def compute_storage_volumes(self):
         """
@@ -2484,6 +2592,17 @@ def gamma_p(Q_p_t, b_p, c_p, u):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64),
       cache=True)
+def gamma_prv(Q_prv_t, Aprv, Cprv, g=9.81):
+    """
+    Compute flow coefficient 'gamma' for orifice o.
+    """
+    num = 2 * g * Cprv**2 * Aprv**2
+    den = np.abs(Q_prv_t)
+    result = safe_divide_vec(num, den)
+    return result
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64),
+      cache=True)
 def gamma_uk(Q_uk_t, C_uk, A_uk, g=9.81):
     """
     Compute flow coefficient 'gamma' for upstream end of superlink k
@@ -2521,12 +2640,10 @@ def xi_dk(dx_dk, B_dk, theta_dk, dt):
     return result
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], float64[:], float64[:], boolean[:],
-             int64[:], int64[:]),
+            float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:]),
       cache=True)
 def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_inv_j,
-                                    _z_o, _tau_o, _Co, _Ao, _y_max_o, _unidir_o,
-                                     _J_uo, _J_do):
+                                    _z_o, _tau_o, _Co, _Ao, _y_max_o, _J_uo, _J_do):
     g = 9.81
     _H_uo = H_j[_J_uo]
     _H_do = H_j[_J_do]
@@ -2543,7 +2660,6 @@ def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_i
                 _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
     cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
                 _z_o + _z_inv_uo)
-    cond_3 = (_H_do >= _H_uo) & _unidir_o
     # Fill coefficient arrays
     # Submerged on both sides
     a = (cond_0 & cond_1)
@@ -2564,18 +2680,17 @@ def numba_orifice_flow_coefficients(_alpha_o, _beta_o, _chi_o, H_j, _Qo, u, _z_i
     _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
                                     * (- _z_inv_uo[c] - _z_o[c]))
     # No flow
-    d = (~cond_0 & ~cond_2) | cond_3
+    d = (~cond_0 & ~cond_2)
     _alpha_o[d] = 0.0
     _beta_o[d] = 0.0
     _chi_o[d] = 0.0
     return 1
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], float64[:], boolean[:],
-            int64[:], int64[:], float64),
+            float64[:], float64[:], float64[:], float64[:], int64[:], int64[:], float64),
       cache=True)
 def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
-                              _tau_o, _y_max_o, _Co, _Ao, _unidir_o, _J_uo, _J_do, g=9.81):
+                              _tau_o, _y_max_o, _Co, _Ao, _J_uo, _J_do, g=9.81):
     # Specify orifice heads at previous timestep
     _H_uo = H_j[_J_uo]
     _H_do = H_j[_J_do]
@@ -2596,7 +2711,6 @@ def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
                 _z_o + _z_inv_uo + (_tau_o * _y_max_o * u / 2))
     cond_2 = (_omega_o * _H_uo + (1 - _omega_o) * _H_do >
                 _z_o + _z_inv_uo)
-    cond_3 = (_H_do >= _H_uo) & _unidir_o
     # Fill coefficient arrays
     # Submerged on both sides
     a = (cond_0 & cond_1)
@@ -2617,7 +2731,7 @@ def numba_solve_orifice_flows(H_j, u, _z_inv_j, _z_o,
     _chi_o[c] = (_gamma_o[c] * (-1)**(1 - _omega_o[c])
                                     * (- _z_inv_uo[c] - _z_o[c]))
     # No flow
-    d = (~cond_0 & ~cond_2) | cond_3
+    d = (~cond_0 & ~cond_2)
     _alpha_o[d] = 0.0
     _beta_o[d] = 0.0
     _chi_o[d] = 0.0
@@ -2762,6 +2876,115 @@ def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _a_p, _b_
     _Qp_next = (u / _b_p * (_a_p - _dHp))**(1 / _c_p)
     _Qp_next[~cond_0] = 0.0
     return _Qp_next
+
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:], boolean[:]),
+      cache=True)
+def numba_prv_flow_coefficients(_alpha_prv, _beta_prv, _chi_prv, H_j, _Qprv, u, _z_inv_j, _H_set,
+                                    _z_prv, _tau_prv, _Cprv_active, _Cprv_open, _Aprv, _y_max_prv, _J_uprv, _J_dprv, bc):
+    g = 9.81
+    _H_uprv = H_j[_J_uprv]
+    _H_dprv = H_j[_J_dprv]
+    _z_inv_uprv = _z_inv_j[_J_uprv]
+    div_term = _H_uprv / _H_set
+    # Create indicator functions
+    _omega_prv = np.zeros_like(_H_uprv)
+    _omega_prv[_H_uprv >= _H_dprv] = 1.0
+    # Compute universal coefficients
+    _gamma_prv_active = gamma_o(_Qprv, _Aprv, _Cprv_active, g) # use orifice gamma
+    _gamma_prv_open = gamma_prv(_Qprv, _Aprv, _Cprv_open, g)
+    
+    # Create conditionals
+    cond_0 = (_H_uprv > _H_dprv)
+    cond_1 = (_H_uprv > _H_set)
+     
+    # Fill coefficient arrays
+    # Active
+    a = (cond_0 & cond_1)
+    _alpha_prv[a] = _gamma_prv_active[a]
+    _beta_prv[a] = -div_term* _gamma_prv_active[a]
+    _chi_prv[a] = 0.0
+    #bc[_J_dprv] = True
+    
+    # Open
+    b = (cond_0 & ~cond_1)
+    _alpha_prv[b] = _gamma_prv_open[b]
+    _beta_prv[b] = -_gamma_prv_open[b]
+    _chi_prv[b] = 0.0
+    #bc[_J_dprv] = False
+    
+    # No flow
+    c = (~cond_0)
+    _alpha_prv[c] = 0.0
+    _beta_prv[c] = 0.0
+    _chi_prv[c] = 0.0
+    
+    #print('gamma',a,b,c, _alpha_prv, _beta_prv, _chi_prv, _H_set)
+    return 1
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:], boolean[:], float64),
+      cache=True)
+def numba_solve_prv_flows(H_j, _H_set, u, _z_inv_j, _z_prv,
+                              _tau_prv, _y_max_prv, _Cprv_open, _Cprv_active, _Aprv, _J_uprv, _J_dprv, bc, g=9.81):
+    # Specify orifice heads at previous timestep
+    _H_uprv = H_j[_J_uprv]
+    _H_dprv = H_j[_J_dprv]
+    _z_inv_uprv = _z_inv_j[_J_uprv]
+    # Create indicator functions
+    _omega_prv = np.zeros_like(_H_uprv)
+    _omega_prv[_H_uprv >= _H_dprv] = 1.0
+    # Create arrays to store flow coefficients for current time step
+    _alpha_prv = np.zeros_like(_H_uprv)
+    _beta_prv = np.zeros_like(_H_uprv)
+    _chi_prv = np.zeros_like(_H_uprv)
+    # Compute universal coefficients
+    #print('C', _Cprv_active)
+    _gamma_prv_active = 2 * g * _Cprv_active**2 * _Aprv**2
+    _gamma_prv_open = 2 * g * _Cprv_open**2 * _Aprv**2
+    # Create conditionals
+    cond_0 = (_H_uprv > _H_dprv)
+    cond_1 = (_H_uprv > _H_set)
+    
+    # Fill coefficient arrays
+    # Active
+    a = (cond_0 & cond_1)
+    _alpha_prv[a] = _gamma_prv_active[a]
+    _beta_prv[a] = -_gamma_prv_active[a]
+    _chi_prv[a] = 0.0
+    if a:
+       # print('a true')
+        bc[_J_dprv] = False #True
+    
+    # Open
+    b = (cond_0 & ~cond_1)
+    _alpha_prv[b] = _gamma_prv_open[b]
+    _beta_prv[b] = -_gamma_prv_open[b]
+    _chi_prv[b] = 0.0
+    if b:
+       # print('b true')
+        bc[_J_dprv] = False
+    
+    # No flow
+    c = (~cond_0)
+    _alpha_prv[c] = 0.0
+    _beta_prv[c] = 0.0
+    _chi_prv[c] = 0.0
+    if c:
+       # print('c true')
+        bc[_J_dprv] = False
+    
+    # Compute flow
+    
+    #print('alpha', _alpha_prv)
+    #print(_gamma_prv_active, _gamma_prv_open)
+    _Qprv_next = np.sqrt(np.abs(
+               _alpha_prv * _H_uprv + _beta_prv * _H_dprv + _chi_prv))
+    #print('Q', 3600*_Qprv_next)
+    # Export instance variables
+    return _Qprv_next # removed bc from the things we export
+
+
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], float64[:], float64[:], int64, int64[:], int64[:], int64[:]),
