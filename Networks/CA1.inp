@@ -1,0 +1,621 @@
+[TITLE]
+CITY OF FAIRFIELD - Zone III Water System Model
+AWWARF Study July 8+9, 1993
+Chlorine Simulation - 1st Order Bulk Reaction Only
+Starting Time 6pm 7/7/93
+
+[JUNCTIONS]
+;ID              	Elev        	Demand      	Pattern         
+ 106             	168         	0.00000     	1               	; TAKEOUT for Zone 2 - PRV                 0.00000
+ 107             	193         	0.00448     	1               	; Cotswold Hill Dr (3)                     0.00313
+ 108             	195         	0.00448     	1               	; Bellevue Ct (3)                          0.00313
+ 109             	206         	0.00448     	1               	; Cotswold Hill Dr & Troon (3)             0.00313
+ 111             	207         	0.00594     	1               	; Troon Ct (4)                             0.00415
+ 112             	200         	0.00000     	1               	; St Andrews Dr & Cotswold Hill Dr         0.00000
+ 113             	126         	0.00000     	1               	; Pump Station Outlet                      0.00000
+ 1131            	191         	0.00000     	1               	; Interp Elev                              0.00000
+ 115             	126         	0.00000     	1               	; Pump Station Inlet                       0.00000
+ 123             	194         	0.01233     	1               	; TAKEOUT for Zone 2 - PRV (8)             0.00861
+ 124             	205         	0.00448     	1               	; Pasatiempo Ct (3)                        0.00313
+ 125             	207         	0.01233     	1               	; Del Monte Ct & Del Monte (8)             0.00861
+ 126             	191         	0.01233     	1               	; Del Monte Ct & Del Monte (8)             0.00861
+ 127             	209         	0.00000     	1               	; St Andrews Dr & Del Monte Dr             0.00000
+ 128             	204         	0.00448     	1               	; St Andrews Dr & Oakmont Ct (3)           0.00313
+ 129             	203         	0.00448     	1               	; Oakmont Ct (3)                           0.00313
+ 130             	225         	0.00292     	1               	; Kingsmill Ln (2)                         0.00204
+ 131             	201         	0.00740     	1               	; St Andrews Dr & Salishan (5)             0.00517
+ 132             	202         	0.00594     	1               	; Salishan Ct (4)                          0.00415
+ 133             	210         	0.00292     	1               	; Kingsmill Cir & Kingsmill (2)            0.00204
+ 134             	199         	0.00594     	1               	; St Andrews Dr & Kingsmill (4)            0.00415
+ 135             	199         	0.00000     	1               	; St Andrews Dr & Kingsmill                0.00000
+ 1351            	213         	0.00000     	1               	; Interp Elev     St Andrews               0.00000
+ 1352            	230         	0.00000     	1               	; Interp Elev     St Andrews               0.00000
+ 137             	126         	0.00000     	1               	; Pump 1 Outlet                            0.00000
+ 138             	126         	0.00000     	1               	; Pump 2 Outlet                            0.00000
+ 139             	138         	-1.00000    	2               	; WATERMAN TRTMT PLANT - model as pattern
+ 140             	126         	0.00000     	1               	; Pump 3 Outlet                            0.00000
+ 141             	240         	0.00000     	1               	; St Andrews Dr & Bear Crk Dr              0.00000
+ 1411            	268         	0.00000     	1               	; Interp Elev                              0.00000
+ 1412            	268         	0.00000     	1               	; Interp Elev                              0.00000
+ 1413            	289         	0.00000     	1               	; Interp Elev                              0.00000
+ 142             	235         	0.03586     	1               	; Bear Crk Dr & Pau Ct (24)                0.02505
+ 143             	289         	0.01681     	1               	; Costa Ct (11)                            0.01174
+ 144             	284         	0.00885     	1               	; Costa Ct (6)                             0.00618
+ 1441            	292         	0.00000     	1               	; Interp Elev                              0.00000
+ 1442            	306         	0.00000     	1               	; Interp Elev                              0.00000
+ 1443            	288         	0.00000     	1               	; Interp Elev                              0.00000
+ 145             	300         	0.01681     	1               	; Seminole Dr (11)                         0.01174
+ 146             	311         	0.01457     	1               	; Seminole Dr (10)                         0.01018
+ 147             	264         	0.01681     	1               	; Seminole Dr & Banff (11)                 0.01174
+ 148             	268         	0.00740     	1               	; St Andrews Dr (5)                        0.00517
+ 149             	245         	0.01681     	1               	; Seminole Cir & S Hills Dr(11)            0.01174
+ 151             	243         	0.00000     	1               	; St Andrews Dr                            0.00000
+ 152             	246         	0.01457     	1               	; S Hills Dr & S Hills Ct(10)              0.01018
+ 1521            	245         	0.00000     	1               	; Interp Elev                              0.00000
+ 153             	191         	0.02465     	1               	; Seminole Cir & Cherry V Cir (17)         0.01722
+ 154             	205         	0.02801     	1               	; Broadmoor & Cherry V Cir (19)            0.01957
+ 1541            	198         	0.00000     	1               	; Interp Elev                              0.00000
+ 155             	218         	0.01233     	1               	; Broadmoor (8)                            0.00861
+ 156             	198         	0.02353     	1               	; Seminole Cir (16)                        0.01644
+ 157             	208         	0.02690     	1               	; Seminole Cir & Broadmoor (18)            0.01879
+ 158             	217         	0.01031     	1               	; Seminole Cir & St Andrew (7)             0.00720
+ 159             	226         	0.01344     	1               	; (9)                                      0.00939
+ 160             	187         	0.04034     	1               	; Bear Crk Dr & Ayr Ct (27)                0.02818
+ 161             	250         	0.01681     	1               	; Wailea Cir & Kaanapali Dr (11)           0.01174
+ 1611            	262         	0.00000     	1               	; Interp Elev                              0.00000
+ 162             	212         	0.02353     	1               	; Cherry Valley Dr (16)                    0.01644
+ 163             	270         	0.01457     	1               	; Wailea Cir (10)                          0.01018
+ 1631            	275         	0.00000     	1               	; Interp Elev                              0.00000
+ 164             	235         	0.01792     	1               	; Cherry Valley Dr (12)                    0.01252
+ 165             	285         	0.02017     	1               	; Wailea Cir (14)                          0.01409
+ 1651            	296         	0.00000     	1               	; Interp Elev                              0.00000
+ 167             	311         	0.00740     	1               	; Kapalua Ct (5)                           0.00517
+ 168             	253         	0.01457     	1               	; Seminole Dr (10)                         0.01018
+ 169             	260         	0.02353     	1               	; Cherry Valley Dr (16)                    0.01644
+ 171             	260         	0.01344     	1               	; Cherry Valley Cir (9)                    0.00939
+ 172             	290         	0.01905     	1               	; Cherry Valley Cir (13)                   0.01331
+ 1721            	275         	0.00000     	1               	; Interp Elev                              0.00000
+ 1722            	260         	0.00000     	1               	; Interp Elev                              0.00000
+ 1723            	230         	0.00000     	1               	; Interp Elev                              0.00000
+ 1724            	216         	0.00000     	1               	; Interp Elev                              0.00000
+ 173             	228         	0.01457     	1               	; Cherry Valley Cir (10)                   0.01018
+ 174             	268         	0.01031     	1               	; Seminole Dr & Ganton Ct (7)              0.00720
+ 175             	263         	0.00000     	1               	; Seminole Dr & R S Parkway                0.00000
+ 176             	258         	0.00000     	1               	; R S Parkway                              0.00000
+ 177             	213         	0.00000     	1               	; R S Parkway                              0.00000
+ 178             	227         	0.00000     	1               	; R S Parkway                              0.00000
+ 1781            	209         	0.00000     	1               	; Interp Elev                              0.00000
+ 179             	236         	0.08741     	1               	; (59,Balance Of 1215Du)                   0.06106
+ 1791            	252         	0.00000     	1               	; Interp Elev                              0.00000
+ 1792            	289         	0.00000     	1               	; Interp Elev                              0.00000
+ 1793            	351         	0.00000     	1               	; Interp Elev                              0.00000
+ 1794            	385         	0.00000     	1               	; Interp Elev                              0.00000
+ 180             	190         	0.00000     	1               	; R S Parkway & Ascot Dr                   0.00000
+ 1801            	200         	0.00000     	1               	; Interp Elev                              0.00000
+ 181             	235         	0.02353     	1               	; Formby Ln & Ascot Dr (16)                0.01644
+ 182             	260         	0.01681     	1               	; Formby Ln (11)                           0.01174
+ 1821            	250         	0.00000     	1               	; Interp Elev                              0.00000
+ 183             	245         	0.01233     	1               	; Formby Ln (8)                            0.00861
+ 184             	200         	0.02353     	1               	; Bear Crk & Cherry Valley(16)             0.01644
+ 202             	264         	0.01457     	1               	; Pebble Bch Dr & Spyglass (10)            0.01018
+ 203             	227         	0.01681     	1               	; Pebble Beach Dr & Pebble Bch Ct (11)     0.01174
+ 207             	215         	0.01681     	1               	; St Andrews Dr (11)                       0.01174
+ 2071            	233         	0.00000     	1               	; Interp Elev                              0.00000
+ 208             	247         	0.03138     	1               	; Congressional Cir(21)                    0.02192
+ 209             	217         	0.01792     	1               	; St Andrews Dr (12)                       0.01252
+ 211             	230         	0.03698     	1               	; Area "B" & Gleneagles Ct (25)            0.02583
+ 2111            	243         	0.00000     	1               	; Interp Elev                              0.00000
+ 212             	238         	0.00885     	1               	; Gleneagles Ct (6)                        0.00618
+ 213             	274         	0.01681     	1               	; Prestwick Ct (11)                        0.01174
+ 214             	272         	0.01344     	1               	; St Andrews & Turnberry Dr (9)            0.00939
+ 215             	286         	0.00594     	1               	; Turnberry Ct (4)                         0.00415
+ 216             	280         	0.00448     	1               	; Turnberry  Dr (3)                        0.00313
+ 217             	279         	0.01233     	1               	; St Andrews & Capilano Ct (8)             0.00861
+ 218             	280         	0.00448     	1               	; St Andrews & Capilano Ct (3)             0.00313
+ 219             	284         	0.01681     	1               	; St Andrews & Capilano Ct (11)            0.01174
+ 221             	295         	0.00000     	1               	; Rs Parkway                               0.00000
+ 222             	358         	0.00000     	1               	; Turnberry Dr                             0.00000
+ 223             	240         	0.00000     	1               	; St Andrews Dr                            0.00000
+ 229             	284         	0.00000     	1               	; TAKEOUT Zone 4 - not used                0.00000
+
+[RESERVOIRS]
+;ID              	Head        	Pattern         
+
+[TANKS]
+;ID              	Elevation   	InitLevel   	MinLevel    	MaxLevel    	Diameter    	MinVol      	VolCurve
+ 185             	402         	15.9        	1           	26          	135         	0           	                	; Rancho Solano Reservoir
+
+[PIPES]
+;ID              	Node1           	Node2           	Length      	Diameter    	Roughness   	MinorLoss   	Status
+ 119             	106             	107             	570         	12          	140         	0           	Open  	; Cotswold Hill Dr
+ 121             	107             	108             	240         	6           	140         	0           	Open  	; Bellevue Ct
+ 122             	107             	109             	440         	12          	140         	0           	Open  	; Cotswold Hill Dr
+ 123             	109             	111             	220         	6           	140         	0           	Open  	; Troon Ct
+ 124             	109             	112             	300         	12          	140         	0           	Open  	; Cotswold Hill Dr
+ 125             	115             	137             	25          	6           	140         	0           	Open  	; Pump 1
+ 126             	115             	138             	25          	6           	140         	0           	Open  	; Pump 2
+ 127             	115             	140             	25          	6           	140         	0           	Open  	; Pump 3
+ 130             	133             	130             	190         	6           	140         	0           	Open  	; Kingsmill Ln
+ 137             	123             	124             	310         	6           	140         	0           	Open  	; Pasatiempo Ct
+ 138             	123             	125             	570         	12          	140         	0           	Open  	; Del Monte Dr
+ 139             	125             	126             	450         	8           	140         	0           	Open  	; Del Monte Ct
+ 141             	125             	127             	190         	12          	140         	0           	Open  	; Del Monte Dr
+ 142             	112             	127             	390         	12          	140         	0           	Open  	; St Andrews Dr
+ 143             	127             	128             	260         	12          	140         	0           	Open  	; St Andrews Dr
+ 144             	128             	129             	230         	6           	140         	0           	Open  	; Oakmont Ct
+ 145             	128             	131             	320         	12          	140         	0           	Open  	; St Andrews Dr
+ 146             	131             	132             	290         	8           	140         	0           	Open  	; Salishan Ct
+ 147             	131             	133             	150         	12          	140         	0           	Open  	; Kingsmill Cir
+ 148             	133             	134             	250         	12          	140         	0           	Open  	; Kingsmill Cir
+ 149             	134             	135             	140         	12          	140         	0           	Open  	; St Andrews Dr
+ 150             	139             	115             	570         	12          	140         	0           	Open  	; Pump Suction
+ 151             	113             	1131            	1600        	12          	140         	0           	Open  	; Pumped Supply Line
+ 1511            	1131            	135             	190         	12          	140         	0           	Open  	; Connection St Andrews
+ 152             	137             	113             	111         	6           	140         	0           	Open  	; Eq Pipe Length
+ 153             	138             	113             	111         	6           	140         	0           	Open  	; Eq Pipe Length
+ 154             	135             	1351            	385         	12          	140         	0           	Open  	; St Andrews Btw Kingsmill & Bear Cr
+ 1541            	1351            	1352            	490         	12          	140         	0           	Open  	; St Andrews Btw Kingsmill & Bear Cr
+ 1542            	1352            	141             	280         	12          	140         	0           	Open  	; St Andrews Btw Kingsmill & Bear Cr
+ 155             	141             	142             	260         	12          	140         	0           	Open  	; Bear Crk Dr
+ 156             	141             	1411            	515         	12          	140         	0           	Open  	; St Andrews
+ 1561            	1411            	1412            	120         	12          	140         	0           	Open  	; St Andrews
+ 1562            	1412            	143             	365         	12          	140         	0           	Open  	; St Andrews
+ 157             	1413            	144             	545         	12          	140         	0           	Open  	; St Andrews
+ 1571            	143             	1413            	150         	12          	140         	0           	Open  	; St Andrews
+ 158             	144             	1441            	405         	8           	140         	0           	Open  	; Balmoral Dr
+ 1581            	1441            	145             	325         	8           	140         	0           	Open  	; Balmoral Dr
+ 159             	1442            	146             	150         	8           	140         	0           	Open  	; Seminole Cir
+ 1591            	145             	1442            	220         	8           	140         	0           	Open  	; Seminole Cir
+ 160             	140             	113             	111         	6           	140         	0           	Open  	; Eq Pipe Length
+ 161             	147             	1443            	350         	8           	140         	0           	Open  	; Seminole Cir
+ 1611            	145             	1443            	230         	8           	140         	0           	Open  	; Seminole Cir
+ 162             	147             	149             	210         	8           	140         	0           	Open  	; Seminole Cir
+ 163             	148             	147             	920         	8           	140         	0           	Open  	; Banff Dr
+ 164             	149             	153             	790         	8           	140         	0           	Open  	; Seminole Cir
+ 165             	149             	1521            	460         	8           	140         	0           	Open  	; Southern Hills Dr
+ 1651            	1521            	152             	350         	8           	140         	0           	Open  	; Southern Hills Dr
+ 166             	144             	148             	210         	12          	140         	0           	Open  	; St Andrews
+ 167             	148             	151             	270         	12          	140         	0           	Open  	; St Andrews
+ 168             	151             	152             	180         	8           	140         	0           	Open  	; Southern Hills Dr
+ 169             	151             	158             	560         	12          	140         	0           	Open  	; St Andrews
+ 171             	154             	155             	420         	8           	140         	0           	Open  	; Broadmoor
+ 172             	154             	1541            	420         	8           	140         	0           	Open  	; Cherry Valley Dr
+ 1721            	1541            	153             	470         	8           	140         	0           	Open  	; Cherry Valley Dr
+ 173             	153             	156             	560         	8           	140         	0           	Open  	; Seminole Cir
+ 174             	156             	157             	880         	8           	140         	0           	Open  	; Seminole Cir
+ 175             	157             	154             	490         	8           	140         	0           	Open  	; Broadmoor
+ 176             	157             	158             	470         	8           	140         	0           	Open  	; Seminole Cir
+ 177             	158             	207             	560         	12          	140         	0           	Open  	; St Andrews Dr
+ 178             	207             	2071            	490         	8           	140         	0           	Open  	; Congressional Cir
+ 1781            	2071            	208             	340         	8           	140         	0           	Open  	; Congressional Cir
+ 179             	208             	209             	770         	8           	140         	0           	Open  	; Congressional Cir
+ 180             	207             	209             	350         	12          	140         	0           	Open  	; St Andrews Dr
+ 181             	209             	223             	630         	12          	140         	0           	Open  	; St Andrews Dr
+ 182             	223             	211             	590         	12          	140         	0           	Open  	; St Andrews Dr
+ 183             	2111            	213             	630         	8           	140         	0           	Open  	; Prestwick Ct
+ 1831            	211             	2111            	260         	8           	140         	0           	Open  	; Prestwick Ct
+ 184             	211             	212             	420         	8           	140         	0           	Open  	; Gleneagles Ct
+ 185             	211             	214             	1050        	12          	140         	0           	Open  	; St Andrews Dr
+ 186             	214             	216             	190         	8           	140         	0           	Open  	; Turnberry Dr
+ 187             	216             	215             	470         	8           	140         	0           	Open  	; Turnberry Ct
+ 188             	216             	222             	840         	8           	140         	0           	Open  	; Turnberry Dr
+ 189             	214             	217             	560         	12          	140         	0           	Open  	; St Andrews Dr
+ 191             	217             	218             	200         	12          	140         	0           	Open  	; St Andrews Dr
+ 192             	218             	219             	790         	12          	140         	0           	Open  	; St Andrews Dr
+ 193             	219             	221             	790         	12          	140         	1000        	Open  	; Rs Parkway - Suspected Valve Loss
+ 194             	221             	175             	1890        	12          	140         	0           	Open  	; Rs Parkway
+ 195             	175             	176             	580         	12          	140         	0           	Open  	; Rs Parkway
+ 196             	175             	174             	550         	12          	140         	0           	Open  	; Seminole Dr
+ 197             	174             	168             	470         	12          	140         	0           	Open  	; Seminole Dr
+ 198             	168             	159             	1010        	12          	140         	0           	Open  	; Seminole Dr
+ 199             	153             	162             	680         	12          	140         	0           	Open  	; Cherry Valley Dr
+ 200             	163             	161             	1200        	8           	140         	0           	Open  	; Kaanapali Dr
+ 201             	159             	158             	270         	12          	140         	0           	Open  	; Seminole Dr
+ 202             	162             	164             	200         	8           	140         	0           	Open  	; Cherry Valley Dr
+ 203             	161             	159             	270         	8           	140         	0           	Open  	; Wailea Cir
+ 204             	168             	163             	230         	8           	140         	0           	Open  	; Wailea Cir
+ 205             	1631            	165             	705         	8           	140         	0           	Open  	; Wailea Cir
+ 2051            	163             	1631            	230         	8           	140         	0           	Open  	; Wailea Cir
+ 206             	164             	169             	210         	8           	140         	0           	Open  	; Cherry Valley Dr
+ 207             	1611            	165             	555         	8           	140         	0           	Open  	; Wailea Cir
+ 2071            	161             	1611            	275         	8           	140         	0           	Open  	; Wailea Cir
+ 208             	1651            	167             	310         	8           	140         	0           	Open  	; Kapalua Ct
+ 2081            	165             	1651            	190         	8           	140         	0           	Open  	; Kapalua Ct
+ 209             	169             	172             	680         	8           	140         	0           	Open  	; Cherry Valley Cir
+ 210             	1722            	169             	770         	8           	140         	0           	Open  	; Pine Valley Dr
+ 2101            	171             	1722            	505         	8           	140         	0           	Open  	; Pine Valley Dr
+ 211             	1721            	172             	305         	8           	140         	0           	Open  	; Cherry Valley Cir
+ 2111            	171             	1721            	325         	8           	140         	0           	Open  	; Cherry Valley Cir
+ 212             	171             	173             	270         	8           	140         	0           	Open  	; Cherry Valley Cir
+ 213             	184             	1724            	455         	8           	140         	0           	Open  	; Cherry Valley Cir
+ 2131            	1724            	173             	455         	8           	140         	0           	Open  	; Cherry Valley Cir
+ 214             	162             	184             	1070        	8           	140         	0           	Open  	; Cherry Valley Cir
+ 215             	160             	184             	830         	12          	140         	0           	Open  	; Bear Crk Dr
+ 216             	160             	142             	910         	12          	140         	0           	Open  	; Bear Crk Dr
+ 217             	176             	177             	1150        	12          	140         	0           	Open  	; Rs Parkway
+ 218             	177             	178             	1260        	12          	140         	0           	Open  	; Rs Parkway
+ 219             	178             	179             	420         	16          	140         	0           	Open  	; Rs Parkway
+ 220             	1723            	164             	1070        	8           	140         	0           	Open  	; Sonoma Valley Dr
+ 2201            	173             	1723            	430         	8           	140         	0           	Open  	; Sonoma Valley Dr
+ 221             	178             	1781            	1095        	12          	140         	0           	Open  	; Rs Parkway
+ 2211            	1781            	180             	1095        	12          	140         	0           	Open  	; Rs Parkway
+ 222             	180             	106             	420         	12          	140         	0           	Open  	; RS Parkway To Cotswold H Dr
+ 223             	1801            	181             	470         	8           	140         	0           	Open  	; Ascot Dr
+ 2231            	180             	1801            	180         	8           	140         	0           	Open  	; Ascot Dr
+ 224             	181             	1821            	465         	8           	140         	0           	Open  	; Formby Ln
+ 2241            	1821            	182             	295         	8           	140         	0           	Open  	; Formby Ln
+ 225             	181             	183             	315         	8           	140         	0           	Open  	; Formby Ln
+ 226             	1793            	1792            	515         	16          	140         	0           	Open  	; Res. Line
+ 2261            	1791            	179             	135         	16          	140         	0           	Open  	; Res. Line
+ 2262            	1792            	1791            	305         	16          	140         	0           	Open  	; Res. Line
+ 2263            	1794            	1793            	285         	16          	140         	0           	Open  	; Res. Line
+ 2264            	185             	1794            	125         	16          	140         	0           	Open  	; Res. Line
+ 245             	202             	203             	860         	12          	140         	0           	Open  	; Pebble Beach Dr
+ 247             	203             	177             	740         	12          	140         	0           	Open  	; Pebble Beach Dr
+ 257             	219             	229             	45          	16          	140         	0           	Open  	; Rancho Solano Takeout
+
+[PUMPS]
+;ID              	Node1           	Node2           	Parameters
+
+[VALVES]
+;ID              	Node1           	Node2           	Diameter    	Type	Setting     	MinorLoss   
+
+[TAGS]
+
+[DEMANDS]
+;Junction        	Demand      	Pattern         	Category
+
+[STATUS]
+;ID              	Status/Setting
+
+[PATTERNS]
+;ID              	Multipliers
+;       0     1     2     3     4     5    6     7
+ 1               	99          	99          	285         	470         	403         	403         
+ 1               	205         	205         	106         	106         	651         	651         
+ 1               	652         	652         	403         	403         	205         	205         
+ 1               	298         	298         	298         	298         	99          	99          
+; Waterman Treatment Plant input based on record flows during study - Smoothed
+ 2               	0           	0           	450         	900         	900         	900         
+ 2               	900         	900         	900         	900         	900         	900         
+ 2               	900         	900         	900         	900         	900         	900         
+ 2               	0           	0           	0           	0           	0           	0           
+; Waterman Treatment Plant Fluoride Input Pattern
+ 3               	0.22        	0.22        	0.22        	0.22        	0.22        	0.22        
+ 3               	0.22        	0.22        	0.22        	0.22        	0.22        	0.40        
+ 3               	0.60        	0.70        	0.80        	0.90        	0.90        	0.90        
+ 3               	0.90        	0.90        	0.90        	0.90        	0.90        	0.90        
+
+[CURVES]
+;ID              	X-Value     	Y-Value
+
+[CONTROLS]
+
+[RULES]
+
+[ENERGY]
+ Global Efficiency  	75
+ Global Price       	0
+ Demand Charge      	0
+
+[EMITTERS]
+;Junction        	Coefficient
+
+[QUALITY]
+;Node            	InitQual
+ 106             	0.1
+ 107             	0.1
+ 108             	0.1
+ 109             	0.1
+ 111             	0.1
+ 112             	0.1
+ 113             	0.1
+ 1131            	0.1
+ 115             	0.1
+ 123             	0.1
+ 124             	0.1
+ 125             	0.1
+ 126             	0.1
+ 127             	0.1
+ 128             	0.1
+ 129             	0.1
+ 130             	0.1
+ 131             	0.1
+ 132             	0.1
+ 133             	0.1
+ 134             	0.1
+ 135             	0.1
+ 1351            	0.1
+ 1352            	0.1
+ 137             	0.1
+ 138             	0.1
+ 139             	1.7
+ 140             	0.1
+ 141             	0.1
+ 1411            	0.1
+ 1412            	0.1
+ 1413            	0.1
+ 142             	0.1
+ 143             	0.1
+ 144             	0.1
+ 1441            	0.1
+ 1442            	0.1
+ 1443            	0.1
+ 145             	0.1
+ 146             	0.1
+ 147             	0.1
+ 148             	0.1
+ 149             	0.1
+ 151             	0.1
+ 152             	0.1
+ 1521            	0.1
+ 153             	0.1
+ 154             	0.1
+ 1541            	0.1
+ 155             	0.1
+ 156             	0.1
+ 157             	0.1
+ 158             	0.1
+ 159             	0.1
+ 160             	0.1
+ 161             	0.1
+ 1611            	0.1
+ 162             	0.1
+ 163             	0.1
+ 1631            	0.1
+ 164             	0.1
+ 165             	0.1
+ 1651            	0.1
+ 167             	0.1
+ 168             	0.1
+ 169             	0.1
+ 171             	0.1
+ 172             	0.1
+ 1721            	0.1
+ 1722            	0.1
+ 1723            	0.1
+ 1724            	0.1
+ 173             	0.1
+ 174             	0.1
+ 175             	0.1
+ 176             	0.1
+ 177             	0.1
+ 178             	0.1
+ 1781            	0.1
+ 179             	0.1
+ 1791            	0.1
+ 1792            	0.1
+ 1793            	0.1
+ 1794            	0.1
+ 180             	0.1
+ 1801            	0.1
+ 181             	0.1
+ 182             	0.1
+ 1821            	0.1
+ 183             	0.1
+ 184             	0.1
+ 202             	0.1
+ 203             	0.1
+ 207             	0.1
+ 2071            	0.1
+ 208             	0.1
+ 209             	0.1
+ 211             	0.1
+ 2111            	0.1
+ 212             	0.1
+ 213             	0.1
+ 214             	0.1
+ 215             	0.1
+ 216             	0.1
+ 217             	0.1
+ 218             	0.1
+ 219             	0.1
+ 221             	0.1
+ 222             	0.1
+ 223             	0.1
+ 229             	0.1
+ 185             	0.01
+
+[SOURCES]
+;Node            	Type        	Quality     	Pattern
+ 139             	CONCEN      	1.7         	
+
+[REACTIONS]
+;Type     	Pipe/Tank       	Coefficient
+
+
+[REACTIONS]
+ Order Bulk            	1
+ Order Tank            	1
+ Order Wall            	1
+ Global Bulk           	-1.16
+ Global Wall           	0
+ Limiting Potential    	0
+ Roughness Correlation 	0
+
+[MIXING]
+;Tank            	Model
+
+[TIMES]
+ Duration           	24:00 
+ Hydraulic Timestep 	1:00
+ Quality Timestep   	0:05
+ Pattern Timestep   	1:00
+ Pattern Start      	0:00
+ Report Timestep    	1:00
+ Report Start       	0:00
+ Start ClockTime    	12 am
+ Statistic          	None
+
+[REPORT]
+ Status             	No
+ Summary            	No
+ Page               	0
+
+[OPTIONS]
+ Units              	GPM
+ Headloss           	H-W
+ Specific Gravity   	1
+ Viscosity          	1
+ Trials             	40
+ Accuracy           	0.001
+ CHECKFREQ          	2
+ MAXCHECK           	10
+ DAMPLIMIT          	0
+ Unbalanced         	Continue 10
+ Pattern            	1
+ Demand Multiplier  	1.0
+ Emitter Exponent   	0.5
+ Quality            	Chlorine mg/L
+ Diffusivity        	1
+ Tolerance          	0.01
+
+[COORDINATES]
+;Node            	X-Coord         	Y-Coord
+ 106             	3353.03         	5853.66         
+ 107             	3866.16         	5704.77         
+ 108             	3783.91         	5501.55         
+ 109             	4225.89         	5516.30         
+ 111             	4082.39         	5406.90         
+ 112             	4357.54         	5283.31         
+ 113             	6225.16         	4307.76         
+ 1131            	5546.88         	5037.58         
+ 115             	6335.66         	4145.38         
+ 123             	4551.34         	4572.39         
+ 124             	4686.22         	4351.45         
+ 125             	4687.13         	5080.35         
+ 126             	4325.83         	5060.50         
+ 127             	4710.33         	5257.79         
+ 128             	4970.02         	5244.96         
+ 129             	4967.67         	5050.69         
+ 130             	5296.21         	5600.30         
+ 131             	5252.74         	5314.05         
+ 132             	5273.13         	5045.56         
+ 133             	5315.50         	5390.01         
+ 134             	5473.44         	5267.45         
+ 135             	5605.41         	5214.68         
+ 1351            	5967.41         	5177.13         
+ 1352            	6130.35         	5602.04         
+ 137             	6237.82         	4207.43         
+ 138             	6317.79         	4253.72         
+ 139             	6733.11         	3951.35         
+ 140             	6279.22         	4233.99         
+ 141             	6026.39         	5829.06         
+ 1411            	5657.63         	6129.09         
+ 1412            	5572.82         	6067.15         
+ 1413            	5384.29         	6363.86         
+ 142             	6230.54         	5956.62         
+ 143             	5313.50         	6286.68         
+ 144             	5349.10         	6883.19         
+ 1441            	5711.85         	6812.73         
+ 1442            	5602.15         	6527.57         
+ 1443            	6004.01         	6548.69         
+ 145             	5794.42         	6521.46         
+ 146             	5526.89         	6638.63         
+ 147             	6126.16         	6839.08         
+ 148             	5339.86         	7102.32         
+ 149             	6245.71         	7024.31         
+ 151             	5270.43         	7330.19         
+ 152             	5463.55         	7355.79         
+ 1521            	5825.02         	7244.39         
+ 153             	6577.99         	7644.56         
+ 154             	5949.22         	7552.84         
+ 1541            	6245.53         	7813.41         
+ 155             	6289.73         	7394.04         
+ 156             	6471.30         	8135.28         
+ 157             	5692.20         	7933.74         
+ 158             	5252.57         	7889.28         
+ 159             	4968.07         	7946.22         
+ 160             	7006.95         	6224.78         
+ 161             	4884.98         	7726.13         
+ 1611            	4741.73         	7535.25         
+ 162             	7237.14         	7438.11         
+ 163             	4252.55         	8504.99         
+ 1631            	4057.32         	8421.19         
+ 164             	7427.00         	7434.00         
+ 165             	4379.82         	7847.74         
+ 1651            	4259.12         	7694.62         
+ 167             	4391.54         	7443.17         
+ 168             	4421.69         	8585.14         
+ 169             	7618.14         	7467.62         
+ 171             	8303.90         	6880.71         
+ 172             	8048.23         	7124.33         
+ 1721            	8280.62         	7105.04         
+ 1722            	7919.01         	6919.02         
+ 1723            	7865.20         	6681.72         
+ 1724            	7995.60         	6428.26         
+ 173             	8239.19         	6614.49         
+ 174             	4187.52         	8948.01         
+ 175             	3808.49         	9340.35         
+ 176             	3406.69         	9347.33         
+ 177             	2460.83         	8830.04         
+ 178             	2286.87         	7858.03         
+ 1781            	3027.73         	7105.84         
+ 179             	1865.67         	7567.16         
+ 1791            	1913.65         	7464.08         
+ 1792            	1864.21         	7202.30         
+ 1793            	2131.32         	6853.94         
+ 1794            	1988.92         	6684.33         
+ 180             	3090.85         	6044.70         
+ 1801            	3266.38         	6106.79         
+ 181             	3400.21         	6643.25         
+ 182             	3836.21         	6234.14         
+ 1821            	3805.00         	6460.00         
+ 183             	3301.49         	6880.30         
+ 184             	7646.57         	6537.68         
+ 202             	2034.35         	10066.40        
+ 203             	2025.44         	9352.33         
+ 207             	5445.33         	8379.27         
+ 2071            	5129.88         	8639.66         
+ 208             	5044.54         	8950.99         
+ 209             	5667.34         	8622.06         
+ 211             	6603.04         	9291.05         
+ 2111            	6549.27         	9522.56         
+ 212             	6905.75         	9095.26         
+ 213             	6831.11         	9995.43         
+ 214             	7173.64         	10064.21        
+ 215             	7349.04         	9608.93         
+ 216             	7302.52         	10081.68        
+ 217             	6966.87         	10490.54        
+ 218             	6808.87         	10576.59        
+ 219             	6241.03         	10438.80        
+ 221             	5270.29         	9929.10         
+ 222             	8132.58         	10049.30        
+ 223             	6077.46         	8995.59         
+ 229             	6210.00         	10470.00        
+ 185             	2051.82         	6617.00         
+
+[VERTICES]
+;Link            	X-Coord         	Y-Coord
+
+[LABELS]
+;X-Coord           Y-Coord          Label & Anchor Node
+ 6733.11          4151.35          "Waterman Treatment Plant"                 
+ 2051.82          6600.00          "Rancho"                 
+ 2051.82          6400.00          "Solano"                 
+ 2051.82          6200.00          "Reservoir"                 
+ 2100.00          4500.00          "CITY OF FAIRFIELD"                 
+ 2000.00          4150.00          "Rancho Solano Zone III"                 
+ 5473.44          5267.45          "F001"                 
+ 3353.03          5853.66          "F002"                 
+ 3805.00          6460.00          "F003"                 
+ 2286.87          7858.03          "F004"                 
+ 4421.69          8585.14          "F005"                 
+ 5252.57          7889.28          "F006"                 
+ 5349.10          6883.19          "F007"                 
+ 5825.02          7244.39          "F008"                 
+ 6577.99          7644.56          "F009"                 
+ 6026.39          5829.06          "F010"                 
+ 7646.57          6537.68          "F011"                 
+ 8048.23          7124.33          "F012"                 
+ 7237.14          7438.11          "F013"                 
+ 7173.64          10064.21         "F014                       "                 
+ 6241.03          10438.80         "F015"                 
+
+[BACKDROP]
+ DIMENSIONS     	1542.23         	3620.09         	8625.88         	10907.85        
+ UNITS          	None
+ FILE           	
+ OFFSET         	0.00            	0.00            
+
+[END]
