@@ -173,6 +173,7 @@ class SuperLink():
         | A           | float | m^2  | Full area of orifice                                 |
         | y_max       | float | m    | Full height of orifice                               |
         | z_o         | float | m    | Offset of bottom above upstream superjunction invert |
+        | oneway      | bool  |      | Is the flow one-way only? (upstream to downstream)   |
         |-------------+-------+------+------------------------------------------------------|
 
     weirs: pd.DataFrame (optional)
@@ -211,6 +212,23 @@ class SuperLink():
         | dH_min | float | m    | Minimum pump head                                    |
         | dH_max | float | m    | Maximum pump head                                    |
         |--------+-------+------+------------------------------------------------------|
+
+    prvs: pd.DataFrame (optional)
+        Table containing PRV control structures and their attributes.
+        The following fields are required:
+
+        |-----------+-------+------+------------------------------------------------------|
+        | Field     | Type  | Unit | Description                                          |
+        |-----------+-------+------+------------------------------------------------------|
+        | id        | int   |      | Integer id for the PRV                               |
+        | name      | str   |      | Name of the PRV                                      |
+        | sj_0      | int   |      | Index of the upstream superjunction                  |
+        | sj_1      | int   |      | Index of the downstream superjunction                |
+        | Hset      | float | m    | Head setting of PRV                                  |
+        | C_open    | float |      | Discharge coefficient when PRV is open               |
+        | C_active  | float |      | Discharge coefficient when PRV is active             |
+        | A         | float | m^2  | Full area of PRV opening                             |
+        |-----------+-------+------+------------------------------------------------------|
 
     dt: float
         Default timestep of model (in seconds).
@@ -411,8 +429,8 @@ class SuperLink():
         self._ki = links['k'].values.astype(np.int64)
         self.start_nodes = self.superlinks['j_0'].values.astype(np.int64)
         self.end_nodes = self.superlinks['j_1'].values.astype(np.int64)
-        self._is_start = np.zeros(self._I.size, dtype=np.bool8)
-        self._is_end = np.zeros(self._I.size, dtype=np.bool8)
+        self._is_start = np.zeros(self._I.size, dtype=np.bool_)
+        self._is_end = np.zeros(self._I.size, dtype=np.bool_)
         self._is_start[self.start_nodes] = True
         self._is_end[self.end_nodes] = True
         self.middle_nodes = self._I[(~self._is_start) & (~self._is_end)]
@@ -462,7 +480,7 @@ class SuperLink():
             self._n_ik = links['roughness'].values.astype(np.float64)
         else:
             self._n_ik = links['n'].values.astype(np.float64)
-        self._ctrl = links['ctrl'].values.astype(np.bool8)
+        self._ctrl = links['ctrl'].values.astype(np.bool_)
         self._A_c_ik = links['A_c'].values.astype(np.float64)
         self._C_ik = links['C'].values.astype(np.float64)
         self._storage_type = superjunctions['storage']
@@ -523,6 +541,10 @@ class SuperLink():
                 self._g1_o = np.sqrt(self._Ao_max)
                 self._g2_o = np.sqrt(self._Ao_max)
                 self._g3_o = np.zeros(self.n_o)
+            if 'oneway' in self.orifices.columns:
+                self._unidir_o = self.orifices['oneway'].values.astype(np.bool_)
+            else:
+                self._unidir_o = np.zeros(self.n_o, dtype=np.bool_)
             self._Qo = np.zeros(self.n_o, dtype=np.float64)
             self._alpha_o = np.zeros(self.n_o, dtype=np.float64)
             self._beta_o = np.zeros(self.n_o, dtype=np.float64)
@@ -633,28 +655,13 @@ class SuperLink():
             self.n_prv = self.prvs.shape[0]
             self._J_uprv = self.prvs['sj_0'].values.astype(np.int64)
             self._J_dprv = self.prvs['sj_1'].values.astype(np.int64)
-            self._Aprv_max = self.prvs['A'].values.astype(np.float64)
-            self._Aprv = np.copy(self._Aprv_max)
+            self._Aprv = self.prvs['A'].values.astype(np.float64)
             self._Cprv_open = self.prvs['C_open'].values.astype(np.float64)
             self._Cprv_active = self.prvs['C_active'].values.astype(np.float64)
             self._H_set = self.prvs['Hset'].values.astype(np.float64)
-            self._z_prv = self.prvs['z_o'].values.astype(np.float64)
-            self._y_max_prv = self.prvs['y_max'].values.astype(np.float64)
-            self._orient_prv = self.prvs['orientation'].values
-            self._tau_prv = (self._orient_prv == 'side').astype(np.float64)
-            if 'shape' in self.prvs.columns:
-                self._shape_prv = self.prvs['shape']
-                self._g1_prv = self.prvs['g1'].values.astype(np.float64)
-                self._g2_prv = self.prvs['g2'].values.astype(np.float64)
-                self._g3_prv = self.prvs['g3'].values.astype(np.float64)
-            else:
-                self._shape_prv = pd.Series(['rect_open'] * self.n_prv)
-                self._g1_prv = np.sqrt(self._Aprv_max)
-                self._g2_prv = np.sqrt(self._Aprv_max)
-                self._g3_prv = np.zeros(self.n_prv)
-            self._Qprv = np.zeros(self.n_prv, dtype=np.float64)
-            self._alpha_prv = np.zeros(self.n_prv, dtype=np.float64)
-            self._beta_prv = np.zeros(self.n_prv, dtype=np.float64)
+            self._Qprv = np.ones(self.n_prv, dtype=np.float64)
+            self._alpha_prv = np.ones(self.n_prv, dtype=np.float64)
+            self._beta_prv = np.ones(self.n_prv, dtype=np.float64)
             self._chi_prv = np.zeros(self.n_prv, dtype=np.float64)
             self._alpha_uprvm = np.zeros(self.M, dtype=np.float64)
             self._beta_dprvl = np.zeros(self.M, dtype=np.float64)
@@ -663,18 +670,10 @@ class SuperLink():
         else:
             self._J_uprv = np.array([], dtype=np.int64)
             self._J_dprv = np.array([], dtype=np.int64)
-            self._Aprv_max = np.array([], dtype=np.float64)
             self._Aprv = np.array([], dtype=np.float64)
             self._Cprv_open = np.array([], dtype=np.float64)
             self._Cprv_active = np.array([], dtype=np.float64)
             self._H_set = np.array([], dtype=np.float64)
-            self._z_prv = np.array([], dtype=np.float64)
-            self._y_max_prv = np.array([], dtype=np.float64)
-            self._orient_prv = np.array([])
-            self._shape_prv = pd.Series(np.array([]))
-            self._g1_prv = np.array([], dtype=np.float64)
-            self._g2_prv = np.array([], dtype=np.float64)
-            self._g3_prv = np.array([], dtype=np.float64)
             self.n_prv = 0
             self._Qprv = np.array([], dtype=np.float64)
             self._alpha_prv = np.array([], dtype=np.float64)
@@ -701,7 +700,7 @@ class SuperLink():
         self._E_Ik = np.zeros(self._I.size)
         self._D_Ik = np.zeros(self._I.size)
         # Forward recurrence relations
-        self._I_end = np.zeros(self._I.size, dtype=np.bool8)
+        self._I_end = np.zeros(self._I.size, dtype=np.bool_)
         self._I_end[self.end_nodes] = True
         self._I_1k = self.start_nodes
         self._I_2k = self.forward_I_I[self._I_1k]
@@ -712,7 +711,7 @@ class SuperLink():
         self._V_Ik = np.zeros(self._I.size)
         self._W_Ik = np.zeros(self._I.size)
         # Backward recurrence relations
-        self._I_start = np.zeros(self._I.size, dtype=np.bool8)
+        self._I_start = np.zeros(self._I.size, dtype=np.bool_)
         self._I_start[self.start_nodes] = True
         self._I_Np1k = self.end_nodes
         self._I_Nk = self.backward_I_I[self._I_Np1k]
@@ -739,7 +738,7 @@ class SuperLink():
             self.A = np.zeros((self.M, self.M))
         self.b = np.zeros(self.M)
         self.D = np.zeros(self.M)
-        self.bc = self.superjunctions['bc'].values.astype(np.bool8)
+        self.bc = self.superjunctions['bc'].values.astype(np.bool_)
         if sparse:
             self.B = scipy.sparse.lil_matrix((self.M, self.n_o))
             self.O = scipy.sparse.lil_matrix((self.M, self.M))
@@ -794,8 +793,8 @@ class SuperLink():
         self._S_o_uk = _S_o_uk
         self._S_o_dk = _S_o_dk
         # Boundary indexers
-        self._link_start = np.zeros(self._ik.size, dtype=np.bool8)
-        self._link_end = np.zeros(self._ik.size, dtype=np.bool8)
+        self._link_start = np.zeros(self._ik.size, dtype=np.bool_)
+        self._link_end = np.zeros(self._ik.size, dtype=np.bool_)
         self._link_start[self._i_1k] = True
         self._link_end[self._i_nk] = True
         # End roughness
@@ -1011,6 +1010,19 @@ class SuperLink():
             At[J_d.astype(int), J_u.astype(int)] = 1
         return At
 
+        
+    def safe_divide(function):
+        """
+        Allow for division by zero. Division by zero will return zero.
+        """
+        def inner(*args, **kwargs):
+            num, den = function(*args, **kwargs)
+            cond = (den != 0)
+            result = np.zeros(num.size)
+            result[cond] = num[cond] / den[cond]
+            return result
+        return inner    
+
     def _compute_bandwidth(self):
         At = self.adjacency_matrix
         bandwidth = 0
@@ -1170,7 +1182,7 @@ class SuperLink():
             # xx[:, :] = np.vstack([np.linspace(j, i + j + k, njunctions)
             #                       for i, j, k in zip(dx_j, _dx_uk, _dx_dk)])
             zz[:] = xx * _m.reshape(-1, 1) + _b0.reshape(-1, 1)
-            _fixed = np.ones(xx.shape, dtype=np.bool8)
+            _fixed = np.ones(xx.shape, dtype=np.bool_)
             _xc = None
             _zc = None
             c = None
@@ -1194,17 +1206,17 @@ class SuperLink():
         self._xc = _xc
         self._zc = _zc
 
-    def safe_divide(function):
-        """
-        Allow for division by zero. Division by zero will return zero.
-        """
-        def inner(*args, **kwargs):
-            num, den = function(*args, **kwargs)
-            cond = (den != 0)
-            result = np.zeros(num.size)
-            result[cond] = num[cond] / den[cond]
-            return result
-        return inner
+    # def safe_divide(function):
+    #     """
+    #     Allow for division by zero. Division by zero will return zero.
+    #     """
+    #     def inner(*args, **kwargs):
+    #         num, den = function(*args, **kwargs)
+    #         cond = (den != 0)
+    #         result = np.zeros(num.size)
+    #         result[cond] = num[cond] / den[cond]
+    #         return result
+    #     return inner
 
     @safe_divide
     def u_ik(self, Q_ik, A_ik):
@@ -2758,13 +2770,9 @@ class SuperLink():
         """
         # Import instance variables
         H_j = self.H_j               # Head at superjunction j
-        _z_inv_j = self._z_inv_j     # Invert elevation at superjunction j
         _H_set = self._H_set
         _J_uprv = self._J_uprv           # Index of superjunction upstream of orifice o
         _J_dprv = self._J_dprv           # Index of superjunction downstream of orifice o
-        _z_prv = self._z_prv             # Elevation offset of bottom of orifice o
-        _tau_prv = self._tau_prv         # Orientation of orifice o (side/bottom)
-        _y_max_prv = self._y_max_prv     # Maximum height of orifice o
         _Qprv = self._Qprv               # Current flow rate of orifice o
         _Cprv_open = self._Cprv_open               # Discharge coefficient of orifice o
         _Cprv_active = self._Cprv_active               # Discharge coefficient of orifice o
@@ -2772,18 +2780,17 @@ class SuperLink():
         _alpha_prv = self._alpha_prv     # Orifice flow coefficient alpha_o
         _beta_prv = self._beta_prv       # Orifice flow coefficient beta_o
         _chi_prv = self._chi_prv         # Orifice flow coefficient chi_o
-        bc = self.bc               # Boundary conditions
         
         # If no input signal, assume orifice is closed
         g = 9.81
         _H_uprv = H_j[_J_uprv]
         _H_dprv = H_j[_J_dprv]
-        _z_inv_uprv = _z_inv_j[_J_uprv]
+        div_term = _H_uprv / _H_set
         # Create indicator functions
         _omega_prv = np.zeros_like(_H_uprv)
         _omega_prv[_H_uprv >= _H_dprv] = 1.0
         # Compute universal coefficients
-        _gamma_prv_active = gamma_o(_Qprv, _Aprv, _Cprv_active, g) # use orifice gamma
+        _gamma_prv_active = 2 * g * _Cprv_active**2 * _Aprv**2
         _gamma_prv_open = gamma_prv(_Qprv, _Aprv, _Cprv_open, g)
         
         # Create conditionals
@@ -2794,16 +2801,14 @@ class SuperLink():
         # Active
         a = (cond_0 & cond_1)
         _alpha_prv[a] = _gamma_prv_active[a]
-        _beta_prv[a] = -_gamma_prv_active[a]
+        _beta_prv[a] = -div_term*_gamma_prv_active[a]
         _chi_prv[a] = 0.0
-        bc[_J_dprv] = True
         
         # Open
         b = (cond_0 & ~cond_1)
         _alpha_prv[b] = _gamma_prv_open[b]
         _beta_prv[b] = -_gamma_prv_open[b]
         _chi_prv[b] = 0.0
-        bc[_J_dprv] = False
         
         # No flow
         c = (~cond_0)
@@ -2815,8 +2820,6 @@ class SuperLink():
         self._alpha_prv = _alpha_prv
         self._beta_prv = _beta_prv
         self._chi_prv = _chi_prv
-        self.bc = bc               # Boundary conditions
-        #H_j = self.H_j               # Head at superjunction j
 
 
     def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
@@ -3335,6 +3338,7 @@ class SuperLink():
         _Qp_next[~cond_0] = 0.0
         self._Qp = _Qp_next
 
+    @safe_divide    
     def solve_prv_flows(self, dt, u=None):
         """
         Solve for pump discharges given superjunction heads at time t + dt.
@@ -3343,16 +3347,12 @@ class SuperLink():
         # Import instance variables
         H_j = self.H_j                # Head at superjunction j
         bc = self.bc                # Boundary conditions
-        _z_inv_j = self._z_inv_j      # Invert elevation at superjunction j
         _J_uprv = self._J_uprv            # Index of superjunction upstream of orifice o
         _J_dprv = self._J_dprv            # Index of superjunction downstream of orifice o
-        _z_prv = self._z_prv              # Offset of orifice above upstream invert elevation
-        _tau_prv = self._tau_prv          # Orientation of orifice o (bottom/side)
-        _y_max_prv = self._y_max_prv      # Maximum height of orifice o
         _Cprv_open = self._Cprv_open                # Discharge coefficient of orifice o
         _Cprv_active = self._Cprv_active               # Discharge coefficient of orifice o
         _Aprv = self._Aprv                # Maximum flow area of orifice o
-        _V_sj = self._V_sj
+        # _V_sj = self._V_sj
         _H_set = self._H_set
         g = 9.81
         _Qprv = self._Qprv              # Current flow rate through pump p
@@ -3361,9 +3361,8 @@ class SuperLink():
         # Specify orifice heads at previous timestep
         _H_uprv = H_j[_J_uprv]
         _H_dprv = H_j[_J_dprv]
-        _z_inv_uprv = _z_inv_j[_J_uprv]
         if u is None:
-            u = np.zeros(self.n_o, dtype=np.float64)
+            u = np.zeros(self.n_prv, dtype=np.float64)
         # Compute orifice flows
         
         # Create indicator functions
@@ -3374,8 +3373,8 @@ class SuperLink():
         _beta_prv = np.zeros_like(_H_uprv)
         _chi_prv = np.zeros_like(_H_uprv)
         # Compute universal coefficients
-        _gamma_prv_active = 2 * g * _Cprv_active**2 * _Aprv**2
-        _gamma_prv_open = 2 * g * _Cprv_open**2 * _Aprv**2
+        _gamma_prv_active = safe_divide(2 * g * _Cprv_active**2 * _Aprv**2, np.abs(_Qprv))
+        _gamma_prv_open = safe_divide(2 * g * _Cprv_open**2 * _Aprv**2, np.abs(_Qprv))
         # Create conditionals
         cond_0 = (_H_uprv > _H_dprv)
         cond_1 = (_H_uprv > _H_set)
@@ -3407,8 +3406,8 @@ class SuperLink():
        
 # what's this!!        # TODO: Move this inside numba function
         upstream_ctrl = (H_j[_J_uprv] > H_j[_J_dprv])
-        _Qprv_max = np.where(upstream_ctrl, _V_sj[_J_uprv], _V_sj[_J_dprv]) / dt
-        _Qprv_next = np.sign(_Qprv_next) * np.minimum(np.abs(_Qprv_next), _Qprv_max)
+        # _Qprv_max = np.where(upstream_ctrl, _V_sj[_J_uprv], _V_sj[_J_dprv]) / dt
+        # _Qprv_next = np.sign(_Qprv_next) * np.minimum(np.abs(_Qprv_next), _Qprv_max)
         # Export instance variables       
         self._Qprv = _Qprv_next
         #print(_Qprv_next)
