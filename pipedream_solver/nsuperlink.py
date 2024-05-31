@@ -1558,7 +1558,7 @@ class nSuperLink(SuperLink):
         _H_dk = H_j[_J_dk]
         # Handle which superlinks to reposition
         if reposition is None:
-            reposition = np.ones(NK, dtype=np.bool8)
+            reposition = np.ones(NK, dtype=np.bool_)
         # Reposition junctions
         numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
                                     _b0, _zc, _xc, _m, _elem_pos, _i_1k, _I_1k,
