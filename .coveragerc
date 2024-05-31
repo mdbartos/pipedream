@@ -1,2 +1,2 @@
 [run]
-omit = pipedream_solver/nsuperlink.py,pipedream_solver/ninfiltration.py,pipedream_solver/nquality.py,pipedream_solver/ngeometry.py,pipedream_solver/nutils.py
+omit = pipedream_solver/geometry.py, pipedream_solver/infiltration.py, pipedream_solver/_nsuperlink.py, pipedream_solver/_ninfiltration.py
