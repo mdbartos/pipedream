@@ -297,6 +297,120 @@ class nSuperLink(SuperLink):
                          bc_method, exit_hydraulics, auto_permute,
                          end_length, end_method, internal_links, mobile_elements)
 
+    def configure_hydraulic_geometry(self):
+        """
+        Prepare data structures for hydraulic geometry computations.
+        """
+        # Import instance variables
+        transects = self.transects          # Table of transects
+        _shape_ik = self._shape_ik          # Shape of link ik
+        _shape_o = self._shape_o
+        _transect_ik = self._transect_ik    # Transect associated with link ik
+        _link_start = self._link_start      # Link is first link in superlink k
+        _link_end = self._link_end          # Link is last link in superlink k
+        _geom_numbers = pipedream_solver.geometry.geom_code
+        _g1_ik = self._g1_ik
+        _g2_ik = self._g2_ik
+        _g3_ik = self._g3_ik
+        _g4_ik = self._g4_ik
+        _g5_ik = self._g5_ik
+        _g6_ik = self._g6_ik
+        _g7_ik = self._g7_ik
+        nk = self.nk
+        n_o = self.n_o
+        # Handle regular geometries
+        _geom_codes = np.array([_geom_numbers.setdefault(shape, 0)
+                                for shape in _shape_ik], dtype=np.int64)
+        _is_irregular = _shape_ik == 'irregular'
+        _has_irregular = _is_irregular.any()
+        _uk_has_irregular = (_link_start & _is_irregular).any()
+        _dk_has_irregular = (_link_end & _is_irregular).any()
+        # Handle irregular geometries
+        _transect_inds = np.array([])
+        _transect_lens = np.array([])
+        _transect_codes = np.array([])
+        _transect_As = np.array([])
+        _transect_Bs = np.array([])
+        _transect_Pes = np.array([])
+        _transect_Rs = np.array([])
+        _transect_zs = np.array([])
+        if transects:
+            transect_name_to_ind = {transect : index for index, transect in enumerate(transects)}
+            _transect_inds = []
+            _transect_lens = []
+            _transect_As = []
+            _transect_Bs = []
+            _transect_Pes = []
+            _transect_Rs = []
+            _transect_zs = []
+            order = []
+            ix = 0
+            for name, transect in transects.items():
+                x = transect['x']
+                y = transect['y']
+                sample_points = transect.setdefault('sample_points', 100)
+                w = np.linspace(0., y.max(), sample_points)
+                A = np.array([pipedream_solver.ngeometry.Transect_A_ik(w_i, x, y) for w_i in w])
+                B = np.array([pipedream_solver.ngeometry.Transect_B_ik(w_i, x, y) for w_i in w])
+                Pe = np.array([pipedream_solver.ngeometry.Transect_Pe_ik(w_i, x, y) for w_i in w])
+                R = safe_divide_vec(A, Pe)
+                _transect_As.append(A)
+                _transect_Bs.append(B)
+                _transect_Pes.append(Pe)
+                _transect_Rs.append(R)
+                _transect_zs.append(w)
+                _transect_inds.append(ix)
+                order.append(transect_name_to_ind[name])
+                ix += len(w)
+                _transect_lens.append(len(w))
+            order = np.argsort(order)
+            _transect_zs = np.concatenate([_transect_zs[i] for i in order])
+            _transect_As = np.concatenate([_transect_As[i] for i in order])
+            _transect_Bs = np.concatenate([_transect_Bs[i] for i in order])
+            _transect_Pes = np.concatenate([_transect_Pes[i] for i in order])
+            _transect_Rs = np.concatenate([_transect_Rs[i] for i in order])
+            _transect_inds = np.asarray(_transect_inds)[order]
+            _transect_lens = np.asarray(_transect_lens)[order]
+            _transect_codes = np.array([transect_name_to_ind.setdefault(transect, 0)
+                                        for transect in _transect_ik.values], dtype=np.int64)
+        # TODO: Drop support for ellipse
+        # NOTE: Handle case for elliptical geometry
+        _ellipse_ix = np.flatnonzero(_geom_codes ==
+                                     pipedream_solver.geometry.geom_code['elliptical'])
+        # Handle orifices
+        if n_o:
+            _geom_codes_o = np.array([_geom_numbers.setdefault(shape, 0)
+                                      for shape in _shape_o], dtype=np.int64)
+            self._geom_codes_o = _geom_codes_o
+        # Add default Preissman slot for circular
+        _g2_ik[(_geom_codes == 1) & (_g2_ik == 0.)] = 0.001
+        # Add default Preissman slot for rect_closed
+        _g3_ik[(_geom_codes == 2) & (_g3_ik == 0.)] = 0.001
+        # Add default Preissman slot for force_main
+        _g2_ik[(_geom_codes == 9) & (_g2_ik == 0.)] = 0.001
+        # Export instance variables
+        self._g1_ik = _g1_ik
+        self._g2_ik = _g2_ik
+        self._g3_ik = _g3_ik
+        self._g4_ik = _g4_ik
+        self._g5_ik = _g5_ik
+        self._g6_ik = _g6_ik
+        self._g7_ik = _g7_ik
+        self._is_irregular = _is_irregular
+        self._has_irregular = _has_irregular
+        self._uk_has_irregular = _uk_has_irregular
+        self._dk_has_irregular = _dk_has_irregular
+        self._geom_codes = _geom_codes
+        self._ellipse_ix = _ellipse_ix
+        self._transect_zs = _transect_zs
+        self._transect_As = _transect_As
+        self._transect_Bs = _transect_Bs
+        self._transect_Pes = _transect_Pes
+        self._transect_Rs = _transect_Rs
+        self._transect_inds = _transect_inds
+        self._transect_lens = _transect_lens
+        self._transect_codes = _transect_codes
+
     def configure_storages(self):
         """
         Prepare data structures for computation of superjunction storage.
@@ -389,29 +503,30 @@ class nSuperLink(SuperLink):
         _g7_ik = self._g7_ik           # Geometry 7 of link ik (other)
         _geom_codes = self._geom_codes
         _ellipse_ix = self._ellipse_ix
-        _transect_factory = self._transect_factory
-        _transect_indices = self._transect_indices
+        _is_irregular = self._is_irregular
         _has_irregular = self._has_irregular
+        _transect_zs = self._transect_zs
+        _transect_As = self._transect_As
+        _transect_Bs = self._transect_Bs
+        _transect_Pes = self._transect_Pes
+        _transect_Rs = self._transect_Rs
+        _transect_codes = self._transect_codes
+        _transect_inds = self._transect_inds
+        _transect_lens = self._transect_lens
         # Compute hydraulic geometry for regular geometries
         # NOTE: Handle case for elliptical perimeter first
         handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik,
-                                   _g1_ik, _g2_ik)
+                                    _g1_ik, _g2_ik)
         # Compute hydraulic geometries for all other regular geometries
         numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                                  _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                                  _geom_codes, _Ik, _ik)
         # Compute hydraulic geometry for irregular geometries
         if _has_irregular:
-            for transect_name, generator in _transect_factory.items():
-                _ik_g = _transect_indices.loc[[transect_name]].values
-                _Ik_g = _Ik[_ik_g]
-                _Ip1k_g = _Ip1k[_ik_g]
-                _h_Ik_g = _h_Ik[_Ik_g]
-                _h_Ip1k_g = _h_Ik[_Ip1k_g]
-                _A_ik[_ik_g] = generator.A_ik(_h_Ik_g, _h_Ip1k_g)
-                _Pe_ik[_ik_g] = generator.Pe_ik(_h_Ik_g, _h_Ip1k_g)
-                _R_ik[_ik_g] = generator.R_ik(_h_Ik_g, _h_Ip1k_g)
-                _B_ik[_ik_g] = generator.B_ik(_h_Ik_g, _h_Ip1k_g)
+            numba_transect_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik, _is_irregular,
+                                    _transect_zs, _transect_As, _transect_Bs, _transect_Pes,
+                                    _transect_Rs, _transect_codes, _transect_inds,
+                                    _transect_lens, _Ik, _ik)
         # Export to instance variables
         self._A_ik = _A_ik
         self._Pe_ik = _Pe_ik
@@ -442,27 +557,31 @@ class nSuperLink(SuperLink):
         _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
         _J_uk = self._J_uk             # Index of junction upstream of superlink k
         H_j = self.H_j                 # Head at superjunction j
-        _transect_factory = self._transect_factory
-        _uk_transect_indices = self._uk_transect_indices
+        _theta_uk = self._theta_uk
+        _is_irregular = self._is_irregular
         _uk_has_irregular = self._uk_has_irregular
         _i_1k = self._i_1k
         _I_1k = self._I_1k
         _geom_codes = self._geom_codes
+        _transect_zs = self._transect_zs
+        _transect_As = self._transect_As
+        _transect_Bs = self._transect_Bs
+        _transect_Pes = self._transect_Pes
+        _transect_Rs = self._transect_Rs
+        _transect_codes = self._transect_codes
+        _transect_inds = self._transect_inds
+        _transect_lens = self._transect_lens
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk,
+        numba_boundary_geometry(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk, _theta_uk,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                                 _geom_codes, _i_1k, _I_1k, _J_uk)
         # Compute hydraulic geometry for irregular geometries
         if _uk_has_irregular:
-            for transect_name, generator in _transect_factory.items():
-                _ik_g = _uk_transect_indices.loc[[transect_name]].values
-                _ki_g = _ki[_ik_g]
-                _Ik_g = _Ik[_ik_g]
-                _h_Ik_g = _h_Ik[_Ik_g]
-                _H_j_g = H_j[_J_uk[_ki_g]] - _z_inv_uk[_ki_g]
-                # TODO: Allow for max here like above
-                _A_uk[_ki_g] = generator.A_ik(_h_Ik_g, _H_j_g)
-                _B_uk[_ki_g] = generator.B_ik(_h_Ik_g, _H_j_g)
+            numba_boundary_transect(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk, _theta_uk,
+                                    _is_irregular, _transect_zs, _transect_As, _transect_Bs,
+                                    _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
+                                    _transect_lens, _I_1k, _i_1k, _J_uk)
+        # TODO: Export rest of instance variables here?
         # Export to instance variables
         self._A_uk = _A_uk
 
@@ -486,31 +605,34 @@ class nSuperLink(SuperLink):
         _g4_ik = self._g4_ik           # Geometry 4 of link ik (other)
         _g5_ik = self._g5_ik           # Geometry 5 of link ik (other)
         _g6_ik = self._g6_ik           # Geometry 6 of link ik (other)
-        _g7_ik = self._g7_ik           # Geometry 7 of link ik (other)        
+        _g7_ik = self._g7_ik           # Geometry 7 of link ik (other)
         _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
         _J_dk = self._J_dk             # Index of junction downstream of superlink k
         H_j = self.H_j                 # Head at superjunction j
-        _transect_factory = self._transect_factory
-        _dk_transect_indices = self._dk_transect_indices
+        _theta_dk = self._theta_dk
+        _is_irregular = self._is_irregular
         _dk_has_irregular = self._dk_has_irregular
         _i_nk = self._i_nk
         _I_Np1k = self._I_Np1k
         _geom_codes = self._geom_codes
+        _transect_zs = self._transect_zs
+        _transect_As = self._transect_As
+        _transect_Bs = self._transect_Bs
+        _transect_Pes = self._transect_Pes
+        _transect_Rs = self._transect_Rs
+        _transect_codes = self._transect_codes
+        _transect_inds = self._transect_inds
+        _transect_lens = self._transect_lens
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk,
+        numba_boundary_geometry(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk, _theta_dk,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                                 _geom_codes, _i_nk, _I_Np1k, _J_dk)
         # Compute hydraulic geometry for irregular geometries
         if _dk_has_irregular:
-            for transect_name, generator in _transect_factory.items():
-                _ik_g = _dk_transect_indices.loc[[transect_name]].values
-                _ki_g = _ki[_ik_g]
-                _Ip1k_g = _Ip1k[_ik_g]
-                _h_Ip1k_g = _h_Ik[_Ip1k_g]
-                _H_j_g = H_j[_J_dk[_ki_g]] - _z_inv_dk[_ki_g]
-                # TODO: Allow max here like above
-                _A_dk[_ki_g] = generator.A_ik(_h_Ip1k_g, _H_j_g)
-                _B_dk[_ki_g] = generator.B_ik(_h_Ip1k_g, _H_j_g)
+            numba_boundary_transect(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk, _theta_dk,
+                                    _is_irregular, _transect_zs, _transect_As, _transect_Bs,
+                                    _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
+                                    _transect_lens, _I_Np1k, _i_nk, _J_dk)
         # Export to instance variables
         self._A_dk = _A_dk
 
@@ -523,7 +645,6 @@ class nSuperLink(SuperLink):
         _g1_o = self._g1_o           # Geometry 1 of link ik (vertical)
         _g2_o = self._g2_o           # Geometry 2 of link ik (horizontal)
         _g3_o = self._g3_o           # Geometry 3 of link ik (other)
-        _geom_factory_o = self._geom_factory_o
         _geom_codes_o = self._geom_codes_o
         n_o = self.n_o
         _z_o = self._z_o
@@ -1574,4 +1695,5 @@ def handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik, _g1_ik, 
                                                             _h_Ik[_Ip1k_g],
                                                             _g1_ik[_ik_g],
                                                             _g2_ik[_ik_g])
+
 

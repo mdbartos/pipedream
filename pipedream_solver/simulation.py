@@ -11,9 +11,9 @@ try:
 except:
     _HAS_NUMBA = False
 if _HAS_NUMBA:
-    from pipedream_solver.nutils import interpolate_sample, _kalman_semi_implicit
+    from pipedream_solver.nutils import interpolate_sample, _kalman_semi_implicit, _square_root_kalman_semi_implicit
 else:
-    from pipedream_solver.utils import interpolate_sample, _kalman_semi_implicit
+    from pipedream_solver.utils import interpolate_sample, _kalman_semi_implicit, _square_root_kalman_semi_implicit
 
 eps = np.finfo(float).eps
 
@@ -86,7 +86,7 @@ class Simulation():
     def __init__(self, model, Q_in=None, H_bc=None, Q_Ik=None, t_start=None,
                  t_end=None, dt=None, max_iter=None, min_dt=1, max_dt=200,
                  tol=0.01, min_rel_change=1e-10, max_rel_change=1e10, safety_factor=0.9,
-                 Qcov=None, Rcov=None, C=None, H=None, interpolation_method='linear'):
+                 Pxx = None, Qcov=None, Rcov=None, C=None, H=None, interpolation_method='linear'):
         self.model = model
         if Q_in is not None:
             self.Q_in = Q_in.copy(deep=True)
@@ -204,7 +204,12 @@ class Simulation():
         else:
             assert isinstance(H, np.ndarray)
             self.H = H
-        self.P_x_k_k = self.C @ self.Qcov @ self.C.T
+        if Pxx is None:
+            self.P_x_k_k = self.C @ self.Qcov @ self.C.T
+        else: 
+            self.P_x_k_k = Pxx.copy()
+        self.A_1 = None
+        self.P_zz = None
         # Progress bar checkpoints
         if np.isfinite(self.t_end):
             self._checkpoints = np.linspace(self.t_start, self.t_end)
@@ -447,7 +452,7 @@ class Simulation():
         return dt_np1
 
     def kalman_filter(self, Z, H=None, C=None, Qcov=None, Rcov=None, P_x_k_k=None,
-                      dt=None, **kwargs):
+                      dt=None, SR=False, **kwargs):
         """
         Apply Kalman Filter to fuse observed data into model.
 
@@ -481,9 +486,15 @@ class Simulation():
         if Rcov is None:
             Rcov = self.Rcov
         A_1, A_2, b = self.model._semi_implicit_system(_dt=dt)
-        b_hat, P_x_k_k = _kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
+        if SR == False:
+            b_hat, P_x_k_k, P_zz = _kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
+                                               Qcov, Rcov)
+        else:
+            b_hat, P_x_k_k, P_zz = _square_root_kalman_semi_implicit(Z, P_x_k_k, A_1, A_2, b, H, C,
                                                Qcov, Rcov)
         self.P_x_k_k = P_x_k_k
+        self.P_zz = P_zz
+        self.A_1 = A_1
         self.model.b = b_hat
         self.model.iter_count -= 1
         self.model.t -= dt
