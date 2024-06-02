@@ -223,7 +223,7 @@ class QualityBuilder():
         self.N_process_sigma = superlink_params['KF_process_sigma'].values[0].astype(np.float64)
         self.N_measure_sigma = superlink_params['KF_measure_sigma'].values[0].astype(np.float64)
         self.step(dt=1e-6)
-        
+
     # TODO: It might be safer to have these as @properties
     def import_hydraulic_states(self, _dt):
         self._H_j_next = self.hydraulics.H_j
@@ -277,7 +277,27 @@ class QualityBuilder():
                self.hydraulics._geom_codes, self.hydraulics._g1_ik, self._H_j_next, self._z_inv_j, self._H_j_prev, self._Q_dk_next, self._B_dk, self._dx_dk,
                self._Q_uk_up_next, self._Q_uk_dn_next, self._Q_dk_up_next, self._Q_dk_dn_next,
                self._A_uk_next, self._A_dk_next, self._A_uk_prev, self._A_dk_prev)
-        
+
+    @property
+    def c(self):
+        # NOTE: more performant to write in-place
+        result = np.concatenate([self._c_j, self._c_Ik, self._c_ik,
+                                 self._c_uk, self._c_dk])
+        return result
+
+    @c.setter
+    def c(self, value):
+        n1 = self._c_j.size
+        n2 = n1 + self._c_Ik.size
+        n3 = n2 + self._c_ik.size
+        n4 = n3 + self._c_uk.size
+        n5 = n4 + self._c_dk.size
+        self._c_j[:] = np.asarray(value[:n1])
+        self._c_Ik[:] = np.asarray(value[n1:n2])
+        self._c_ik[:] = np.asarray(value[n2:n3])
+        self._c_uk[:] = np.asarray(value[n3:n4])
+        self._c_dk[:] = np.asarray(value[n4:n5])
+
     @property
     def c_j(self):
         return self._c_j
