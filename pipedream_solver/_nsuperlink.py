@@ -70,22 +70,19 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                 _B_ik[i] = pipedream_solver.ngeometry.Force_Main_B_ik(h_i, g1_i, g2_i)
             elif geom_code == 10:
                 _A_ik[i] = pipedream_solver.ngeometry.Floodplain_A_ik(h_i, g1_i, g2_i,
-                                                                      g3_i, g4_i, g5_i,
-                                                                      g6_i, g7_i)
+                                                                      g3_i, g4_i, g5_i, g6_i, g7_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Floodplain_Pe_ik(h_i, g1_i, g2_i,
-                                                                        g3_i, g4_i, g5_i,
-                                                                        g6_i, g7_i)
+                                                                        g3_i, g4_i, g5_i, g6_i, g7_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Floodplain_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Floodplain_B_ik(h_i, g1_i, g2_i,
-                                                                      g3_i, g4_i, g5_i,
-                                                                      g6_i, g7_i)
+                                                                      g3_i, g4_i, g5_i, g6_i, g7_i)
     return 1
 
-@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             int64[:], int64[:], int64[:], int64[:]),
       cache=True)
-def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
+def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk, _theta_bk,
                             _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                             _geom_codes, _i_bk, _I_bk, _J_bk):
     n = len(_i_bk)
@@ -93,9 +90,9 @@ def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         i = _i_bk[k]
         I = _I_bk[k]
         j = _J_bk[k]
-        # TODO: does not handle "max" mode
+        # TODO: This should incorporate theta
         h_I = _h_Ik[I]
-        h_Ip1 = _H_j[j] - _z_inv_bk[k]
+        h_Ip1 = _theta_bk[k] * (_H_j[j] - _z_inv_bk[k])
         h_i = (h_I + h_Ip1) / 2
         geom_code = _geom_codes[i]
         g1_i = _g1_ik[i]
@@ -149,10 +146,13 @@ def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
                 _R_bk[k] = pipedream_solver.ngeometry.Force_Main_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Force_Main_B_ik(h_i, g1_i, g2_i)
             elif geom_code == 10:
-                _A_bk[k] = pipedream_solver.ngeometry.Floodplain_A_ik(h_i, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i, g7_i)
-                _Pe_bk[k] = pipedream_solver.ngeometry.Floodplain_Pe_ik(h_i, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i, g7_i)
+                _A_bk[k] = pipedream_solver.ngeometry.Floodplain_A_ik(h_i, g1_i, g2_i,
+                                                                      g3_i, g4_i, g5_i, g6_i, g7_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Floodplain_Pe_ik(h_i, g1_i, g2_i,
+                                                                        g3_i, g4_i, g5_i, g6_i, g7_i)
                 _R_bk[k] = pipedream_solver.ngeometry.Floodplain_R_ik(_A_bk[k], _Pe_bk[k])
-                _B_bk[k] = pipedream_solver.ngeometry.Floodplain_B_ik(h_i, g1_i, g2_i, g3_i, g4_i, g5_i, g6_i, g7_i)
+                _B_bk[k] = pipedream_solver.ngeometry.Floodplain_B_ik(h_i, g1_i, g2_i,
+                                                                      g3_i, g4_i, g5_i, g6_i, g7_i)
     return 1
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
@@ -185,6 +185,72 @@ def numba_orifice_geometry(_Ao, h_eo, u_o, _g1_o, _g2_o, _g3_o, _geom_codes_o, n
                 _Ao[i] = pipedream_solver.ngeometry.Wide_A_ik(h_e, g1 * u, g2)
             elif geom_code == 9:
                 _Ao[i] = pipedream_solver.ngeometry.Force_Main_A_ik(h_e, g1 * u, g2)
+    return 1
+
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], boolean[:], float64[:],
+            float64[:], float64[:], float64[:], float64[:],
+            int64[:], int64[:], int64[:], int64[:], int64[:]),
+      cache=True)
+def numba_transect_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik, _is_irregular, _transect_zs,
+                            _transect_As, _transect_Bs, _transect_Pes, _transect_Rs,
+                            _transect_codes, _transect_inds, _transect_lens, _Ik, _ik):
+    n = len(_ik)
+    for i in range(n):
+        is_irregular = _is_irregular[i]
+        if is_irregular:
+            I = _Ik[i]
+            Ip1 = I + 1
+            transect_code = _transect_codes[i]
+            h_I = _h_Ik[I]
+            h_Ip1 = _h_Ik[Ip1]
+            h_i = (h_I + h_Ip1) / 2
+            start = _transect_inds[transect_code]
+            size = _transect_lens[transect_code]
+            end = start + size
+            _z_range = _transect_zs[start:end]
+            _A_range = _transect_As[start:end]
+            _B_range = _transect_Bs[start:end]
+            _Pe_range = _transect_Pes[start:end]
+            _R_range = _transect_Rs[start:end]
+            _A_ik[i] = pipedream_solver.ngeometry.interpolate_geometry(h_i, _z_range, _A_range, 1)
+            _B_ik[i] = pipedream_solver.ngeometry.interpolate_geometry(h_i, _z_range, _B_range, 1)
+            _Pe_ik[i] = pipedream_solver.ngeometry.interpolate_geometry(h_i, _z_range, _Pe_range, 1)
+            _R_ik[i] = pipedream_solver.ngeometry.interpolate_geometry(h_i, _z_range, _R_range, 1)
+    return 1
+
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], boolean[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], int64[:], int64[:],
+            int64[:], int64[:], int64[:], int64[:]),
+      cache=True)
+def numba_boundary_transect(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
+                            _theta_bk, _is_irregular, _transect_zs, _transect_As, _transect_Bs,
+                            _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
+                            _transect_lens, _I_bk, _i_bk, _J_bk):
+    n = len(_i_bk)
+    for k in range(n):
+        i = _i_bk[k]
+        I = _I_bk[k]
+        j = _J_bk[k]
+        is_irregular_bk = _is_irregular[i]
+        if is_irregular_bk:
+            h_I = _h_Ik[I]
+            # TODO: This should incorporate theta
+            h_Ip1 = _theta_bk[k] * (_H_j[j] - _z_inv_bk[k])
+            transect_code = _transect_codes[i]
+            h_i = (h_I + h_Ip1) / 2
+            start = _transect_inds[transect_code]
+            size = _transect_lens[transect_code]
+            end = start + size
+            _z_range = _transect_zs[start:end]
+            _A_range = _transect_As[start:end]
+            _B_range = _transect_Bs[start:end]
+            _Pe_range = _transect_Pes[start:end]
+            _R_range = _transect_Rs[start:end]
+            _A_bk[k] = pipedream_solver.ngeometry.interpolate_geometry(h_i, _z_range, _A_range, 1)
+            _B_bk[k] = pipedream_solver.ngeometry.interpolate_geometry(h_i, _z_range, _B_range, 1)
+            _Pe_bk[k] = pipedream_solver.ngeometry.interpolate_geometry(h_i, _z_range, _Pe_range, 1)
+            _R_bk[k] = pipedream_solver.ngeometry.interpolate_geometry(h_i, _z_range, _R_range, 1)
     return 1
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], boolean[:]),
