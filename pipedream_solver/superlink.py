@@ -212,6 +212,23 @@ class SuperLink():
         | dH_max | float | m    | Maximum pump head                                    |
         |--------+-------+------+------------------------------------------------------|
 
+    prvs: pd.DataFrame (optional)
+        Table containing PRV control structures and their attributes.
+        The following fields are required:
+
+        |-----------+-------+------+------------------------------------------------------|
+        | Field     | Type  | Unit | Description                                          |
+        |-----------+-------+------+------------------------------------------------------|
+        | id        | int   |      | Integer id for the PRV                               |
+        | name      | str   |      | Name of the PRV                                      |
+        | sj_0      | int   |      | Index of the upstream superjunction                  |
+        | sj_1      | int   |      | Index of the downstream superjunction                |
+        | Hset      | float | m    | Head setting of PRV                                  |
+        | C_open    | float |      | Discharge coefficient when PRV is open               |
+        | C_active  | float |      | Discharge coefficient when PRV is active             |
+        | A         | float | m^2  | Full area of PRV opening                             |
+        |-----------+-------+------+------------------------------------------------------|
+
     dt: float
         Default timestep of model (in seconds).
 
@@ -281,7 +298,7 @@ class SuperLink():
     def __init__(self, superlinks, superjunctions,
                  links=None, junctions=None,
                  transects={}, storages={},
-                 orifices=None, weirs=None, pumps=None,
+                 orifices=None, weirs=None, pumps=None, prvs = None,
                  dt=60, sparse=False, min_depth=1e-5, method='b',
                  inertial_damping=False, bc_method='z',
                  exit_hydraulics=False, auto_permute=False,
@@ -314,6 +331,7 @@ class SuperLink():
         self.orifices = orifices
         self.weirs = weirs
         self.pumps = pumps
+        self.prvs = prvs
         # Dimensions of supersystem
         self.M = len(superjunctions)
         if superlinks is not None:
@@ -330,6 +348,7 @@ class SuperLink():
             orifices = self.orifices
             weirs = self.weirs
             pumps = self.pumps
+            prvs = self.prvs
         else:
             self.permutations = np.arange(len(superjunctions))
             self.banded = False
@@ -632,6 +651,40 @@ class SuperLink():
             self._beta_dpl = np.array([], dtype=np.float64)
             self._chi_upl = np.array([], dtype=np.float64)
             self._chi_dpm = np.array([], dtype=np.float64)
+        # Handle PRVs
+        if prvs is not None:
+            self.n_prv = self.prvs.shape[0]
+            self._J_uprv = self.prvs['sj_0'].values.astype(np.int64)
+            self._J_dprv = self.prvs['sj_1'].values.astype(np.int64)
+            self._Aprv = self.prvs['A'].values.astype(np.float64)
+            self._Cprv_open = self.prvs['C_open'].values.astype(np.float64)
+            self._Cprv_active = self.prvs['C_active'].values.astype(np.float64)
+            self._H_set = self.prvs['Hset'].values.astype(np.float64)
+            self._Qprv = np.ones(self.n_prv, dtype=np.float64)
+            self._alpha_prv = np.ones(self.n_prv, dtype=np.float64)
+            self._beta_prv = np.ones(self.n_prv, dtype=np.float64)
+            self._chi_prv = np.zeros(self.n_prv, dtype=np.float64)
+            self._alpha_uprvm = np.zeros(self.M, dtype=np.float64)
+            self._beta_dprvl = np.zeros(self.M, dtype=np.float64)
+            self._chi_uprvl = np.zeros(self.M, dtype=np.float64)
+            self._chi_dprvm = np.zeros(self.M, dtype=np.float64)
+        else:
+            self._J_uprv = np.array([], dtype=np.int64)
+            self._J_dprv = np.array([], dtype=np.int64)
+            self._Aprv = np.array([], dtype=np.float64)
+            self._Cprv_open = np.array([], dtype=np.float64)
+            self._Cprv_active = np.array([], dtype=np.float64)
+            self._H_set = np.array([], dtype=np.float64)
+            self.n_prv = 0
+            self._Qprv = np.array([], dtype=np.float64)
+            self._alpha_prv = np.array([], dtype=np.float64)
+            self._beta_prv = np.array([], dtype=np.float64)
+            self._chi_prv = np.array([], dtype=np.float64)
+            self._alpha_uprvm = np.array([], dtype=np.float64)
+            self._beta_dprvl = np.array([], dtype=np.float64)
+            self._chi_uprvl = np.array([], dtype=np.float64)
+            self._chi_dprvm = np.array([], dtype=np.float64)
+            
         # Enforce minimum depth
         self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
@@ -692,11 +745,13 @@ class SuperLink():
             self.O = scipy.sparse.lil_matrix((self.M, self.M))
             self.W = scipy.sparse.lil_matrix((self.M, self.M))
             self.P = scipy.sparse.lil_matrix((self.M, self.M))
+            self.PRV = scipy.sparse.lil_matrix((self.M, self.M))
         else:
             self.B = np.zeros((self.M, self.n_o))
             self.O = np.zeros((self.M, self.M))
             self.W = np.zeros((self.M, self.M))
             self.P = np.zeros((self.M, self.M))
+            self.PRV = np.zeros((self.M, self.M))
         # TODO: Should these be size NK?
         self._theta_uk = np.ones(self.NK)
         self._theta_dk = np.ones(self.NK)
@@ -719,6 +774,7 @@ class SuperLink():
         self._O_diag = np.zeros(self.M)
         self._W_diag = np.zeros(self.M)
         self._P_diag = np.zeros(self.M)
+        self._PRV_diag = np.zeros(self.M)
         # Superlink end hydraulic geometries
         self._A_uk = np.copy(self._A_ik[self._i_1k])
         self._A_dk = np.copy(self._A_ik[self._i_nk])
@@ -827,6 +883,14 @@ class SuperLink():
     @Q_p.setter
     def Q_p(self, value):
         self._Qp = np.asarray(value)
+        
+    @property
+    def Q_prv(self):
+        return self._Qprv
+
+    @Q_prv.setter
+    def Q_prv(self, value):
+        self._Qprv = np.asarray(value)
 
     @property
     def A_ik(self):
@@ -933,18 +997,32 @@ class SuperLink():
             orifices = self.orifices
             weirs = self.weirs
             pumps = self.pumps
+            prvs = self.prvs
             # Create array of upstream and downstream indices
             J_u = np.concatenate([elem['sj_0'].values for elem in
-                                (superlinks, orifices, weirs, pumps)
+                                (superlinks, orifices, weirs, pumps, prvs)
                                 if elem is not None])
             J_d = np.concatenate([elem['sj_1'].values for elem in
-                                (superlinks, orifices, weirs, pumps)
+                                (superlinks, orifices, weirs, pumps, prvs)
                                 if elem is not None])
         At = np.zeros((M, M))
-        At[J_u, J_d] = 1
+        At[J_u.astype(int), J_d.astype(int)] = 1
         if symmetric:
-            At[J_d, J_u] = 1
+            At[J_d.astype(int), J_u.astype(int)] = 1
         return At
+
+        
+    def safe_divide(function):
+        """
+        Allow for division by zero. Division by zero will return zero.
+        """
+        def inner(*args, **kwargs):
+            num, den = function(*args, **kwargs)
+            cond = (den != 0)
+            result = np.zeros(num.size)
+            result[cond] = num[cond] / den[cond]
+            return result
+        return inner    
 
     def _compute_bandwidth(self):
         At = self.adjacency_matrix
@@ -970,6 +1048,7 @@ class SuperLink():
         orifices = self.orifices
         weirs = self.weirs
         pumps = self.pumps
+        prvs = self.prvs
         # Find permutation array
         permutations = self._to_banded()
         perm_inv = np.argsort(permutations)
@@ -990,6 +1069,9 @@ class SuperLink():
         if pumps is not None:
             pumps['sj_0'] = perm_inv[pumps['sj_0'].values]
             pumps['sj_1'] = perm_inv[pumps['sj_1'].values]
+        if prvs is not None:
+            prvs['sj_0'] = perm_inv[prvs['sj_0'].values]
+            prvs['sj_1'] = perm_inv[prvs['sj_1'].values]
         # TODO: Remember to permute weirs/orifices/pumps too
         # Export instance variables
         self.superjunctions = superjunctions
@@ -997,6 +1079,7 @@ class SuperLink():
         self.orifices = orifices
         self.weirs = weirs
         self.pumps = pumps
+        self.prvs = prvs
         self.permutations = permutations
 
     def _configure_internals_variable(self, internal_links=4, mobile_elements=True):
@@ -1121,17 +1204,17 @@ class SuperLink():
         self._xc = _xc
         self._zc = _zc
 
-    def safe_divide(function):
-        """
-        Allow for division by zero. Division by zero will return zero.
-        """
-        def inner(*args, **kwargs):
-            num, den = function(*args, **kwargs)
-            cond = (den != 0)
-            result = np.zeros(num.size)
-            result[cond] = num[cond] / den[cond]
-            return result
-        return inner
+    # def safe_divide(function):
+    #     """
+    #     Allow for division by zero. Division by zero will return zero.
+    #     """
+    #     def inner(*args, **kwargs):
+    #         num, den = function(*args, **kwargs)
+    #         cond = (den != 0)
+    #         result = np.zeros(num.size)
+    #         result[cond] = num[cond] / den[cond]
+    #         return result
+    #     return inner
 
     @safe_divide
     def u_ik(self, Q_ik, A_ik):
@@ -1586,6 +1669,15 @@ class SuperLink():
         num = a_q**2 * np.abs(dH_p_t)
         den = a_h**2 * np.abs(Q_p_t)
         return num, den
+
+    @safe_divide
+    def gamma_prv(self, Q_o_t, Ao, Co=0.67, g=9.81):
+        """
+        Compute flow coefficient 'gamma' for orifice o.
+        """
+        num = 2 * g * Co**2 * Ao**2
+        den = np.abs(Q_o_t)
+        return num, den    
 
     def configure_hydraulic_geometry(self):
         """
@@ -2668,6 +2760,65 @@ class SuperLink():
         self._alpha_p = _alpha_p
         self._beta_p = _beta_p
         self._chi_p = _chi_p
+        
+    def prv_flow_coefficients(self, u=None):
+        """
+        Compute orifice flow coefficients: alpha_uo, beta_uo, chi_uo,
+        alpha_do, beta_do, chi_do.
+        """
+        # Import instance variables
+        H_j = self.H_j               # Head at superjunction j
+        _H_set = self._H_set
+        _J_uprv = self._J_uprv           # Index of superjunction upstream of orifice o
+        _J_dprv = self._J_dprv           # Index of superjunction downstream of orifice o
+        _Qprv = self._Qprv               # Current flow rate of orifice o
+        _Cprv_open = self._Cprv_open               # Discharge coefficient of orifice o
+        _Cprv_active = self._Cprv_active               # Discharge coefficient of orifice o
+        _Aprv = self._Aprv               # Maximum flow area of orifice o
+        _alpha_prv = self._alpha_prv     # Orifice flow coefficient alpha_o
+        _beta_prv = self._beta_prv       # Orifice flow coefficient beta_o
+        _chi_prv = self._chi_prv         # Orifice flow coefficient chi_o
+        
+        # If no input signal, assume orifice is closed
+        g = 9.81
+        _H_uprv = H_j[_J_uprv]
+        _H_dprv = H_j[_J_dprv]
+        div_term = _H_uprv / _H_set
+        # Create indicator functions
+        _omega_prv = np.zeros_like(_H_uprv)
+        _omega_prv[_H_uprv >= _H_dprv] = 1.0
+        # Compute universal coefficients
+        _gamma_prv_active = 2 * g * _Cprv_active**2 * _Aprv**2
+        _gamma_prv_open = gamma_prv(_Qprv, _Aprv, _Cprv_open, g)
+        
+        # Create conditionals
+        cond_0 = (_H_uprv > _H_dprv)
+        cond_1 = (_H_uprv > _H_set)
+         
+        # Fill coefficient arrays
+        # Active
+        a = (cond_0 & cond_1)
+        _alpha_prv[a] = _gamma_prv_active[a]
+        _beta_prv[a] = -div_term*_gamma_prv_active[a]
+        _chi_prv[a] = 0.0
+        
+        # Open
+        b = (cond_0 & ~cond_1)
+        _alpha_prv[b] = _gamma_prv_open[b]
+        _beta_prv[b] = -_gamma_prv_open[b]
+        _chi_prv[b] = 0.0
+        
+        # No flow
+        c = (~cond_0)
+        _alpha_prv[c] = 0.0
+        _beta_prv[c] = 0.0
+        _chi_prv[c] = 0.0
+        
+        # Export instance variables
+        self._alpha_prv = _alpha_prv
+        self._beta_prv = _beta_prv
+        self._chi_prv = _chi_prv
+
 
     def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
@@ -2719,10 +2870,21 @@ class SuperLink():
         _chi_upl = self._chi_upl         # Summation of pump flow coefficients
         _chi_dpm = self._chi_dpm         # Summation of pump flow coefficients
         _P_diag = self._P_diag           # Diagonal elements of matrix P
+        _J_uprv = self._J_uprv               # Index of superjunction upstream of orifice o
+        _J_dprv = self._J_dprv               # Index of superjunction upstream of orifice o
+        _alpha_prv = self._alpha_prv         # Orifice flow coefficient
+        _beta_prv = self._beta_prv           # Orifice flow coefficient
+        _chi_prv = self._chi_prv             # Orifice flow coefficient
+        _alpha_uprvm = self._alpha_uprvm     # Summation of orifice flow coefficients
+        _beta_dprvl = self._beta_dprvl       # Summation of orifice flow coefficients
+        _chi_uprvl = self._chi_uprvl         # Summation of orifice flow coefficients
+        _chi_dprvm = self._chi_dprvm         # Summation of orifice flow coefficients
+        _PRV_diag = self._PRV_diag           # Diagonal elements of matrix O
         _sparse = self._sparse           # Use sparse matrix data structures (y/n)
         n_o = self.n_o                   # Number of orifices in system
         n_w = self.n_w                   # Number of weirs in system
         n_p = self.n_p                   # Number of pumps in system
+        n_prv = self.n_prv                   # Number of pumps in system
         M = self.M                       # Number of superjunctions in system
         H_j = self.H_j                   # Head at superjunction j
         bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
@@ -2863,6 +3025,41 @@ class SuperLink():
                 np.add.at(D, i[~bc], -_chi_upl[~bc] + _chi_dpm[~bc])
             else:
                 pass
+        if n_prv:
+            bc_uprv = bc[_J_uprv]
+            bc_dprv = bc[_J_dprv]
+            if implicit:
+                _alpha_uprv = _alpha_prv
+                _alpha_dprv = _alpha_prv
+                _beta_uprv = _beta_prv
+                _beta_dprv = _beta_prv
+                _chi_uprv = _chi_prv
+                _chi_dprv = _chi_prv
+                _alpha_uprvm.fill(0)
+                _beta_dprvl.fill(0)
+                _chi_uprvl.fill(0)
+                _chi_dprvm.fill(0)
+                _PRV_diag.fill(0)
+                # Set diagonal
+                np.add.at(_alpha_uprvm, _J_uprv, _alpha_uprv)
+                np.add.at(_beta_dprvl, _J_dprv, _beta_dprv)
+                _PRV_diag = -_beta_dprvl + _alpha_uprvm
+                # Set off-diagonal
+                self.PRV[i[~bc], i[~bc]] = _PRV_diag[i[~bc]]
+                self.PRV[_J_uprv[~bc_uprv], _J_dprv[~bc_uprv]] = 0.0
+                self.PRV[_J_do[~bc_dprv], _J_uprv[~bc_dprv]] = 0.0
+                np.add.at(self.PRV, (_J_uprv[~bc_uprv], _J_dprv[~bc_uprv]), _beta_uprv[~bc_uprv])
+                np.add.at(self.PRV, (_J_dprv[~bc_dprv], _J_uprv[~bc_dprv]), -_alpha_dprv[~bc_dprv])
+                # Set right-hand side
+                np.add.at(_chi_uprvl, _J_uprv, _chi_uprv)
+                np.add.at(_chi_dprvm, _J_dprv, _chi_dprv)
+                np.add.at(D, i[~bc], -_chi_uprvl[~bc] + _chi_dprvm[~bc])
+            else:
+                # TODO: Broken
+                # _Qo_u, _Qo_d = self.B_j(_J_uo, _J_do, _Ao, H_j)
+                # self.B[_J_uo[~bc_uo]] = _Qo_u[~bc_uo]
+                # self.B[_J_do[~bc_do]] = _Qo_d[~bc_do]
+                pass
         b.fill(0)
         b = (_A_sj * H_j / _dt) + _Q_0j + D
         # Ensure boundary condition is specified
@@ -2888,19 +3085,21 @@ class SuperLink():
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
         P = self.P                    # Pump matrix
+        PRV = self.PRV                    # Pump matrix
         n_o = self.n_o                # Number of orifices
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
+        n_prv = self.n_prv                # Number of pumps
         _z_inv_j = self._z_inv_j      # Invert elevation of superjunction j
         _sparse = self._sparse        # Use sparse data structures (y/n)
         min_depth = self.min_depth    # Minimum depth at superjunctions
         max_depth = self.max_depth    # Maximum depth at superjunctions
         # Does the system have control assets?
-        has_control = n_o + n_w + n_p
+        has_control = n_o + n_w + n_p + n_prv
         # Get right-hand size
         if has_control:
             if implicit:
-                l = A + O + W + P
+                l = A + O + W + P + PRV
                 r = b
             else:
                 raise NotImplementedError
@@ -2928,9 +3127,11 @@ class SuperLink():
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
         P = self.P                    # Pump matrix
+        PRV = self.PRV                    # Pump matrix
         n_o = self.n_o                # Number of orifices
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
+        n_prv = self.n_prv                # Number of pumps
         _z_inv_j = self._z_inv_j      # Invert elevation of superjunction j
         _sparse = self._sparse        # Use sparse data structures (y/n)
         min_depth = self.min_depth    # Minimum depth at superjunctions
@@ -2938,11 +3139,11 @@ class SuperLink():
         bandwidth = self.bandwidth
         M = self.M
         # Does the system have control assets?
-        has_control = n_o + n_w + n_p
+        has_control = n_o + n_w + n_p + n_prv
         # Get right-hand size
         if has_control:
             if implicit:
-                l = A + O + W + P
+                l = A + O + W + P + PRV
                 r = b
             else:
                 raise NotImplementedError
@@ -3135,6 +3336,81 @@ class SuperLink():
         _Qp_next[~cond_0] = 0.0
         self._Qp = _Qp_next
 
+    @safe_divide    
+    def solve_prv_flows(self, dt, u=None):
+        """
+        Solve for pump discharges given superjunction heads at time t + dt.
+        """
+        
+        # Import instance variables
+        H_j = self.H_j                # Head at superjunction j
+        bc = self.bc                # Boundary conditions
+        _J_uprv = self._J_uprv            # Index of superjunction upstream of orifice o
+        _J_dprv = self._J_dprv            # Index of superjunction downstream of orifice o
+        _Cprv_open = self._Cprv_open                # Discharge coefficient of orifice o
+        _Cprv_active = self._Cprv_active               # Discharge coefficient of orifice o
+        _Aprv = self._Aprv                # Maximum flow area of orifice o
+        # _V_sj = self._V_sj
+        _H_set = self._H_set
+        g = 9.81
+        _Qprv = self._Qprv              # Current flow rate through pump p
+        # If no input signal, assume orifice is closed
+        
+        # Specify orifice heads at previous timestep
+        _H_uprv = H_j[_J_uprv]
+        _H_dprv = H_j[_J_dprv]
+        if u is None:
+            u = np.zeros(self.n_prv, dtype=np.float64)
+        # Compute orifice flows
+        
+        # Create indicator functions
+        _omega_prv = np.zeros_like(_H_uprv)
+        _omega_prv[_H_uprv >= _H_dprv] = 1.0
+        # Create arrays to store flow coefficients for current time step
+        _alpha_prv = np.zeros_like(_H_uprv)
+        _beta_prv = np.zeros_like(_H_uprv)
+        _chi_prv = np.zeros_like(_H_uprv)
+        # Compute universal coefficients
+        _gamma_prv_active = safe_divide(2 * g * _Cprv_active**2 * _Aprv**2, np.abs(_Qprv))
+        _gamma_prv_open = safe_divide(2 * g * _Cprv_open**2 * _Aprv**2, np.abs(_Qprv))
+        # Create conditionals
+        cond_0 = (_H_uprv > _H_dprv)
+        cond_1 = (_H_uprv > _H_set)
+        
+        # Fill coefficient arrays
+        # Active
+        a = (cond_0 & cond_1)
+        _alpha_prv[a] = _gamma_prv_active[a]
+        _beta_prv[a] = -_gamma_prv_active[a]
+        _chi_prv[a] = 0.0
+        bc[_J_dprv] = True
+        
+        # Open
+        b = (cond_0 & ~cond_1)
+        _alpha_prv[b] = _gamma_prv_open[b]
+        _beta_prv[b] = -_gamma_prv_open[b]
+        _chi_prv[b] = 0.0
+        bc[_J_dprv] = False
+        
+        # No flow
+        c = (~cond_0)
+        _alpha_prv[c] = 0.0
+        _beta_prv[c] = 0.0
+        _chi_prv[c] = 0.0
+        
+        # Compute pump flows
+        _Qprv_next =  np.sqrt(np.abs(
+                  _alpha_prv * _H_uprv + _beta_prv * _H_dprv + _chi_prv))
+       
+# what's this!!        # TODO: Move this inside numba function
+        upstream_ctrl = (H_j[_J_uprv] > H_j[_J_dprv])
+        # _Qprv_max = np.where(upstream_ctrl, _V_sj[_J_uprv], _V_sj[_J_dprv]) / dt
+        # _Qprv_next = np.sign(_Qprv_next) * np.minimum(np.abs(_Qprv_next), _Qprv_max)
+        # Export instance variables       
+        self._Qprv = _Qprv_next
+        #print(_Qprv_next)
+        self.bc = bc         # Boundary conditions
+        
     def solve_superlink_depths(self):
         """
         Solve for depths at superlink ends given discharges and
@@ -3813,6 +4089,7 @@ class SuperLink():
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
         P = self.P                    # Pump matrix
+        PRV = self.PRV                    # Pump matrix
         D = self.D                    # Vector for storing chi coefficients
         M = self.M                    # Number of superjunctions in system
         H_j = self.H_j                # Head at superjunction j
@@ -3821,6 +4098,7 @@ class SuperLink():
         n_o = self.n_o                # Number of orifices
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
+        n_prv = self.n_prv                # Number of pumps
         # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
@@ -3830,10 +4108,10 @@ class SuperLink():
         A_1 = np.zeros((M + 1, M + 1))
         A_2 = np.zeros((M + 1, M + 1))
         Q = np.zeros(M + 1)
-        has_control = n_o + n_w + n_p
+        has_control = n_o + n_w + n_p + n_prv
         # Get right-hand size
         if has_control:
-            L = A + O + W + P
+            L = A + O + W + P + PRV
         else:
             L = A
         # Fill in A_1 matrix
@@ -3854,6 +4132,7 @@ class SuperLink():
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
         P = self.P                    # Pump matrix
+        PRV = self.PRV                    # Pump matrix
         b = self.b
         M = self.M                    # Number of superjunctions in system
         H_j = self.H_j                # Head at superjunction j
@@ -3862,13 +4141,14 @@ class SuperLink():
         n_o = self.n_o                # Number of orifices
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
+        n_prv = self.n_prv                # Number of pumps
         # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
-        has_control = n_o + n_w + n_p
+        has_control = n_o + n_w + n_p + n_prv
         # Get A_1
         if has_control:
-            A_1 = A + O + W + P
+            A_1 = A + O + W + P + PRV
         else:
             A_1 = A
         # Get A_2
@@ -3880,6 +4160,7 @@ class SuperLink():
         O = self.O                    # Orifice matrix
         W = self.W                    # Weir matrix
         P = self.P                    # Pump matrix
+        PRV = self.PRV                    # Pump matrix
         D = self.D
         M = self.M                    # Number of superjunctions in system
         H_j_next = self.H_j                # Head at superjunction j
@@ -3889,14 +4170,15 @@ class SuperLink():
         n_o = self.n_o                # Number of orifices
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
+        n_prv = self.n_prv                # Number of pumps
         Q_in = self._Q_in
         # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
-        has_control = n_o + n_w + n_p
+        has_control = n_o + n_w + n_p + n_prv
         # Get A_1
         if has_control:
-            A_1 = A + O + W + P
+            A_1 = A + O + W + P + PRV
         else:
             A_1 = A
         # Get A_2
@@ -3921,6 +4203,8 @@ class SuperLink():
             self.states['Q_w'] = np.copy(self.Q_w)
         if self.n_p:
             self.states['Q_p'] = np.copy(self.Q_p)
+        if self.n_prv:
+            self.states['Q_prv'] = np.copy(self.Q_prv)
         self.states['A_ik'] = np.copy(self.A_ik)
         self.states['A_uk'] = np.copy(self.A_uk)
         self.states['A_dk'] = np.copy(self.A_dk)
@@ -4012,7 +4296,7 @@ class SuperLink():
                                  weir_kwargs=weir_kwargs,
                                  pump_kwargs=pump_kwargs))
 
-    def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
+    def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, u_prv = None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         if first_iter:
             self.save_state()
@@ -4046,11 +4330,13 @@ class SuperLink():
             self.weir_flow_coefficients(u=u_w)
         if self.pumps is not None:
             self.pump_flow_coefficients(u=u_p)
+        if self.prvs is not None:
+            self.prv_flow_coefficients(u=u_prv)
         self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
 
-    def _solve_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
+    def _solve_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, u_prv = None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         _method = self._method
         _exit_hydraulics = self._exit_hydraulics
@@ -4065,6 +4351,8 @@ class SuperLink():
             self.solve_weir_flows(u=u_w)
         if self.pumps is not None:
             self.solve_pump_flows(u=u_p)
+        if self.prvs is not None:
+            self.solve_prv_flows(dt=dt, u=u_prv)
         self.solve_superlink_depths()
         if _exit_hydraulics:
             self.exit_conditions()
@@ -4082,7 +4370,7 @@ class SuperLink():
         self.iter_count += 1
         self.t += dt
 
-    def step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
+    def step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, u_prv = None, dt=None,
              first_time=False, implicit=True, banded=None, first_iter=True,
              num_iter=1, head_tol=0.0015):
         """
@@ -4119,10 +4407,10 @@ class SuperLink():
         """
         if banded is None:
             banded = self.banded
-        self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+        self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, u_prv=u_prv, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
-        self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+        self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, u_prv=u_prv, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
         # Perform fixed-point iteration until convergence
@@ -4136,10 +4424,10 @@ class SuperLink():
                 for _ in range(num_iter):
                     self.iter_count -= 1
                     self.t -= dt
-                    self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                    self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, u_prv=u_prv, dt=dt,
                                      first_time=first_time, implicit=implicit, banded=banded,
                                      first_iter=False)
-                    self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                    self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, u_prv=u_prv, dt=dt,
                                      first_time=first_time, implicit=implicit, banded=banded,
                                      first_iter=False)
                     iter_elapsed += 1
