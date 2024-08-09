@@ -3,6 +3,17 @@ from numba import njit, prange
 from numba.types import float64, int64, uint32, uint16, uint8, boolean, UniTuple, Tuple, List, DictType, void
 import pipedream_solver.ngeometry
 
+CIRCULAR = 1
+RECT_CLOSED = 2
+RECT_OPEN = 3
+TRIANGULAR = 4
+TRAPEZOIDAL = 5
+PARABOLIC = 6
+ELLIPTICAL = 7
+WIDE = 8
+FORCE_MAIN = 9
+FLOODPLAIN = 10
+
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             int64[:], int64[:], int64[:]),
@@ -26,49 +37,49 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
         g6_i = _g6_ik[i]
         g7_i = _g7_ik[i]
         if geom_code:
-            if geom_code == 1:
-                _A_ik[i] = pipedream_solver.ngeometry.Circular_A_ik(h_i, g1_i)
-                _Pe_ik[i] = pipedream_solver.ngeometry.Circular_Pe_ik(h_i, g1_i)
+            if geom_code == CIRCULAR:
+                _A_ik[i] = pipedream_solver.ngeometry.Circular_A_ik(h_i, g1_i, g2_i)
+                _Pe_ik[i] = pipedream_solver.ngeometry.Circular_Pe_ik(h_i, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Circular_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Circular_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 2:
+            elif geom_code == RECT_CLOSED:
                 _A_ik[i] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_i, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Rect_Closed_Pe_ik(h_i, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Rect_Closed_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_i, g1_i, g2_i, g3_i)
-            elif geom_code == 3:
+            elif geom_code == RECT_OPEN:
                 _A_ik[i] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_i, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Rect_Open_Pe_ik(h_i, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Rect_Open_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Rect_Open_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 4:
+            elif geom_code == TRIANGULAR:
                 _A_ik[i] = pipedream_solver.ngeometry.Triangular_A_ik(h_i, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Triangular_Pe_ik(h_i, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Triangular_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Triangular_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 5:
+            elif geom_code == TRAPEZOIDAL:
                 _A_ik[i] = pipedream_solver.ngeometry.Trapezoidal_A_ik(h_i, g1_i, g2_i, g3_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Trapezoidal_Pe_ik(h_i, g1_i, g2_i, g3_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Trapezoidal_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Trapezoidal_B_ik(h_i, g1_i, g2_i, g3_i)
-            elif geom_code == 6:
+            elif geom_code == PARABOLIC:
                 _A_ik[i] = pipedream_solver.ngeometry.Parabolic_A_ik(h_i, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Parabolic_Pe_ik(h_i, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Parabolic_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Parabolic_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 7:
+            elif geom_code == ELLIPTICAL:
                 raise NotImplementedError
-            elif geom_code == 8:
+            elif geom_code == WIDE:
                 _A_ik[i] = pipedream_solver.ngeometry.Wide_A_ik(h_i, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Wide_Pe_ik(h_i, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Wide_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Wide_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 9:
+            elif geom_code == FORCE_MAIN:
                 _A_ik[i] = pipedream_solver.ngeometry.Force_Main_A_ik(h_i, g1_i, g2_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Force_Main_Pe_ik(h_i, g1_i, g2_i)
                 _R_ik[i] = pipedream_solver.ngeometry.Force_Main_R_ik(_A_ik[i], _Pe_ik[i])
                 _B_ik[i] = pipedream_solver.ngeometry.Force_Main_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 10:
+            elif geom_code == FLOODPLAIN:
                 _A_ik[i] = pipedream_solver.ngeometry.Floodplain_A_ik(h_i, g1_i, g2_i,
                                                                       g3_i, g4_i, g5_i, g6_i, g7_i)
                 _Pe_ik[i] = pipedream_solver.ngeometry.Floodplain_Pe_ik(h_i, g1_i, g2_i,
@@ -103,49 +114,49 @@ def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         g6_i = _g6_ik[i]
         g7_i = _g7_ik[i]
         if geom_code:
-            if geom_code == 1:
-                _A_bk[k] = pipedream_solver.ngeometry.Circular_A_ik(h_i, g1_i)
-                _Pe_bk[k] = pipedream_solver.ngeometry.Circular_Pe_ik(h_i, g1_i)
+            if geom_code == CIRCULAR:
+                _A_bk[k] = pipedream_solver.ngeometry.Circular_A_ik(h_i, g1_i, g2_i)
+                _Pe_bk[k] = pipedream_solver.ngeometry.Circular_Pe_ik(h_i, g1_i, g2_i)
                 _R_bk[k] = pipedream_solver.ngeometry.Circular_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Circular_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 2:
+            elif geom_code == RECT_CLOSED:
                 _A_bk[k] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_i, g1_i, g2_i)
                 _Pe_bk[k] = pipedream_solver.ngeometry.Rect_Closed_Pe_ik(h_i, g1_i, g2_i)
                 _R_bk[k] = pipedream_solver.ngeometry.Rect_Closed_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Rect_Closed_B_ik(h_i, g1_i, g2_i, g3_i)
-            elif geom_code == 3:
+            elif geom_code == RECT_OPEN:
                 _A_bk[k] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_i, g1_i, g2_i)
                 _Pe_bk[k] = pipedream_solver.ngeometry.Rect_Open_Pe_ik(h_i, g1_i, g2_i)
                 _R_bk[k] = pipedream_solver.ngeometry.Rect_Open_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Rect_Open_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 4:
+            elif geom_code == TRIANGULAR:
                 _A_bk[k] = pipedream_solver.ngeometry.Triangular_A_ik(h_i, g1_i, g2_i)
                 _Pe_bk[k] = pipedream_solver.ngeometry.Triangular_Pe_ik(h_i, g1_i, g2_i)
                 _R_bk[k] = pipedream_solver.ngeometry.Triangular_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Triangular_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 5:
+            elif geom_code == TRAPEZOIDAL:
                 _A_bk[k] = pipedream_solver.ngeometry.Trapezoidal_A_ik(h_i, g1_i, g2_i, g3_i)
                 _Pe_bk[k] = pipedream_solver.ngeometry.Trapezoidal_Pe_ik(h_i, g1_i, g2_i, g3_i)
                 _R_bk[k] = pipedream_solver.ngeometry.Trapezoidal_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Trapezoidal_B_ik(h_i, g1_i, g2_i, g3_i)
-            elif geom_code == 6:
+            elif geom_code == PARABOLIC:
                 _A_bk[k] = pipedream_solver.ngeometry.Parabolic_A_ik(h_i, g1_i, g2_i)
                 _Pe_bk[k] = pipedream_solver.ngeometry.Parabolic_Pe_ik(h_i, g1_i, g2_i)
                 _R_bk[k] = pipedream_solver.ngeometry.Parabolic_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Parabolic_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 7:
+            elif geom_code == ELLIPTICAL:
                 raise NotImplementedError
-            elif geom_code == 8:
+            elif geom_code == WIDE:
                 _A_bk[k] = pipedream_solver.ngeometry.Wide_A_ik(h_i, g1_i, g2_i)
                 _Pe_bk[k] = pipedream_solver.ngeometry.Wide_Pe_ik(h_i, g1_i, g2_i)
                 _R_bk[k] = pipedream_solver.ngeometry.Wide_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Wide_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 9:
+            elif geom_code == FORCE_MAIN:
                 _A_bk[k] = pipedream_solver.ngeometry.Force_Main_A_ik(h_i, g1_i, g2_i)
                 _Pe_bk[k] = pipedream_solver.ngeometry.Force_Main_Pe_ik(h_i, g1_i, g2_i)
                 _R_bk[k] = pipedream_solver.ngeometry.Force_Main_R_ik(_A_bk[k], _Pe_bk[k])
                 _B_bk[k] = pipedream_solver.ngeometry.Force_Main_B_ik(h_i, g1_i, g2_i)
-            elif geom_code == 10:
+            elif geom_code == FLOODPLAIN:
                 _A_bk[k] = pipedream_solver.ngeometry.Floodplain_A_ik(h_i, g1_i, g2_i,
                                                                       g3_i, g4_i, g5_i, g6_i, g7_i)
                 _Pe_bk[k] = pipedream_solver.ngeometry.Floodplain_Pe_ik(h_i, g1_i, g2_i,
@@ -167,24 +178,27 @@ def numba_orifice_geometry(_Ao, h_eo, u_o, _g1_o, _g2_o, _g3_o, _geom_codes_o, n
         u = u_o[i]
         h_e = h_eo[i]
         if geom_code:
-            if geom_code == 1:
-                _Ao[i] = pipedream_solver.ngeometry.Circular_A_ik(h_e, g1 * u)
-            elif geom_code == 2:
+            if geom_code == CIRCULAR:
+                _Ao[i] = pipedream_solver.ngeometry.Circular_A_ik(h_e, g1 * u, g2)
+            elif geom_code == RECT_CLOSED:
                 _Ao[i] = pipedream_solver.ngeometry.Rect_Closed_A_ik(h_e, g1 * u, g2)
-            elif geom_code == 3:
+            elif geom_code == RECT_OPEN:
                 _Ao[i] = pipedream_solver.ngeometry.Rect_Open_A_ik(h_e, g1 * u, g2)
-            elif geom_code == 4:
+            elif geom_code == TRIANGULAR:
                 _Ao[i] = pipedream_solver.ngeometry.Triangular_A_ik(h_e, g1 * u, g2)
-            elif geom_code == 5:
+            elif geom_code == TRAPEZOIDAL:
                 _Ao[i] = pipedream_solver.ngeometry.Trapezoidal_A_ik(h_e, g1 * u, g2, g3)
-            elif geom_code == 6:
+            elif geom_code == PARABOLIC:
                 _Ao[i] = pipedream_solver.ngeometry.Parabolic_A_ik(h_e, g1 * u, g2)
-            elif geom_code == 7:
+            elif geom_code == ELLIPTICAL:
                 raise NotImplementedError
-            elif geom_code == 8:
+            elif geom_code == WIDE:
                 _Ao[i] = pipedream_solver.ngeometry.Wide_A_ik(h_e, g1 * u, g2)
-            elif geom_code == 9:
+            elif geom_code == FORCE_MAIN:
                 _Ao[i] = pipedream_solver.ngeometry.Force_Main_A_ik(h_e, g1 * u, g2)
+            elif geom_code == FLOODPLAIN:
+                # TODO: This can be implemented
+                raise NotImplementedError
     return 1
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], boolean[:], float64[:],

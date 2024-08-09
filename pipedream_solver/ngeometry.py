@@ -18,9 +18,9 @@ geom_code = {
 
 eps = np.finfo(float).eps
 
-@njit(float64(float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Circular_A_ik(h_ik, g1):
+def Circular_A_ik(h_ik, g1, g2):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -34,6 +34,7 @@ def Circular_A_ik(h_ik, g1):
         Diameter of channel (meters)
     """
     d = g1
+    pslot = g2
     y = h_ik
     if y < 0:
         y = 0
@@ -49,9 +50,9 @@ def Circular_A_ik(h_ik, g1):
     A = r**2 * (theta - np.cos(theta) * np.sin(theta))
     return A
 
-@njit(float64(float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Circular_Pe_ik(h_ik, g1):
+def Circular_Pe_ik(h_ik, g1, g2):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -65,6 +66,7 @@ def Circular_Pe_ik(h_ik, g1):
         Diameter of channel (meters)
     """
     d = g1
+    pslot = g2
     y = h_ik
     if y < 0:
         y = 0

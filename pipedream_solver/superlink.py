@@ -759,6 +759,7 @@ class SuperLink():
         self._A_k = np.zeros(self.NK, dtype=np.float64)
         self._dt_ck = np.ones(self.NK, dtype=np.float64)
         self._Q_in = np.zeros(self.M, dtype=np.float64)
+        self._H_bc = np.zeros(self.M, dtype=np.float64)
         # Initialize state dictionary
         self.states = {}
         # Iteration counter
@@ -3890,6 +3891,7 @@ class SuperLink():
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
         Q_in = self._Q_in
+        H_bc = self._H_bc
         # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
@@ -3900,8 +3902,14 @@ class SuperLink():
         else:
             A_1 = A
         # Get A_2
-        A_2 = np.diag(np.where(~bc, _A_sj / _dt, 0))
-        return A_1, A_2, D, H_j_next, H_j_prev, Q_in
+        A_2_diag = _A_sj / _dt
+        np.add.at(A_2_diag, self._J_uk, self._B_uk * self._dx_uk * self._theta_uk / 2 / _dt)
+        np.add.at(A_2_diag, self._J_dk, self._B_dk * self._dx_dk * self._theta_dk / 2 / _dt) 
+        A_2 = np.diag(np.where(~bc, A_2_diag, 0.))
+        D = np.where(~bc, D, 0.)
+        B = np.diag(np.where(~bc, 1., 0.))
+        H_bc = np.where(bc, H_bc, 0.)
+        return A_1, A_2, B, D, H_j_next, H_j_prev, Q_in, H_bc
 
     def save_state(self):
         """
@@ -4018,6 +4026,7 @@ class SuperLink():
             self.save_state()
         if dt is None:
             dt = self._dt
+        self._H_bc = H_bc
         self._Q_in = Q_in
         self._Q_0Ik = Q_0Ik
         if not implicit:
