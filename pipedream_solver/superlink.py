@@ -8,6 +8,7 @@ import scipy.sparse.linalg
 import pipedream_solver.geometry
 import pipedream_solver.storage
 import pipedream_solver.visualization
+from pipedream_solver.callbacks import BaseCallback
 
 class SuperLink():
     """
@@ -293,6 +294,7 @@ class SuperLink():
         orifices = copy.deepcopy(orifices)
         weirs = copy.deepcopy(weirs)
         pumps = copy.deepcopy(pumps)
+        self.callbacks = {}
         # TODO: Ensure index is int
         # TODO: This needs to be done for orifices/weirs/pumps as well
         # Ensure nominal direction of superlinks is correct
@@ -420,6 +422,7 @@ class SuperLink():
         # Dimensions
         self.nk = np.bincount(self._ki)
         # Create forward and backward indexers
+        # TODO: Check if these are correct for single link
         self.forward_I_I = np.copy(self._I)
         self.forward_I_I[self._Ik] = self._Ip1k
         self.backward_I_I = np.copy(self._I)
@@ -3934,6 +3937,8 @@ class SuperLink():
         self.states['A_dk'] = np.copy(self.A_dk)
         self.states['A_sj'] = np.copy(self.A_sj)
         self.states['V_j'] = np.copy(self.V_j)
+        for _, callback in self.callbacks.items():
+            callback.__on_save_state__()
 
     def load_state(self, states={}, exclude_states=set(),
                    compute_hydraulic_geometries=True):
@@ -3959,6 +3964,8 @@ class SuperLink():
             self.downstream_hydraulic_geometry()
             self.compute_storage_areas()
             self.node_velocities()
+        for _, callback in self.callbacks.items():
+            callback.__on_load_state__()
 
     def spinup(self, n_steps=100, dt=10, Q_in=None, Q_0Ik=None, reposition_junctions=False,
                reset_counters=True, **kwargs):
@@ -4020,12 +4027,21 @@ class SuperLink():
                                  weir_kwargs=weir_kwargs,
                                  pump_kwargs=pump_kwargs))
 
+    def bind_callback(self, callback, key):
+        assert isinstance(callback, BaseCallback)
+        self.callbacks[key] = callback
+
+    def unbind_callback(self, key):
+        return self.callbacks.pop(key)
+
     def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         if first_iter:
             self.save_state()
         if dt is None:
             dt = self._dt
+        else:
+            self._dt = dt
         self._H_bc = H_bc
         self._Q_in = Q_in
         self._Q_0Ik = Q_0Ik
@@ -4126,6 +4142,8 @@ class SuperLink():
         implicit : bool
             (Deprecated)
         """
+        for _, callback in self.callbacks.items():
+            callback.__on_step_start__()
         if banded is None:
             banded = self.banded
         self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
@@ -4157,3 +4175,7 @@ class SuperLink():
                         break
                     H_j_next = np.copy(self.H_j)
         self.iter_elapsed = iter_elapsed
+        for _, callback in self.callbacks.items():
+            callback.__on_step_end__(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                     first_time=first_time, implicit=implicit, banded=banded,
+                                     first_iter=False)

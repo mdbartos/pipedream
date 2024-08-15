@@ -1558,7 +1558,8 @@ class nSuperLink(SuperLink):
         # TODO: Move this inside numba function
         upstream_ctrl = (H_j[_J_uo] > H_j[_J_do])
         _Qo_max = np.where(upstream_ctrl, _V_sj[_J_uo], _V_sj[_J_do]) / dt
-        _Qo_next = np.sign(_Qo_next) * np.minimum(np.abs(_Qo_next), _Qo_max)
+        # TODO: Check if flow limiter is causing issues
+        #_Qo_next = np.sign(_Qo_next) * np.minimum(np.abs(_Qo_next), _Qo_max)
         # Export instance variables
         self._Qo = _Qo_next
 
