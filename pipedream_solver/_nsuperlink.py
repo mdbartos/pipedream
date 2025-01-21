@@ -3,6 +3,8 @@ from numba import njit, prange
 from numba.types import float64, int64, uint32, uint16, uint8, boolean, UniTuple, Tuple, List, DictType, void
 import pipedream_solver.ngeometry
 
+MIN_SJ_AREA = 1e-8
+
 CIRCULAR = 1
 RECT_CLOSED = 2
 RECT_OPEN = 3
