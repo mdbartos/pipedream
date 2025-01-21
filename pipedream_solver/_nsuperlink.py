@@ -276,7 +276,7 @@ def numba_compute_functional_storage_areas(h, A, a, b, c, _functional):
             if h[j] < 0:
                 A[j] = 0
             else:
-                A[j] = a[j] * (h[j]**b[j]) + c[j]
+                A[j] = max(a[j] * (h[j]**b[j]) + c[j], MIN_SJ_AREA)
     return A
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], boolean[:]),
@@ -288,6 +288,7 @@ def numba_compute_functional_storage_volumes(h, V, a, b, c, _functional):
             if h[j] < 0:
                 V[j] = 0
             else:
+                # TODO: Ensure this works when functional storage area is negative
                 V[j] = (a[j] / (b[j] + 1)) * h[j] ** (b[j] + 1) + c[j] * h[j]
     return V
 
