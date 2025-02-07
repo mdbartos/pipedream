@@ -369,7 +369,14 @@ def friction_slope(Q_ik_t, dx_ik, A_ik, R_ik, n_ik, Sf_method_ik, g=9.81):
             # kinematic viscosity(meter^2/sec), we can consider this is constant.
             nu = 0.0000010034
             Re = (np.abs(Q_ik_t) / A_ik) * 4 * R_ik / nu
-            f = 0.25 / (np.log10(n_ik / (3.7 * 4 * R_ik) + 5.74 / (Re**0.9)))**2
+            if Re > 2000:
+                f = 0.25 / (np.log10(n_ik / (3.7 * 4 * R_ik) + 5.74 / (Re**0.9)))**2
+            elif (Re > 0) and (Re <= 2000):
+                f = 64 / Re
+            elif (Re == 0):
+                f = 0.1
+            else:
+                raise ValueError('Reynolds number outside allowable range')
             t_1 = (0.01274 * g * f * np.abs(Q_ik_t) * dx_ik
                    / (A_ik * R_ik))
         else:
