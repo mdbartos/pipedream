@@ -451,7 +451,7 @@ class nSuperLink(SuperLink):
             for name, storage in storages.items():
                 A = storage['A']
                 h = storage['h']
-                V = scipy.integrate.cumtrapz(h, A, initial=0.)
+                V = scipy.integrate.cumtrapz(A, h, initial=0.)
                 _storage_As.append(A)
                 _storage_Vs.append(V)
                 _storage_hs.append(h)
