@@ -650,7 +650,7 @@ def kappa_uk(Q_uk, dx_uk, A_uk, C_uk, R_uk, n_uk, Sf_method_uk, dt, g=9.81):
     t_0 = - dx_uk / g / A_uk / dt
     t_1 = np.zeros(k, dtype=np.float64)
     for n in range(k):
-        t_1[n] = friction_slope(Q_uk[n], dx_uk[n], A_uk[n], R_uk[n],
+        t_1[n] = - friction_slope(Q_uk[n], dx_uk[n], A_uk[n], R_uk[n],
                                 n_uk[n], Sf_method_uk[n], g)
     t_2 = - C_uk * np.abs(Q_uk) / 2 / g / A_uk**2
     return t_0 + t_1 + t_2
