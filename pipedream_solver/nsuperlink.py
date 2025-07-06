@@ -1131,7 +1131,7 @@ class nSuperLink(SuperLink):
         self._beta_p = _beta_p
         self._chi_p = _chi_p
 
-    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
+    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, _Q_bc=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
         """
         Construct sparse matrices A, O, W, P and b.
@@ -1215,6 +1215,8 @@ class nSuperLink(SuperLink):
         # If no flow input specified, assume zero external inflow
         if _Q_0j is None:
             _Q_0j = 0
+        if _Q_bc is None:
+            _Q_bc = 0
         # If no control input signal specified assume zero input
         if u is None:
             u = 0
@@ -1282,7 +1284,7 @@ class nSuperLink(SuperLink):
             numba_add_at(D, _J_dp, _chi_dp)
         b.fill(0)
         # TODO: Which A_sj? Might need to apply product rule here.
-        b = (_A_sj * H_j_prev / _dt) + _Q_0j + D
+        b = (_A_sj * H_j_prev / _dt) + _Q_0j + _Q_bc + D
         # Ensure boundary condition is specified
         b[bc] = H_bc[bc]
         # Export instance variables

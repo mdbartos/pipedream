@@ -9,6 +9,7 @@ import pipedream_solver.geometry
 import pipedream_solver.storage
 import pipedream_solver.visualization
 from pipedream_solver.callbacks import BaseCallback
+from pipedream_solver.diagnostics import ConvergenceTracker
 
 class SuperLink():
     """
@@ -718,6 +719,8 @@ class SuperLink():
         self._Q_dk = self._Q_ik[self._i_nk]
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
+        # Set boundary condition in/outflows
+        self._Q_bc = np.zeros(self.M, dtype=np.float64)
         # Other parameters
         self._O_diag = np.zeros(self.M)
         self._W_diag = np.zeros(self.M)
@@ -771,6 +774,8 @@ class SuperLink():
         # Compute bandwidth
         self._compute_bandwidth()
         # Initialize to stable state
+        self.convergence_tracker = ConvergenceTracker(self)
+        self.bind_callback(self.convergence_tracker, 'convergence_tracker')
         self.step(dt=1e-6, first_time=True)
         # Reset iteration counter
         self.iter_count = 0
@@ -927,6 +932,12 @@ class SuperLink():
     @x_Ik.setter
     def x_Ik(self, value):
         self._x_Ik = np.asarray(value)
+
+    @property
+    def state_vector(self):
+        vec = np.concatenate([self.H_j, self.Q_uk, self.Q_dk, self.Q_o, self.Q_w, self.Q_p, 
+                              self.h_Ik, self.Q_ik])
+        return vec
 
     @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
@@ -2673,7 +2684,7 @@ class SuperLink():
         self._beta_p = _beta_p
         self._chi_p = _chi_p
 
-    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
+    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, _Q_bc=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
         """
         Construct sparse matrices A, O, W, P and b.
@@ -3537,6 +3548,45 @@ class SuperLink():
         self._Q_ik = _Q_ik
         self._h_Ik = _h_Ik
 
+    def compute_boundary_flows(self, dt=None):
+        # Import instance variables
+        bc = self.bc
+        if not bc.any():
+            return None
+        _Q_bc = self._Q_bc
+        _H_j_next = self.H_j
+        _H_j_prev = self.states['H_j']
+        _Q_in = self._Q_in
+        _A_sj = self._A_sj
+        _J_uk = self._J_uk
+        _J_dk = self._J_dk
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        _J_uw = self._J_uw
+        _J_dw = self._J_dw
+        _J_up = self._J_up
+        _J_dp = self._J_dp
+        _Q_uk = self._Q_uk
+        _Q_dk = self._Q_dk
+        _Q_o = self._Qo
+        _Q_w = self._Qw
+        _Q_p = self._Qp
+        if dt is None:
+            dt = self._dt
+        # Compute boundary flows
+        _Q_bc.fill(0.)
+        _Q_bc -= _Q_in
+        _Q_bc += (_H_j_next - _H_j_prev) * _A_sj / dt
+        _Q_bc[self._J_uk] += _Q_uk
+        _Q_bc[self._J_dk] -= _Q_dk
+        _Q_bc[self._J_uo] += _Q_o
+        _Q_bc[self._J_do] -= _Q_o
+        _Q_bc[self._J_uw] += _Q_w
+        _Q_bc[self._J_dw] -= _Q_w
+        _Q_bc[self._J_up] += _Q_p
+        _Q_bc[self._J_dp] -= _Q_p
+        _Q_bc[~bc] = 0.
+
     def exit_conditions(self):
         """
         Determine which superlinks have exit depths below the pipe crown elevation.
@@ -4034,7 +4084,7 @@ class SuperLink():
     def unbind_callback(self, key):
         return self.callbacks.pop(key)
 
-    def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
+    def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, Q_bc=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         if first_iter:
             self.save_state()
@@ -4042,9 +4092,19 @@ class SuperLink():
             dt = self._dt
         else:
             self._dt = dt
+        if Q_in is None:
+            self._Q_in = np.zeros(self.M, dtype=np.float64)
+        else:
+            self._Q_in = Q_in
+        if Q_bc is None:
+            self._Q_bc = np.zeros(self.M, dtype=np.float64)
+        else:
+            self._Q_bc = Q_bc
+        if Q_0Ik is None:
+            self._Q_0Ik = np.zeros(self._I.size, dtype=np.float64)
+        else:
+            self._Q_0Ik = Q_0Ik
         self._H_bc = H_bc
-        self._Q_in = Q_in
-        self._Q_0Ik = Q_0Ik
         if not implicit:
             raise NotImplementedError
         # Compute all hydraulic geometries
@@ -4071,7 +4131,7 @@ class SuperLink():
             self.weir_flow_coefficients(u=u_w)
         if self.pumps is not None:
             self.pump_flow_coefficients(u=u_p)
-        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
+        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in, _Q_bc=Q_bc,
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
 
@@ -4104,12 +4164,13 @@ class SuperLink():
             self.solve_internals_nnls()
         elif _method == 'lsq':
             self.solve_internals_lsq()
+        self.compute_boundary_flows(dt=dt)
         self.iter_count += 1
         self.t += dt
 
     def step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=None, first_iter=True,
-             num_iter=1, head_tol=0.0015):
+             num_iter=1, rtol=1e-5, atol=1e-5, head_tol=0.0015):
         """
         Advance model forward to next time step, computing hydraulic states.
 
@@ -4143,7 +4204,10 @@ class SuperLink():
             (Deprecated)
         """
         for _, callback in self.callbacks.items():
-            callback.__on_step_start__()
+            callback.__on_step_start__(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                       first_time=first_time, implicit=implicit, banded=banded,
+                                       first_iter=first_iter, num_iter=num_iter, rtol=rtol, atol=atol,
+                                       head_tol=head_tol)
         if banded is None:
             banded = self.banded
         self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
@@ -4152,30 +4216,11 @@ class SuperLink():
         self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                          first_time=first_time, implicit=implicit, banded=banded,
                          first_iter=first_iter)
-        # Perform fixed-point iteration until convergence
+        first_iter = False
         num_iter -= 1
-        iter_elapsed = 1
-        if (num_iter > 0):
-            H_j_prev = self.states['H_j']
-            H_j_next = np.copy(self.H_j)
-            residual = np.abs(H_j_next - H_j_prev)
-            if not (residual < head_tol).all():
-                for _ in range(num_iter):
-                    self.iter_count -= 1
-                    self.t -= dt
-                    self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                     first_time=first_time, implicit=implicit, banded=banded,
-                                     first_iter=False)
-                    self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                     first_time=first_time, implicit=implicit, banded=banded,
-                                     first_iter=False)
-                    iter_elapsed += 1
-                    residual = np.abs(H_j_next - self.H_j)
-                    if (residual < head_tol).all():
-                        break
-                    H_j_next = np.copy(self.H_j)
-        self.iter_elapsed = iter_elapsed
+        self.iter_elapsed = 1
         for _, callback in self.callbacks.items():
             callback.__on_step_end__(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                      first_time=first_time, implicit=implicit, banded=banded,
-                                     first_iter=False)
+                                     first_iter=first_iter, num_iter=num_iter, rtol=rtol, atol=atol,
+                                     head_tol=head_tol)
