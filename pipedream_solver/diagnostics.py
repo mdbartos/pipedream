@@ -14,7 +14,7 @@ class ErrorTracker(BaseCallback):
         self.momentum_error_w = np.zeros(model.n_w)
         self.momentum_error_p = np.zeros(model.n_p)
 
-    def __on_step_end__(self):
+    def __on_step_end__(self, *args, **kwargs):
         model = self.model
         # TODO: This could cause problems, need to make sure this stays updated at each step
         dt = model._dt
@@ -41,7 +41,7 @@ class VolumeTracker(BaseCallback):
         self.cumulative_vol_flux_j = np.zeros(model.M)
         self.cumulative_vol_flux_Ik = np.zeros(model._I.size)
 
-    def __on_step_end__(self):
+    def __on_step_end__(self, *args, **kwargs):
         model = self.model
         dt = model._dt
         Q_in = model._Q_in
@@ -58,12 +58,12 @@ class VolumeTracker(BaseCallback):
         self.cumulative_vol_flux_Ik += self.volume_flux_Ik
 
 class ConvergenceTracker(BaseCallback):
-    def __init__(self, model):
+    def __init__(self, model, rtol=1e-5, atol=1e-8):
         self.model = model
         self.prior_guess = 0.
         self.next_guess = 0.
-        self.rtol = 1e-5
-        self.atol = 1e-8
+        self.rtol = rtol
+        self.atol = atol
 
     def _convergence_met(self, prior_guess, next_guess, rtol=None, atol=None):
         if rtol is None:
@@ -71,7 +71,7 @@ class ConvergenceTracker(BaseCallback):
         if atol is None:
             atol = self.atol
         e = np.abs(next_guess - prior_guess)
-        ewt = rtol * np.abs(next_guess) + atol
+        ewt = np.maximum(rtol * np.maximum(np.abs(prior_guess), np.abs(next_guess)),  atol)
         valid = (e > 0.) & (ewt > 0.)
         condition = (np.log(e[valid]) - np.log(ewt[valid])).max() <= 0.
         return condition
@@ -116,6 +116,51 @@ class ConvergenceTracker(BaseCallback):
                         break
         self.model.iter_elapsed = iter_elapsed 
 
+class LegacyConvergenceTracker(ConvergenceTracker):
+    def __init__(self, model):
+        self.model = model
+        self.prior_guess = 0.
+        self.next_guess = 0.
+
+    def _convergence_met(self, prior_guess, next_guess, head_tol=0.0015):
+        e = np.abs(next_guess - prior_guess)
+        condition = e.max() <= head_tol
+        return condition
+
+    def _compute_prior_guess(self):
+        #return np.copy(self.model.H_j)
+        return self.model.H_j
+    
+    def _compute_next_guess(self):
+        #return np.copy(self.model.H_j)
+        return self.model.H_j
+
+    def __on_step_end__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
+                        first_time=False, implicit=True, banded=None, first_iter=True,
+                        num_iter=1, rtol=None, atol=None, head_tol=0.0015):
+        # Perform fixed-point iteration until convergence
+        iter_elapsed = 1
+        if (num_iter > 0):
+            self.next_guess = self._compute_next_guess()
+            convergence_met = self._convergence_met(self.prior_guess, self.next_guess, head_tol=head_tol)
+            if not convergence_met:
+                for _ in range(num_iter):
+                    # TODO: Rename this to step count
+                    self.model.iter_count -= 1
+                    self.model.t -= dt
+                    self.prior_guess = self._compute_prior_guess()
+                    self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                        first_time=first_time, implicit=implicit, banded=banded,
+                                        first_iter=False)
+                    self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                        first_time=first_time, implicit=implicit, banded=banded,
+                                        first_iter=False)
+                    self.next_guess = self._compute_next_guess()
+                    iter_elapsed += 1
+                    convergence_met = self._convergence_met(self.prior_guess, self.next_guess, head_tol=head_tol)
+                    if convergence_met:
+                        break
+        self.model.iter_elapsed = iter_elapsed 
 
 def continuity_error_j(model, dt):
     error = np.zeros(model.M)

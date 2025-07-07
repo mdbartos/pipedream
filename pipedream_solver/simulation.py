@@ -573,7 +573,7 @@ class Simulation():
         assert np.isfinite(self.model.H_j).all()
         self._iter_count += 1
 
-    def _step(self, dt=None, **kwargs):
+    def _interpolate_inputs(self, dt=None, **kwargs):
         # Specify current timestamps
         t_next = self.t + dt
         # Import inputs
@@ -611,11 +611,16 @@ class Simulation():
                 Q_Ik_next = None
         else:
             Q_Ik_next = kwargs.pop('Q_Ik')
+        return Q_in_next, H_bc_next, Q_Ik_next
+
+    def _step(self, dt=None, **kwargs):
         # Infer if system is banded
         if not 'banded' in kwargs:
             banded = self.model.banded
         else:
             banded = kwargs.pop('banded')
+        # Get next sample
+        Q_in_next, H_bc_next, Q_Ik_next = self._interpolate_inputs(dt=dt, **kwargs)
         # Step model forward with stepsize dt
         self.Q_in_next = Q_in_next
         self.H_bc_next = H_bc_next

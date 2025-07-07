@@ -9,7 +9,7 @@ import pipedream_solver.geometry
 import pipedream_solver.storage
 import pipedream_solver.visualization
 from pipedream_solver.callbacks import BaseCallback
-from pipedream_solver.diagnostics import ConvergenceTracker
+from pipedream_solver.diagnostics import LegacyConvergenceTracker
 
 class SuperLink():
     """
@@ -774,7 +774,7 @@ class SuperLink():
         # Compute bandwidth
         self._compute_bandwidth()
         # Initialize to stable state
-        self.convergence_tracker = ConvergenceTracker(self)
+        self.convergence_tracker = LegacyConvergenceTracker(self)
         self.bind_callback(self.convergence_tracker, 'convergence_tracker')
         self.step(dt=1e-6, first_time=True)
         # Reset iteration counter
