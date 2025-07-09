@@ -3,6 +3,8 @@ import scipy.interpolate
 from numba import njit
 from numba.types import float64, int64, uint32, uint16, uint8, boolean, UniTuple, Tuple, List, DictType, void
 
+MIN_DEPTH = 1e-5
+
 geom_code = {
     'circular' : 1,
     'rect_closed' : 2,
@@ -36,8 +38,8 @@ def Circular_A_ik(h_ik, g1, g2):
     d = g1
     pslot = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > d:
         y = d
     r = d / 2
@@ -68,8 +70,8 @@ def Circular_Pe_ik(h_ik, g1, g2):
     d = g1
     pslot = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > d:
         y = d
     r = d / 2
@@ -122,8 +124,8 @@ def Circular_B_ik(h_ik, g1, g2):
     d = g1
     pslot = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     r = d / 2
     phi = y / r
     if phi < 0:
@@ -160,8 +162,8 @@ def Rect_Closed_A_ik(h_ik, g1, g2):
     y_max = g1
     b = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     A = y * b
@@ -187,8 +189,8 @@ def Rect_Closed_Pe_ik(h_ik, g1, g2):
     y_max = g1
     b = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     Pe = b + 2 * y
@@ -237,8 +239,8 @@ def Rect_Closed_B_ik(h_ik, g1, g2, g3):
     b = g2
     pslot = g3
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     cond = (y < y_max)
     if cond:
         B = b
@@ -267,8 +269,8 @@ def Rect_Open_A_ik(h_ik, g1, g2):
     y_max = g1
     b = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     A = y * b
@@ -294,8 +296,8 @@ def Rect_Open_Pe_ik(h_ik, g1, g2):
     y_max = g1
     b = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     Pe = b + 2 * y
@@ -363,8 +365,8 @@ def Triangular_A_ik(h_ik, g1, g2):
     y_max = g1
     m = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     A = m * y**2
@@ -390,8 +392,8 @@ def Triangular_Pe_ik(h_ik, g1, g2):
     y_max = g1
     m = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     Pe = 2 * y * np.sqrt(1 + m**2)
@@ -437,8 +439,8 @@ def Triangular_B_ik(h_ik, g1, g2):
     y_max = g1
     m = g2
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     cond = (y < y_max)
     if cond:
         B = 2 * m * y
@@ -470,8 +472,8 @@ def Trapezoidal_A_ik(h_ik, g1, g2, g3):
     b = g2
     m = g3
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     A = y * (b + m * y)
@@ -500,8 +502,8 @@ def Trapezoidal_Pe_ik(h_ik, g1, g2, g3):
     b = g2
     m = g3
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     Pe = b + 2 * y * np.sqrt(1 + m**2)
@@ -550,8 +552,8 @@ def Trapezoidal_B_ik(h_ik, g1, g2, g3):
     b = g2
     m = g3
     y = h_ik
-    if y < 0:
-        y = 0
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     cond = (y < y_max)
     if cond:
         B = b + 2 * m * y

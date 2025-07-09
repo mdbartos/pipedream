@@ -1380,8 +1380,9 @@ class nSuperLink(SuperLink):
         # TODO: Not sure what's happening here
         # H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
         # H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
-        H_j_next = np.maximum(H_j_next, _z_inv_j)
-        H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        # NOTE: Changed this while debugging
+        #H_j_next = np.maximum(H_j_next, _z_inv_j)
+        #H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
         # Export instance variables
         self.H_j = H_j_next
 
@@ -1417,7 +1418,7 @@ class nSuperLink(SuperLink):
         # TODO: Temporary
         assert np.isfinite(_h_Ik).all()
         # Ensure non-negative depths?
-        _h_Ik[_h_Ik < min_depth] = min_depth
+        #_h_Ik[_h_Ik < min_depth] = min_depth
         # _h_Ik[_h_Ik > junction_max_depth] = junction_max_depth
         # _h_Ik[_h_Ik > max_depth] = max_depth
         # Export instance variables
@@ -1454,7 +1455,7 @@ class nSuperLink(SuperLink):
                               _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
                               min_depth, max_depth_k, first_link_backwards=False)
         # Ensure non-negative depths?
-        _h_Ik[_h_Ik < min_depth] = min_depth
+        #_h_Ik[_h_Ik < min_depth] = min_depth
         # _h_Ik[_h_Ik > max_depth] = max_depth
         # Export instance variables
         self._h_Ik = _h_Ik
@@ -1503,7 +1504,7 @@ class nSuperLink(SuperLink):
         _h_Ik[_is_start] = _h_uk
         _h_Ik[_is_end] = _h_dk
         # Set min depth
-        _h_Ik[_h_Ik < min_depth] = min_depth
+        #_h_Ik[_h_Ik < min_depth] = min_depth
         # Solve for flows using new depths
         Q_ik_b, Q_ik_f = self.superlink_flow_from_recurrence()
         _Q_ik = (Q_ik_b + Q_ik_f) / 2

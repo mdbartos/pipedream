@@ -4210,12 +4210,22 @@ class SuperLink():
                                        head_tol=head_tol)
         if banded is None:
             banded = self.banded
-        self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                         first_time=first_time, implicit=implicit, banded=banded,
-                         first_iter=first_iter)
-        self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                         first_time=first_time, implicit=implicit, banded=banded,
-                         first_iter=first_iter)
+        try:
+            self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                            first_time=first_time, implicit=implicit, banded=banded,
+                            first_iter=first_iter)
+            self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                            first_time=first_time, implicit=implicit, banded=banded,
+                            first_iter=first_iter)
+        except:
+            self.load_state()
+            raise
+            #new_dt = dt / 2
+            #self.step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=new_dt,
+            #          first_time=first_time, implicit=implicit, banded=banded,
+            #          first_iter=first_iter, num_iter=num_iter, rtol=rtol, atol=atol,
+            #          head_tol=head_tol)
+
         first_iter = False
         num_iter -= 1
         self.iter_elapsed = 1

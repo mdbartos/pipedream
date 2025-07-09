@@ -5,6 +5,7 @@ from pipedream_solver.callbacks import BaseCallback
 class ErrorTracker(BaseCallback):
     def __init__(self, model):
         self.model = model
+        self.errors = {}
         self.continuity_error_j = np.zeros(model.M)
         self.continuity_error_Ik = np.zeros(model._I.size)
         self.momentum_error_ik = np.zeros(model._i.size)
@@ -13,8 +14,40 @@ class ErrorTracker(BaseCallback):
         self.momentum_error_o = np.zeros(model.n_o)
         self.momentum_error_w = np.zeros(model.n_w)
         self.momentum_error_p = np.zeros(model.n_p)
+        self.continuity_magnitude_j = np.zeros(model.M)
+        self.continuity_magnitude_Ik = np.zeros(model._I.size)
+        self.momentum_magnitude_ik = np.zeros(model._i.size)
+        self.momentum_magnitude_uk = np.zeros(model.NK)
+        self.momentum_magnitude_dk = np.zeros(model.NK)
+        self.momentum_magnitude_o = np.zeros(model.n_o)
+        self.momentum_magnitude_w = np.zeros(model.n_w)
+        self.momentum_magnitude_p = np.zeros(model.n_p)
 
-    def __on_step_end__(self, *args, **kwargs):
+    @property
+    def continuity_error(self):
+        return np.concatenate([self.continuity_error_j, self.continuity_error_Ik])
+
+    @property
+    def momentum_error(self):
+        return np.concatenate([self.momentum_error_uk, self.momentum_error_dk,
+                               self.momentum_error_ik])
+
+    @property
+    def error(self):
+        return np.concatenate([self.continuity_error_j, self.momentum_error_uk,
+                               self.momentum_error_dk, self.continuity_error_Ik,
+                               self.momentum_error_ik])
+    @property
+    def magnitude(self):
+        return np.concatenate([self.continuity_magnitude_j, self.momentum_magnitude_uk,
+                               self.momentum_magnitude_dk, self.continuity_magnitude_Ik,
+                               self.momentum_magnitude_ik])
+
+    def _record_error(self, *args, **kwargs):
+        t = self.model.t
+        self.errors[t] = self.error
+        
+    def _compute_error(self, *args, **kwargs):
         model = self.model
         # TODO: This could cause problems, need to make sure this stays updated at each step
         dt = model._dt
@@ -26,7 +59,21 @@ class ErrorTracker(BaseCallback):
         #self.momentum_error_o = 
         #self.momentum_error_w = 
         #self.momentum_error_p = 
-        #self.error = error
+
+    def _compute_magnitudes(self, *args, **kwargs):
+        model = self.model
+        # TODO: This could cause problems, need to make sure this stays updated at each step
+        dt = model._dt
+        self.continuity_magnitude_j = continuity_magnitude_j(model, dt)
+        self.continuity_magnitude_Ik = continuity_magnitude_Ik(model, dt)
+        self.momentum_magnitude_uk = momentum_magnitude_uk(model, dt)
+        self.momentum_magnitude_dk = momentum_magnitude_dk(model, dt)
+        self.momentum_magnitude_ik = momentum_magnitude_ik(model, dt)
+
+    def __on_step_end__(self, *args, **kwargs):
+        self._compute_error(*args, **kwargs)
+        self._compute_magnitudes(*args, **kwargs)
+        #self._record_error(*args, **kwargs)
 
 class VolumeTracker(BaseCallback):
     def __init__(self, model):
@@ -103,12 +150,16 @@ class ConvergenceTracker(BaseCallback):
                     self.model.iter_count -= 1
                     self.model.t -= dt
                     self.prior_guess = self._compute_prior_guess()
-                    self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                        first_time=first_time, implicit=implicit, banded=banded,
-                                        first_iter=False)
-                    self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                        first_time=first_time, implicit=implicit, banded=banded,
-                                        first_iter=False)
+                    try:
+                        self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                            first_time=first_time, implicit=implicit, banded=banded,
+                                            first_iter=False)
+                        self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                            first_time=first_time, implicit=implicit, banded=banded,
+                                            first_iter=False)
+                    except:
+                        self.model.load_state()
+                        raise
                     self.next_guess = self._compute_next_guess()
                     iter_elapsed += 1
                     convergence_met = self._convergence_met(self.prior_guess, self.next_guess, rtol=rtol, atol=atol)
@@ -149,12 +200,16 @@ class LegacyConvergenceTracker(ConvergenceTracker):
                     self.model.iter_count -= 1
                     self.model.t -= dt
                     self.prior_guess = self._compute_prior_guess()
-                    self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                        first_time=first_time, implicit=implicit, banded=banded,
-                                        first_iter=False)
-                    self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                        first_time=first_time, implicit=implicit, banded=banded,
-                                        first_iter=False)
+                    try:
+                        self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                            first_time=first_time, implicit=implicit, banded=banded,
+                                            first_iter=False)
+                        self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                            first_time=first_time, implicit=implicit, banded=banded,
+                                            first_iter=False)
+                    except:
+                        self.model.load_state()
+                        raise
                     self.next_guess = self._compute_next_guess()
                     iter_elapsed += 1
                     convergence_met = self._convergence_met(self.prior_guess, self.next_guess, head_tol=head_tol)
@@ -182,9 +237,29 @@ def continuity_error_j(model, dt):
     np.add.at(error, model._J_up, model._Qp)
     np.subtract.at(error, model._J_dp, model._Qp)
     error -= Q_in
-    error -= Q_bc
-    #error[bc] = 0.
+    #error -= Q_bc
+    error[bc] = 0.
     return error
+
+def continuity_magnitude_j(model, dt):
+    mag = np.zeros(model.M)
+    H_j_next = model.H_j
+    H_j_prev = model.states['H_j']
+    mag += model.A_sj / dt
+    np.add.at(mag, model._J_uk, model._B_uk * model._dx_uk * model._theta_uk / 2 / dt)
+    np.add.at(mag, model._J_dk, model._B_dk * model._dx_dk * model._theta_dk / 2 / dt)
+    mag *= np.maximum(np.abs(H_j_next), np.abs(H_j_prev))
+    return mag
+
+def continuity_increment_j(model, dt):
+    inc = np.zeros(model.M)
+    H_j_next = model.H_j
+    H_j_prev = model.states['H_j']
+    inc += model.A_sj / dt
+    np.add.at(inc, model._J_uk, model._B_uk * model._dx_uk * model._theta_uk / 2 / dt)
+    np.add.at(inc, model._J_dk, model._B_dk * model._dx_dk * model._theta_dk / 2 / dt)
+    inc *= (H_j_next - H_j_prev)
+    return inc
 
 def momentum_error_uk(model, dt):
     error = np.zeros(model.NK)
@@ -216,6 +291,12 @@ def momentum_error_uk_2(model, dt):
     #error += 0.
     return error
 
+def momentum_magnitude_uk(model, dt):
+    Q_uk_next = model.Q_uk
+    Q_uk_prev = model.states['Q_uk']
+    mag = np.maximum(np.abs(Q_uk_next), np.abs(Q_uk_prev))
+    return mag
+
 def momentum_error_dk(model, dt):
     error = np.zeros(model.NK)
     g = 9.81
@@ -246,6 +327,12 @@ def momentum_error_dk_2(model, dt):
     #error += 0.
     return error
 
+def momentum_magnitude_dk(model, dt):
+    Q_dk_next = model.Q_dk
+    Q_dk_prev = model.states['Q_dk']
+    mag = np.maximum(np.abs(Q_dk_next), np.abs(Q_dk_prev))
+    return mag
+
 def momentum_error_o(model, dt):
     error = np.zeros(model.n_o)
     raise NotImplementedError
@@ -273,6 +360,12 @@ def continuity_error_Ik(model, dt):
     error[_I_internal] += model._Q_ik[model.forward_I_i[_I_internal]]
     return error
 
+def continuity_magnitude_Ik(model, dt):
+    h_Ik_next = model.h_Ik
+    h_Ik_prev = model.states['h_Ik']
+    mag = model._E_Ik * dt * np.maximum(np.abs(h_Ik_next), np.abs(h_Ik_prev))
+    return mag
+
 def momentum_error_ik(model, dt):
     error = np.zeros(model._i.size)
     _i_1k = model._i_1k
@@ -299,6 +392,12 @@ def momentum_error_ik(model, dt):
     error[_i_is_internal] += model._a_ik[_i_is_internal] * model.Q_ik[_im1]
     error[_i_is_internal] += model._c_ik[_i_is_internal] * model.Q_ik[_ip1]
     return error
+
+def momentum_magnitude_ik(model, dt):
+    Q_ik_next = model.Q_ik
+    Q_ik_prev = model.states['Q_ik']
+    mag = np.maximum(np.abs(Q_ik_next), np.abs(Q_ik_prev))
+    return mag
 
 def compute_error(model, dt):
     error_j = continuity_error_j(model, dt)

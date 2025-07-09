@@ -3,6 +3,8 @@ from numba import njit, prange
 from numba.types import float64, int64, uint32, uint16, uint8, boolean, UniTuple, Tuple, List, DictType, void
 import pipedream_solver.ngeometry
 
+SMALLEST_NORMAL = np.finfo(np.float64).smallest_normal
+
 MIN_SJ_AREA = 1e-8
 
 CIRCULAR = 1
@@ -410,7 +412,7 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
     Compute link coefficient 'b' for link i, superlink k.
     """
     # TODO: Clean up
-    t_0 = (dx_ik / dt) * sigma_ik
+    t_0 = (dx_ik / dt)
     t_1 = np.zeros(Q_ik_t.size)
     k = len(Sf_method_ik)
     for n in range(k):
@@ -419,8 +421,8 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
     t_2 = np.zeros(ctrl.size)
     cond = ctrl
     t_2[cond] = C_ik[cond] * A_ik[cond] * np.abs(Q_ik_t[cond]) / A_c_ik[cond]**2
-    t_3 = a_ik
-    t_4 = c_ik
+    t_3 = a_ik * sigma_ik
+    t_4 = c_ik * sigma_ik
     return t_0 + t_1 + t_2 - t_3 - t_4
 
 @njit(float64[:](float64[:], float64[:], float64, float64[:], float64[:], float64[:], float64),
@@ -491,18 +493,20 @@ def numba_node_coeffs(_D_Ik, _E_Ik, _Q_0Ik, _B_ik, _h_Ik, _dx_ik, _A_SIk,
 @njit(float64(float64, float64),
       cache=True)
 def safe_divide(num, den):
-    if (den == 0):
-        return 0
-    else:
-        return num / den
+    #if (den == 0):
+    #    return 0
+    #else:
+    #    return num / den
+    return (num + SMALLEST_NORMAL) / (den + SMALLEST_NORMAL)
 
 @njit(float64[:](float64[:], float64[:]),
       cache=True)
 def safe_divide_vec(num, den):
-    result = np.zeros_like(num)
-    cond = (den != 0)
-    result[cond] = num[cond] / den[cond]
-    return result
+    #result = np.zeros_like(num)
+    #cond = (den != 0)
+    #result[cond] = num[cond] / den[cond]
+    #return result
+    return (num + SMALLEST_NORMAL) / (den + SMALLEST_NORMAL)
 
 @njit(float64(float64, float64, float64, float64, float64),
       cache=True)
@@ -556,10 +560,10 @@ def numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
             i = i_n - j
             _Q_ik[i] = Q_i_f(_h_Ik[Ip1], _h_1k, _U_Ik[I], _V_Ik[I], _W_Ik[I])
             _h_Ik[I] = h_i_b(_Q_ik[i], _h_Np1k, _X_Ik[I], _Y_Ik[I], _Z_Ik[I])
-            if _h_Ik[I] < min_depth:
-                _h_Ik[I] = min_depth
-            if _h_Ik[I] > max_depth:
-                _h_Ik[I] = max_depth
+            #if _h_Ik[I] < min_depth:
+            #    _h_Ik[I] = min_depth
+            #if _h_Ik[I] > max_depth:
+            #    _h_Ik[I] = max_depth
         if first_link_backwards:
             _Q_ik[i_1] = Q_i_b(_h_Ik[I_1], _h_Np1k, _X_Ik[I_1], _Y_Ik[I_1],
                             _Z_Ik[I_1])
