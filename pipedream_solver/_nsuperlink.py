@@ -573,6 +573,56 @@ def numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
                             _W_Ik[I_1])
     return 1
 
+
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+            float64[:], float64[:], float64[:], int64[:], int64[:], int64[:], int64,
+            float64, float64[:], boolean),
+      cache=True)
+def numba_solve_internals_matrix(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
+                          _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
+                          min_depth, max_depth_k, first_link_backwards=True):
+    for k in range(NK):
+        n = nk[k]
+        i_1 = _i_1k[k]
+        I_1 = _I_1k[k]
+        i_n = i_1 + n - 1
+        I_2 = I_1 + 1
+        I_Np1 = I_1 + n
+        I_N = I_Np1 - 1
+        # Set boundary depths
+        _h_1k = _h_uk[k]
+        _h_Np1k = _h_dk[k]
+        _h_Ik[I_1] = _h_1k
+        _h_Ik[I_Np1] = _h_Np1k
+        # Set up matrix
+        dim = 2 * n - 1
+        A = np.zeros((dim, dim))
+        b = np.zeros(dim)
+        # Fill linear system
+        #### h indices
+        for j, i in enumerate(range(1, dim, 2)):
+            A[i, i] = -_X_Ik[I_2+j]
+            A[i, i+1] = 1.
+            b[i] = _Y_Ik[I_2+j] + _h_Np1k * _Z_Ik[I_2+j]
+        #### Q indices
+        for j, i in enumerate(range(2, dim, 2)):
+            A[i, i] = 1.
+            if i < dim - 1:
+                A[i, i+1] = -_U_Ik[I_2+j]
+            b[i] = _V_Ik[I_2+j] + _h_1k * _W_Ik[I_2+j]
+        #### Other indices
+        A[0 ,0] = 1.
+        A[0, 1] = -_X_Ik[I_1]
+        b[0] = _Y_Ik[I_1] + _h_Np1k * _Z_Ik[I_1]
+        b[-1] += _h_1k * _U_Ik[I_N]
+        # Solve linear system
+        x = np.linalg.solve(A, b)
+        # Write to output arrays
+        _Q_ik[i_1:i_1+n] = x[::2]
+        _h_Ik[I_2:I_2+n-1] = x[1::2]
+    return 1
+
+
 @njit(float64[:](float64[:], int64, int64[:], int64[:], int64[:], int64[:], float64[:], float64[:], float64[:]),
       cache=True)
 def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
@@ -610,13 +660,45 @@ def numba_u_ik(_Q_ik, _A_ik, _u_ik):
             _u_ik[i] = 0
     return _u_ik
 
-@njit(float64[:](float64[:], float64[:], boolean[:], float64[:]),
+@njit(float64[:](float64[:], float64[:], float64[:]),
       cache=True)
-def numba_u_Ik(_dx_ik, _u_ik, _link_start, _u_Ik):
+def numba_u_uk(_Q_uk, _A_uk, _u_uk):
+    n = _u_uk.size
+    for i in range(n):
+        _Q_u = _Q_uk[i]
+        _A_u = _A_uk[i]
+        if _A_u:
+            _u_uk[i] = _Q_u / _A_u
+        else:
+            _u_uk[i] = 0
+    return _u_uk
+
+@njit(float64[:](float64[:], float64[:], float64[:]),
+      cache=True)
+def numba_u_dk(_Q_dk, _A_dk, _u_dk):
+    n = _u_dk.size
+    for i in range(n):
+        _Q_d = _Q_dk[i]
+        _A_d = _A_dk[i]
+        if _A_d:
+            _u_dk[i] = _Q_d / _A_d
+        else:
+            _u_dk[i] = 0
+    return _u_dk
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], boolean[:], int64[:], float64[:]),
+      cache=True)
+def numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik):
     n = _u_Ik.size
     for i in range(n):
+        k = _ki[i]
         if _link_start[i]:
-            _u_Ik[i] = _u_ik[i]
+            num = _dx_ik[i] * _u_uk[k] + _dx_uk[k] * _u_ik[i]
+            den = _dx_ik[i] + _dx_uk[k]
+            if den:
+                _u_Ik[i] = num / den
+            else:
+                _u_Ik[i] = 0.
         else:
             im1 = i - 1
             num = _dx_ik[i] * _u_ik[im1] + _dx_ik[im1] * _u_ik[i]
@@ -624,16 +706,22 @@ def numba_u_Ik(_dx_ik, _u_ik, _link_start, _u_Ik):
             if den:
                 _u_Ik[i] = num / den
             else:
-                _u_Ik[i] = 0
+                _u_Ik[i] = 0.
     return _u_Ik
 
-@njit(float64[:](float64[:], float64[:], boolean[:], float64[:]),
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], boolean[:], int64[:], float64[:]),
       cache=True)
-def numba_u_Ip1k(_dx_ik, _u_ik, _link_end, _u_Ip1k):
+def numba_u_Ip1k(_dx_ik, _u_ik, _dx_dk, _u_dk, _link_end, _ki, _u_Ip1k):
     n = _u_Ip1k.size
     for i in range(n):
+        k = _ki[i]
         if _link_end[i]:
-            _u_Ip1k[i] = _u_ik[i]
+            num = _dx_ik[i] * _u_dk[k] + _dx_dk[k] * _u_ik[i]
+            den = _dx_ik[i] + _dx_dk[k]
+            if den:
+                _u_Ip1k[i] = num / den
+            else:
+                _u_Ip1k[i] = 0.
         else:
             ip1 = i + 1
             num = _dx_ik[i] * _u_ik[ip1] + _dx_ik[ip1] * _u_ik[i]
@@ -641,7 +729,7 @@ def numba_u_Ip1k(_dx_ik, _u_ik, _link_end, _u_Ip1k):
             if den:
                 _u_Ip1k[i] = num / den
             else:
-                _u_Ip1k[i] = 0
+                _u_Ip1k[i] = 0.
     return _u_Ip1k
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],

@@ -708,18 +708,32 @@ class nSuperLink(SuperLink):
         _u_ik = self._u_ik
         _u_Ik = self._u_Ik                   # Flow velocity at junction Ik
         _u_Ip1k = self._u_Ip1k               # Flow velocity at junction I + 1k
+        _Q_uk = self._Q_uk
+        _Q_dk = self._Q_dk
+        _A_uk = self._A_uk
+        _A_dk = self._A_dk
+        _u_uk = self._u_uk
+        _u_dk = self._u_dk
         _dx_ik = self._dx_ik                 # Length of link ik
+        _dx_uk = self._dx_uk
+        _dx_dk = self._dx_dk
+        _ki = self._ki
         _link_start = self._link_start
         _link_end = self._link_end
         # Determine start and end nodes
         # Compute link velocities
         numba_u_ik(_Q_ik, _A_ik, _u_ik)
+        # Compute boundary velocities
+        numba_u_uk(_Q_uk, _A_uk, _u_uk)
+        numba_u_dk(_Q_dk, _A_dk, _u_dk)
         # Compute velocities for start nodes (1 -> Nk)
-        numba_u_Ik(_dx_ik, _u_ik, _link_start, _u_Ik)
+        numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik)
         # Compute velocities for end nodes (2 -> Nk+1)
-        numba_u_Ip1k(_dx_ik, _u_ik, _link_end, _u_Ip1k)
+        numba_u_Ip1k(_dx_ik, _u_ik, _dx_dk, _u_dk, _link_end, _ki, _u_Ip1k)
         # Export to instance variables
         self._u_ik = _u_ik
+        self._u_uk = _u_uk
+        self._u_dk = _u_dk
         self._u_Ik = _u_Ik
         self._u_Ip1k = _u_Ip1k
 
@@ -1131,7 +1145,7 @@ class nSuperLink(SuperLink):
         self._beta_p = _beta_p
         self._chi_p = _chi_p
 
-    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, _Q_bc=None, u=None, _dt=None, implicit=True,
+    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
         """
         Construct sparse matrices A, O, W, P and b.
@@ -1215,8 +1229,6 @@ class nSuperLink(SuperLink):
         # If no flow input specified, assume zero external inflow
         if _Q_0j is None:
             _Q_0j = 0
-        if _Q_bc is None:
-            _Q_bc = 0
         # If no control input signal specified assume zero input
         if u is None:
             u = 0
@@ -1284,7 +1296,7 @@ class nSuperLink(SuperLink):
             numba_add_at(D, _J_dp, _chi_dp)
         b.fill(0)
         # TODO: Which A_sj? Might need to apply product rule here.
-        b = (_A_sj * H_j_prev / _dt) + _Q_0j + _Q_bc + D
+        b = (_A_sj * H_j_prev / _dt) + _Q_0j + D
         # Ensure boundary condition is specified
         b[bc] = H_bc[bc]
         # Export instance variables

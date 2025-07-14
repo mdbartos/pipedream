@@ -3,7 +3,10 @@ from pipedream_solver._nsuperlink import numba_compute_functional_storage_volume
 from pipedream_solver.callbacks import BaseCallback
 
 class ErrorTracker(BaseCallback):
-    def __init__(self, model):
+    """
+    Tracks the error between the left-hand and right-hand side of each equation
+    """
+    def __init__(self, model, rtol=1e-1, atol=1e-10):
         self.model = model
         self.errors = {}
         self.continuity_error_j = np.zeros(model.M)
@@ -22,6 +25,8 @@ class ErrorTracker(BaseCallback):
         self.momentum_magnitude_o = np.zeros(model.n_o)
         self.momentum_magnitude_w = np.zeros(model.n_w)
         self.momentum_magnitude_p = np.zeros(model.n_p)
+        self.rtol = rtol
+        self.atol = atol
 
     @property
     def continuity_error(self):
@@ -43,6 +48,23 @@ class ErrorTracker(BaseCallback):
                                self.momentum_magnitude_dk, self.continuity_magnitude_Ik,
                                self.momentum_magnitude_ik])
 
+    @property
+    def error_metric(self):
+        rtol = self.rtol
+        atol = self.atol
+        dt = self.model._dt
+        e = np.abs(self.error) * dt
+        # TODO: Is maximum correct here?
+        ewt = np.maximum(rtol * np.abs(self.magnitude), atol)
+        metric = (e / ewt).max()
+        return metric
+
+    @property
+    def success(self):
+        error_metric = self.error_metric
+        condition = error_metric <= 1.
+        return condition
+    
     def _record_error(self, *args, **kwargs):
         t = self.model.t
         self.errors[t] = self.error
@@ -73,7 +95,18 @@ class ErrorTracker(BaseCallback):
     def __on_step_end__(self, *args, **kwargs):
         self._compute_error(*args, **kwargs)
         self._compute_magnitudes(*args, **kwargs)
-        #self._record_error(*args, **kwargs)
+
+
+class ConditionTracker(BaseCallback):
+    def __init__(self, model):
+        self.model = model
+
+    def _superlink_condition_number(self):
+        model = self.model
+        singular_values = (model._X_Ik[model._Ik])**2
+        max_singular_value = max(1., singular_values.max())
+        min_singular_value = min(1., singular_values.min())
+        condition_number = max_singular_value / min_singular_value
 
 class VolumeTracker(BaseCallback):
     def __init__(self, model):
@@ -103,6 +136,7 @@ class VolumeTracker(BaseCallback):
         self.volume_flux_Ik = volume_flux_Ik(Q_0Ik, dt)
         self.cumulative_vol_flux_j += self.volume_flux_j
         self.cumulative_vol_flux_Ik += self.volume_flux_Ik
+
 
 class ConvergenceTracker(BaseCallback):
     def __init__(self, model, rtol=1e-5, atol=1e-8):
@@ -218,6 +252,9 @@ class LegacyConvergenceTracker(ConvergenceTracker):
         self.model.iter_elapsed = iter_elapsed 
 
 def continuity_error_j(model, dt):
+    """
+    err = [A_sj (dH_j / dt) + Q_dk - Q_uk] - [Q_in] 
+    """
     error = np.zeros(model.M)
     H_j_next = model.H_j
     H_j_prev = model.states['H_j']
@@ -346,6 +383,9 @@ def momentum_error_p(model, dt):
     raise NotImplementedError
 
 def continuity_error_Ik(model, dt):
+    """
+    err = [E_Ik h_Ik - Q_im1k + Q_ik] - [D_Ik] 
+    """
     error = np.zeros(model._I.size)
     h_Ik_next = model.h_Ik
     h_Ik_prev = model.states['h_Ik']

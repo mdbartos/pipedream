@@ -734,6 +734,9 @@ class SuperLink():
         self._Pe_dk = np.copy(self._Pe_ik[self._i_nk])
         self._R_uk = np.copy(self._R_ik[self._i_1k])
         self._R_dk = np.copy(self._R_ik[self._i_nk])
+        # End velocities
+        self._u_uk = np.copy(self._u_ik[self._i_1k])
+        self._u_dk = np.copy(self._u_ik[self._i_nk])
         # End slopes
         cond_uk = (self._dx_uk > 0.)
         cond_dk = (self._dx_uk > 0.)
@@ -934,10 +937,22 @@ class SuperLink():
         self._x_Ik = np.asarray(value)
 
     @property
-    def state_vector(self):
+    def state_vector_prior(self):
+        vec = np.concatenate([self.states['H_j'], self.states['Q_uk'],
+                              self.states['Q_dk'], self.states['Q_o'],
+                              self.states['Q_w'], self.states['Q_p'], 
+                              self.states['h_Ik'], self.states['Q_ik']])
+        return vec
+
+    @property
+    def state_vector_next(self):
         vec = np.concatenate([self.H_j, self.Q_uk, self.Q_dk, self.Q_o, self.Q_w, self.Q_p, 
                               self.h_Ik, self.Q_ik])
         return vec
+
+    @property
+    def state_vector(self):
+        return self.state_vector_next
 
     @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
@@ -2684,7 +2699,7 @@ class SuperLink():
         self._beta_p = _beta_p
         self._chi_p = _chi_p
 
-    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, _Q_bc=None, u=None, _dt=None, implicit=True,
+    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
                                 first_time=False):
         """
         Construct sparse matrices A, O, W, P and b.
@@ -3586,6 +3601,7 @@ class SuperLink():
         _Q_bc[self._J_up] += _Q_p
         _Q_bc[self._J_dp] -= _Q_p
         _Q_bc[~bc] = 0.
+        self._Q_bc = _Q_bc
 
     def exit_conditions(self):
         """
@@ -3975,13 +3991,10 @@ class SuperLink():
         self.states['Q_uk'] = np.copy(self.Q_uk)
         self.states['Q_dk'] = np.copy(self.Q_dk)
         self.states['x_Ik'] = np.copy(self.x_Ik)
-        if self.n_o:
-            self.states['Q_o'] = np.copy(self.Q_o)
-            # TODO: Need to add orifice area here
-        if self.n_w:
-            self.states['Q_w'] = np.copy(self.Q_w)
-        if self.n_p:
-            self.states['Q_p'] = np.copy(self.Q_p)
+        self.states['Q_o'] = np.copy(self.Q_o)
+        # TODO: Need to add orifice area here
+        self.states['Q_w'] = np.copy(self.Q_w)
+        self.states['Q_p'] = np.copy(self.Q_p)
         self.states['A_ik'] = np.copy(self.A_ik)
         self.states['A_uk'] = np.copy(self.A_uk)
         self.states['A_dk'] = np.copy(self.A_dk)
@@ -4084,7 +4097,7 @@ class SuperLink():
     def unbind_callback(self, key):
         return self.callbacks.pop(key)
 
-    def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, Q_bc=None, u_o=None, u_w=None, u_p=None, dt=None,
+    def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         if first_iter:
             self.save_state()
@@ -4096,10 +4109,6 @@ class SuperLink():
             self._Q_in = np.zeros(self.M, dtype=np.float64)
         else:
             self._Q_in = Q_in
-        if Q_bc is None:
-            self._Q_bc = np.zeros(self.M, dtype=np.float64)
-        else:
-            self._Q_bc = Q_bc
         if Q_0Ik is None:
             self._Q_0Ik = np.zeros(self._I.size, dtype=np.float64)
         else:
@@ -4131,7 +4140,7 @@ class SuperLink():
             self.weir_flow_coefficients(u=u_w)
         if self.pumps is not None:
             self.pump_flow_coefficients(u=u_p)
-        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in, _Q_bc=Q_bc,
+        self.sparse_matrix_equations(H_bc=H_bc, _Q_0j=Q_in,
                                      first_time=first_time, _dt=dt,
                                      implicit=implicit)
 
@@ -4220,11 +4229,6 @@ class SuperLink():
         except:
             self.load_state()
             raise
-            #new_dt = dt / 2
-            #self.step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=new_dt,
-            #          first_time=first_time, implicit=implicit, banded=banded,
-            #          first_iter=first_iter, num_iter=num_iter, rtol=rtol, atol=atol,
-            #          head_tol=head_tol)
 
         first_iter = False
         num_iter -= 1
