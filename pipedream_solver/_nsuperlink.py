@@ -420,7 +420,7 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
                                 n_ik[n], Sf_method_ik[n], g)
     t_2 = np.zeros(ctrl.size)
     cond = ctrl
-    t_2[cond] = C_ik[cond] * A_ik[cond] * np.abs(Q_ik_t[cond]) / A_c_ik[cond]**2
+    t_2[cond] = C_ik[cond] * np.abs(Q_ik_t[cond]) / 2 / g / A_c_ik[cond]**2
     t_3 = a_ik * sigma_ik
     t_4 = c_ik * sigma_ik
     return t_0 + t_1 + t_2 - t_3 - t_4

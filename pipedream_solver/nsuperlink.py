@@ -755,9 +755,35 @@ class nSuperLink(SuperLink):
         _A_c_ik = self._A_c_ik     # Area of control structure at link ik
         _C_ik = self._C_ik         # Discharge coefficient of control structure at link ik
         _ctrl = self._ctrl         # Control structure exists at link ik (y/n)
-        inertial_damping = self.inertial_damping    # Use inertial damping (y/n)
         _sigma_ik = self._sigma_ik  # Inertial damping coefficient
+        NK = self.NK
         g = 9.81
+        # Upstream parameters
+        _link_start = self._link_start
+        _n_uk = self._n_uk
+        _Q_uk_next = self._Q_uk
+        _Q_uk_prev = self.states['Q_uk']
+        _A_uk = self._A_uk
+        _R_uk = self._R_uk
+        _dx_uk = self._dx_uk
+        _Sf_method_uk = self._Sf_method_uk
+        _C_uk = self._C_uk
+        _S_o_uk = self._S_o_uk
+        _theta_uk = self._theta_uk
+        _z_inv_uk = self._z_inv_uk
+        # Downstream parameters
+        _link_end = self._link_end
+        _n_dk = self._n_dk
+        _Q_dk_next = self._Q_dk
+        _Q_dk_prev = self.states['Q_dk']
+        _A_dk = self._A_dk
+        _R_dk = self._R_dk
+        _dx_dk = self._dx_dk
+        _Sf_method_dk = self._Sf_method_dk
+        _C_dk = self._C_dk
+        _S_o_dk = self._S_o_dk
+        _theta_dk = self._theta_dk
+        _z_inv_dk = self._z_inv_dk
         # If time step not specified, use instance time
         if _dt is None:
             _dt = self._dt
@@ -768,11 +794,37 @@ class nSuperLink(SuperLink):
                            _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik, _Sf_method_ik, g)
         _P_ik = numba_P_ik(_Q_ik_prev, _dx_ik, _dt, _A_ik, _S_o_ik,
                            _sigma_ik, g)
+        # Compute momentum coefficients for upstream boundary
+        _ctrl_uk = np.ones(NK, dtype=np.bool_)
+        _sigma_uk = _sigma_ik[_link_start]
+        _a_uk = np.zeros(NK, dtype=np.float64)
+        _c_uk = numba_c_ik(_u_Ik[_link_start], _sigma_uk)
+        _b_uk = numba_b_ik(_dx_uk, _dt, _n_uk, _Q_uk_next, _A_uk, _R_uk, _A_uk,
+                           _C_uk, _a_uk, _c_uk, _ctrl_uk , _sigma_uk, _Sf_method_uk, g)
+        _P_uk = numba_P_ik(_Q_uk_prev, _dx_uk, _dt, _A_uk, _S_o_uk, _sigma_uk, g)
+        _P_uk -= g * _A_uk * _theta_uk * _z_inv_uk
+        # Compute momentum coefficients for downstream boundary
+        _ctrl_dk = np.ones(NK, dtype=np.bool_)
+        _sigma_dk = _sigma_ik[_link_end]
+        _a_dk = numba_a_ik(_u_Ip1k[_link_end], _sigma_dk)
+        _c_dk = np.zeros(NK, dtype=np.float64)
+        _b_dk = numba_b_ik(_dx_dk, _dt, _n_dk, _Q_dk_next, _A_dk, _R_dk, _A_dk,
+                           _C_dk, _a_dk, _c_dk, _ctrl_dk , _sigma_dk, _Sf_method_dk, g)
+        _P_dk = numba_P_ik(_Q_dk_prev, _dx_dk, _dt, _A_dk, _S_o_dk, _sigma_dk, g)
+        _P_dk += g * _A_dk * _theta_dk * _z_inv_dk
         # Export to instance variables
         self._a_ik = _a_ik
         self._b_ik = _b_ik
         self._c_ik = _c_ik
         self._P_ik = _P_ik
+        self._a_uk = _a_uk
+        self._b_uk = _b_uk
+        self._c_uk = _c_uk
+        self._P_uk = _P_uk
+        self._a_dk = _a_dk
+        self._b_dk = _b_dk
+        self._c_dk = _c_dk
+        self._P_dk = _P_dk
 
     def node_coeffs(self, _Q_0Ik=None, _dt=None, first_iter=True):
         """
