@@ -76,8 +76,8 @@ class ErrorTracker(BaseCallback):
         self.continuity_error_j = continuity_error_j(model, dt)
         self.continuity_error_Ik = continuity_error_Ik(model, dt)
         self.momentum_error_ik = momentum_error_ik(model, dt)
-        self.momentum_error_uk = momentum_error_uk(model, dt)
-        self.momentum_error_dk = momentum_error_dk(model, dt)
+        self.momentum_error_uk = momentum_error_uk_2(model, dt)
+        self.momentum_error_dk = momentum_error_dk_2(model, dt)
         #self.momentum_error_o = 
         #self.momentum_error_w = 
         #self.momentum_error_p = 
@@ -315,17 +315,17 @@ def momentum_error_uk(model, dt):
 def momentum_error_uk_2(model, dt):
     error = np.zeros(model.NK)
     g = 9.81
+    Q_1k_next = model.Q_ik[model._i_1k]
     Q_uk_next = model.Q_uk
-    Q_uk_prev = model.states['Q_uk']
     h_uk_next = model._h_uk
     H_juk_next = model.H_j[model._J_uk]
-    z_inv_uk = model._z_inv_uk
-    theta_uk = model._theta_uk
-    error += (Q_uk_next - Q_uk_prev) * model._dx_uk / dt
-    error += g * model._A_uk * (h_uk_next - theta_uk * (H_juk_next - z_inv_uk))
-    error -= g * model._A_uk * model._dx_uk * model._S_o_uk
-    # Friction and local losses
-    #error += 0.
+    b_uk = model._b_uk
+    c_uk = model._c_uk
+    P_uk = model._P_uk
+    A_uk = model._A_uk
+    LHS = b_uk * Q_uk_next + c_uk * Q_1k_next
+    RHS = P_uk + g * A_uk * (H_juk_next - h_uk_next)
+    error = LHS - RHS
     return error
 
 def momentum_magnitude_uk(model, dt):
@@ -352,16 +352,17 @@ def momentum_error_dk_2(model, dt):
     error = np.zeros(model.NK)
     g = 9.81
     Q_dk_next = model.Q_dk
-    Q_dk_prev = model.states['Q_dk']
+    Q_nk_next = model.Q_ik[model._i_nk]
     h_dk_next = model._h_dk
     H_jdk_next = model.H_j[model._J_dk]
-    z_inv_dk = model._z_inv_dk
-    theta_dk = model._theta_dk
-    error += (Q_dk_next - Q_dk_prev) * model._dx_dk / dt
-    error += g * model._A_dk * (theta_dk * (H_jdk_next - z_inv_dk) - h_dk_next)
-    error -= g * model._A_dk * model._dx_dk * model._S_o_dk
+    b_dk = model._b_dk
+    a_dk = model._a_dk
+    A_dk = model._A_dk
+    P_dk = model._P_dk
     # Friction and local losses
-    #error += 0.
+    LHS = b_dk * Q_dk_next + a_dk * Q_nk_next
+    RHS = P_dk + g * A_dk * (h_dk_next - H_jdk_next)
+    error = LHS - RHS
     return error
 
 def momentum_magnitude_dk(model, dt):

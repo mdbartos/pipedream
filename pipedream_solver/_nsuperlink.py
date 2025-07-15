@@ -734,7 +734,7 @@ def numba_u_Ip1k(_dx_ik, _u_ik, _dx_dk, _u_dk, _link_end, _ki, _u_Ip1k):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
                  int64[:], float64, float64), cache=True)
-def kappa_uk(Q_uk, dx_uk, A_uk, C_uk, R_uk, n_uk, Sf_method_uk, dt, g=9.81):
+def kappa_uk_old(Q_uk, dx_uk, A_uk, C_uk, R_uk, n_uk, Sf_method_uk, dt, g=9.81):
     """
     Compute boundary coefficient 'kappa' for upstream end of superlink k.
     """
@@ -749,7 +749,7 @@ def kappa_uk(Q_uk, dx_uk, A_uk, C_uk, R_uk, n_uk, Sf_method_uk, dt, g=9.81):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
                  int64[:], float64, float64), cache=True)
-def kappa_dk(Q_dk, dx_dk, A_dk, C_dk, R_dk, n_dk, Sf_method_dk, dt, g=9.81):
+def kappa_dk_old(Q_dk, dx_dk, A_dk, C_dk, R_dk, n_dk, Sf_method_dk, dt, g=9.81):
     """
     Compute boundary coefficient 'kappa' for downstream end of superlink k.
     """
@@ -764,7 +764,7 @@ def kappa_dk(Q_dk, dx_dk, A_dk, C_dk, R_dk, n_dk, Sf_method_dk, dt, g=9.81):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:],
                  float64[:], float64, float64), cache=True)
-def mu_uk(Q_uk_t, dx_uk, A_uk, theta_uk, z_inv_uk, S_o_uk, dt, g=9.81):
+def mu_uk_old(Q_uk_t, dx_uk, A_uk, theta_uk, z_inv_uk, S_o_uk, dt, g=9.81):
     """
     Compute boundary coefficient 'mu' for upstream end of superlink k.
     """
@@ -775,7 +775,7 @@ def mu_uk(Q_uk_t, dx_uk, A_uk, theta_uk, z_inv_uk, S_o_uk, dt, g=9.81):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:],
                  float64[:], float64, float64), cache=True)
-def mu_dk(Q_dk_t, dx_dk, A_dk, theta_dk, z_inv_dk, S_o_dk, dt, g=9.81):
+def mu_dk_old(Q_dk_t, dx_dk, A_dk, theta_dk, z_inv_dk, S_o_dk, dt, g=9.81):
     """
     Compute boundary coefficient 'mu' for downstream end of superlink k.
     """
@@ -974,7 +974,7 @@ def O_ik(a_ik, b_ik, c_ik, A_ik, E_Ip1k, X_Ip1k, g=9.81):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_D_k_star(X_1k, kappa_uk, U_Nk, kappa_dk, Z_1k, W_Nk):
+def numba_D_k_star_old(X_1k, kappa_uk, U_Nk, kappa_dk, Z_1k, W_Nk):
     """
     Compute superlink boundary condition coefficient 'D_k_star'.
     """
@@ -985,7 +985,7 @@ def numba_D_k_star(X_1k, kappa_uk, U_Nk, kappa_dk, Z_1k, W_Nk):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_alpha_uk(U_Nk, kappa_dk, X_1k, Z_1k, W_Nk, D_k_star, lambda_uk):
+def numba_alpha_uk_old(U_Nk, kappa_dk, X_1k, Z_1k, W_Nk, D_k_star, lambda_uk):
     """
     Compute superlink boundary condition coefficient 'alpha' for upstream end
     of superlink k.
@@ -997,7 +997,7 @@ def numba_alpha_uk(U_Nk, kappa_dk, X_1k, Z_1k, W_Nk, D_k_star, lambda_uk):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_beta_uk(U_Nk, kappa_dk, Z_1k, W_Nk, D_k_star, lambda_dk):
+def numba_beta_uk_old(U_Nk, kappa_dk, Z_1k, W_Nk, D_k_star, lambda_dk):
     """
     Compute superlink boundary condition coefficient 'beta' for upstream end
     of superlink k.
@@ -1010,7 +1010,7 @@ def numba_beta_uk(U_Nk, kappa_dk, Z_1k, W_Nk, D_k_star, lambda_dk):
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
                  float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_chi_uk(U_Nk, kappa_dk, Y_1k, X_1k, mu_uk, Z_1k,
+def numba_chi_uk_old(U_Nk, kappa_dk, Y_1k, X_1k, mu_uk, Z_1k,
                  mu_dk, V_Nk, W_Nk, D_k_star):
     """
     Compute superlink boundary condition coefficient 'chi' for upstream end
@@ -1025,7 +1025,7 @@ def numba_chi_uk(U_Nk, kappa_dk, Y_1k, X_1k, mu_uk, Z_1k,
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_alpha_dk(X_1k, kappa_uk, W_Nk, D_k_star, lambda_uk):
+def numba_alpha_dk_old(X_1k, kappa_uk, W_Nk, D_k_star, lambda_uk):
     """
     Compute superlink boundary condition coefficient 'alpha' for downstream end
     of superlink k.
@@ -1037,7 +1037,7 @@ def numba_alpha_dk(X_1k, kappa_uk, W_Nk, D_k_star, lambda_uk):
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_beta_dk(X_1k, kappa_uk, U_Nk, W_Nk, Z_1k, D_k_star, lambda_dk):
+def numba_beta_dk_old(X_1k, kappa_uk, U_Nk, W_Nk, Z_1k, D_k_star, lambda_dk):
     """
     Compute superlink boundary condition coefficient 'beta' for downstream end
     of superlink k.
@@ -1050,7 +1050,7 @@ def numba_beta_dk(X_1k, kappa_uk, U_Nk, W_Nk, Z_1k, D_k_star, lambda_dk):
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
                  float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_chi_dk(X_1k, kappa_uk, V_Nk, W_Nk, mu_uk, U_Nk,
+def numba_chi_dk_old(X_1k, kappa_uk, V_Nk, W_Nk, mu_uk, U_Nk,
                     mu_dk, Y_1k, Z_1k, D_k_star):
     """
     Compute superlink boundary condition coefficient 'chi' for downstream end

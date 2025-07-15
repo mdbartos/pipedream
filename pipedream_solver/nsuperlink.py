@@ -915,7 +915,132 @@ class nSuperLink(SuperLink):
         self._Y_Ik = _Y_Ik
         self._Z_Ik = _Z_Ik
 
+    def superlink_boundary_depth_coefficients(self, _dt=None):
+        _U_Ik = self._U_Ik                # Recurrence coefficient U_Ik
+        _V_Ik = self._V_Ik                # Recurrence coefficient V_Ik
+        _W_Ik = self._W_Ik                # Recurrence coefficient W_Ik
+        _X_Ik = self._X_Ik                # Recurrence coefficient X_Ik
+        _Y_Ik = self._Y_Ik                # Recurrence coefficient Y_Ik
+        _Z_Ik = self._Z_Ik                # Recurrence coefficient Z_Ik
+        _E_Ik = self._E_Ik
+        _D_Ik = self._D_Ik
+        _I_1k = self._I_1k
+        _I_Nk = self._I_Nk
+        _I_Np1k = self._I_Np1k
+        # Get boundary coefficients
+        U_Nk = _U_Ik[_I_Nk]
+        E_Np1k = _E_Ik[_I_Np1k]
+        Z_1k = _Z_Ik[_I_1k]
+        W_Nk = _W_Ik[_I_Nk]
+        X_1k = _X_Ik[_I_1k]
+        E_1k = _E_Ik[_I_1k]
+        Y_1k = _Y_Ik[_I_1k]
+        D_1k = _D_Ik[_I_1k]
+        D_Np1k = _D_Ik[_I_Np1k]
+        V_Nk = _V_Ik[_I_Nk]
+        # Formulate expressions
+        a = U_Nk - E_Np1k
+        b = Z_1k
+        c = W_Nk
+        d = X_1k + E_1k
+        e = Y_1k - D_1k
+        f = D_Np1k + V_Nk
+        denom = a*d - b*c
+        # Compute coefficients
+        _kappa_uk = a / denom
+        _lambda_uk = -b / denom
+        _mu_uk = (b*f - a*e) / denom
+        _kappa_dk = -c / denom
+        _lambda_dk = d / denom
+        _mu_dk = (c*e - f*d) / denom
+        # Store coefficients
+        self._kappa_uk = _kappa_uk
+        self._lambda_uk = _lambda_uk
+        self._mu_uk = _mu_uk
+        self._kappa_dk = _kappa_dk
+        self._lambda_dk = _lambda_dk
+        self._mu_dk = _mu_dk
+
+    def superlink_boundary_flow_coefficients(self, _dt=None):
+        _U_Ik = self._U_Ik                # Recurrence coefficient U_Ik
+        _V_Ik = self._V_Ik                # Recurrence coefficient V_Ik
+        _W_Ik = self._W_Ik                # Recurrence coefficient W_Ik
+        _X_Ik = self._X_Ik                # Recurrence coefficient X_Ik
+        _Y_Ik = self._Y_Ik                # Recurrence coefficient Y_Ik
+        _Z_Ik = self._Z_Ik                # Recurrence coefficient Z_Ik
+        _E_Ik = self._E_Ik
+        _D_Ik = self._D_Ik
+        _I_1k = self._I_1k
+        _I_Nk = self._I_Nk
+        _I_Np1k = self._I_Np1k
+        A_uk = self._A_uk
+        A_dk = self._A_dk
+        a_dk = self._a_dk
+        b_uk = self._b_uk
+        b_dk = self._b_dk
+        c_uk = self._c_uk
+        P_uk = self._P_uk
+        P_dk = self._P_dk
+        theta_uk = self._theta_uk
+        theta_dk = self._theta_dk
+        g = 9.81
+        # Get boundary coefficients
+        U_Nk = _U_Ik[_I_Nk]
+        Z_1k = _Z_Ik[_I_1k]
+        W_Nk = _W_Ik[_I_Nk]
+        X_1k = _X_Ik[_I_1k]
+        E_1k = _E_Ik[_I_1k]
+        E_Np1k = _E_Ik[_I_Np1k]
+        D_1k = _D_Ik[_I_1k]
+        D_Np1k = _D_Ik[_I_Np1k]
+        Y_1k = _Y_Ik[_I_1k]
+        V_Nk = _V_Ik[_I_Nk]
+        # Formulate expressions
+        a = U_Nk - E_Np1k
+        b = Z_1k
+        c = W_Nk
+        d = X_1k + E_1k
+        e = Y_1k - D_1k
+        f = D_Np1k + V_Nk
+        q = (-A_dk * g + a_dk * U_Nk)
+        r = (A_uk * g + c_uk * X_1k)
+        s = a * b_dk
+        t = d * b_uk
+        u = (a_dk + b_dk)
+        v = (b_uk + c_uk)
+        w = (A_uk * g - c_uk * E_1k)
+        x = (A_dk * g - a_dk * E_Np1k)
+        y = (c_uk * D_1k - P_uk)
+        z = (P_dk - b_dk * D_Np1k - u * V_Nk)
+        p = (d * P_uk + w * Y_1k - r * D_1k)
+        n = (a_dk * D_Np1k + P_dk)
+        m = (P_uk + b_uk * D_1k - v * Y_1k)
+        o = (a * P_dk - x * V_Nk + q * D_Np1k)
+        # Create inverse matrix
+        aa = A_uk * theta_uk * g * ((c * b * u) - d * (q + s))
+        bb = A_dk * theta_dk * g * (b * w) 
+        cc = A_uk * theta_uk * g * (c * x)
+        dd = A_dk * theta_dk * g * (a * (r + t) - (c * b * v))
+        ee = (-p * (q + s) - (b * c * u * y) - (b * w * z))
+        ff = (-o * (r + t) + (b * c * v * n) + (c * x * m))
+        denom =  (c * b * u * v) - (q + s) * (r + t)
+        # Compute coefficients
+        alpha_uk = aa / denom
+        beta_uk = bb / denom
+        chi_uk = ee / denom
+        alpha_dk = cc / denom
+        beta_dk = dd / denom
+        chi_dk = ff / denom
+        # Store coefficients
+        self._alpha_uk = alpha_uk
+        self._beta_uk = beta_uk
+        self._chi_uk = chi_uk
+        self._alpha_dk = alpha_dk
+        self._beta_dk = beta_dk
+        self._chi_dk = chi_dk
+
     def superlink_upstream_head_coefficients(self, _dt=None):
+        raise NotImplementedError('Deprecated')
         """
         Compute upstream head coefficients for superlinks: kappa_uk, lambda_uk, and mu_uk.
         """
@@ -961,16 +1086,17 @@ class nSuperLink(SuperLink):
             self._mu_uk = - _theta_uk * _z_inv_uk
         elif _bc_method == 'b':
             # Compute superlink upstream coefficients (momentum)
-            self._kappa_uk = kappa_uk(_Q_uk_next, _dx_uk, _A_uk, _C_uk,
+            self._kappa_uk = kappa_uk_old(_Q_uk_next, _dx_uk, _A_uk, _C_uk,
                                       _R_uk, _n_uk, _Sf_method_uk, _dt, g)
             self._lambda_uk = _theta_uk
-            self._mu_uk = mu_uk(_Q_uk_prev, _dx_uk, _A_uk, _theta_uk, _z_inv_uk,
+            self._mu_uk = mu_uk_old(_Q_uk_prev, _dx_uk, _A_uk, _theta_uk, _z_inv_uk,
                                 _S_o_uk, _dt, g)
         else:
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
         self._theta_uk = _theta_uk
 
     def superlink_downstream_head_coefficients(self, _dt=None):
+        raise NotImplementedError('Deprecated')
         """
         Compute downstream head coefficients for superlinks: kappa_dk, lambda_dk, and mu_dk.
         """
@@ -1015,15 +1141,16 @@ class nSuperLink(SuperLink):
             self._mu_dk = - _theta_dk * _z_inv_dk
         elif _bc_method == 'b':
             # Compute superlink upstream coefficients (momentum)
-            self._kappa_dk = kappa_dk(_Q_dk_next, _dx_dk, _A_dk, _C_dk,
+            self._kappa_dk = kappa_dk_old(_Q_dk_next, _dx_dk, _A_dk, _C_dk,
                                       _R_dk, _n_dk, _Sf_method_dk, _dt, g)
             self._lambda_dk = _theta_dk
-            self._mu_dk = mu_dk(_Q_dk_prev, _dx_dk, _A_dk, _theta_dk, _z_inv_dk, _S_o_dk, _dt, g)
+            self._mu_dk = mu_dk_old(_Q_dk_prev, _dx_dk, _A_dk, _theta_dk, _z_inv_dk, _S_o_dk, _dt, g)
         else:
             raise ValueError('Invalid BC method {}.'.format(_bc_method))
         self._theta_dk = _theta_dk
 
     def superlink_flow_coefficients(self):
+        raise NotImplementedError('Deprecated')
         """
         Compute superlink flow coefficients: alpha_uk, beta_uk, chi_uk,
         alpha_dk, beta_dk, chi_dk.
@@ -1070,25 +1197,25 @@ class nSuperLink(SuperLink):
             _V_Nk = _V_Ik[_I_Nk] + _D_Ik[_I_Np1k]
             _W_Nk = _W_Ik[_I_Nk]
         # Compute D_k_star
-        _D_k_star = numba_D_k_star(_X_1k, _kappa_uk, _U_Nk,
+        _D_k_star = numba_D_k_star_old(_X_1k, _kappa_uk, _U_Nk,
                                    _kappa_dk, _Z_1k, _W_Nk)
         # Compute upstream superlink flow coefficients
-        _alpha_uk = numba_alpha_uk(_U_Nk, _kappa_dk, _X_1k,
+        _alpha_uk = numba_alpha_uk_old(_U_Nk, _kappa_dk, _X_1k,
                                    _Z_1k, _W_Nk, _D_k_star,
                                    _lambda_uk)
-        _beta_uk = numba_beta_uk(_U_Nk, _kappa_dk, _Z_1k,
+        _beta_uk = numba_beta_uk_old(_U_Nk, _kappa_dk, _Z_1k,
                                  _W_Nk, _D_k_star, _lambda_dk)
-        _chi_uk = numba_chi_uk(_U_Nk, _kappa_dk, _Y_1k,
+        _chi_uk = numba_chi_uk_old(_U_Nk, _kappa_dk, _Y_1k,
                                _X_1k, _mu_uk, _Z_1k,
                                _mu_dk, _V_Nk, _W_Nk,
                                _D_k_star)
         # Compute downstream superlink flow coefficients
-        _alpha_dk = numba_alpha_dk(_X_1k, _kappa_uk, _W_Nk,
+        _alpha_dk = numba_alpha_dk_old(_X_1k, _kappa_uk, _W_Nk,
                                    _D_k_star, _lambda_uk)
-        _beta_dk = numba_beta_dk(_X_1k, _kappa_uk, _U_Nk,
+        _beta_dk = numba_beta_dk_old(_X_1k, _kappa_uk, _U_Nk,
                                  _W_Nk, _Z_1k, _D_k_star,
                                  _lambda_dk)
-        _chi_dk = numba_chi_dk(_X_1k, _kappa_uk, _V_Nk,
+        _chi_dk = numba_chi_dk_old(_X_1k, _kappa_uk, _V_Nk,
                                _W_Nk, _mu_uk, _U_Nk,
                                _mu_dk, _Y_1k, _Z_1k,
                                _D_k_star)
@@ -1382,8 +1509,8 @@ class nSuperLink(SuperLink):
         if u is None:
             u = 0
         # Create matrices
-        A.fill(0.)
-        b.fill(0.)
+        A = np.zeros((M, M), dtype=np.float64)
+        b = np.zeros(M, dtype=np.float64)
         G_jh = np.zeros(M, dtype=np.float64)
         G_je = np.zeros(M, dtype=np.float64)
         # Create component matrices
@@ -1442,13 +1569,13 @@ class nSuperLink(SuperLink):
         if _sparse:
             H_j_next = scipy.sparse.linalg.spsolve(A, b)
         else:
-            H_j_next = scipy.linalg.solve(A, b)
+            H_j_next = np.linalg.solve(A, b)
         assert np.isfinite(H_j_next).all()
         # Constrain heads based on allowed maximum/minimum depths
         # TODO: Not sure what's happening here
         # H_j_next = np.maximum(H_j_next, _z_inv_j + min_depth)
-        H_j_next = np.maximum(H_j_next, _z_inv_j)
-        H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
+        #H_j_next = np.maximum(H_j_next, _z_inv_j)
+        #H_j_next = np.minimum(H_j_next, _z_inv_j + max_depth)
         # Export instance variables
         self.H_j = H_j_next
 

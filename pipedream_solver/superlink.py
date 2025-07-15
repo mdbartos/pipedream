@@ -3175,8 +3175,6 @@ class SuperLink():
         superjunction heads at time t + dt.
         """
         # Import instance variables
-        _J_uk = self._J_uk              # Index of superjunction upstream of superlink k
-        _J_dk = self._J_dk              # Index of superjunction downstream of superlink k
         _kappa_uk = self._kappa_uk      # Superlink head coefficient
         _kappa_dk = self._kappa_dk      # Superlink head coefficient
         _lambda_uk = self._lambda_uk    # Superlink head coefficient
@@ -3185,11 +3183,10 @@ class SuperLink():
         _mu_dk = self._mu_dk            # Superlink head coefficient
         _Q_uk = self._Q_uk              # Flow rate at upstream end of superlink k
         _Q_dk = self._Q_dk              # Flow rate at downstream end of superlink k
-        H_j = self.H_j                  # Head at superjunction j
         min_depth = self.min_depth      # Minimum allowable depth at boundaries
         # Compute flow at next time step
-        _h_uk_next = _kappa_uk * _Q_uk + _lambda_uk * H_j[_J_uk] + _mu_uk
-        _h_dk_next = _kappa_dk * _Q_dk + _lambda_dk * H_j[_J_dk] + _mu_dk
+        _h_uk_next = _kappa_uk * _Q_uk + _lambda_uk * _Q_dk + _mu_uk
+        _h_dk_next = _kappa_dk * _Q_uk + _lambda_dk * _Q_dk + _mu_dk
         # Set minimum values
         # TODO: Is this causing the difference between normal/numba versions?
         # _h_uk_next[_h_uk_next < min_depth] = min_depth
@@ -4135,9 +4132,11 @@ class SuperLink():
         self.node_coeffs(_Q_0Ik=Q_0Ik, _dt=dt, first_iter=first_iter)
         self.forward_recurrence()
         self.backward_recurrence()
-        self.superlink_upstream_head_coefficients(_dt=dt)
-        self.superlink_downstream_head_coefficients(_dt=dt)
-        self.superlink_flow_coefficients()
+        #self.superlink_upstream_head_coefficients(_dt=dt)
+        #self.superlink_downstream_head_coefficients(_dt=dt)
+        #self.superlink_flow_coefficients()
+        self.superlink_boundary_depth_coefficients(_dt=dt)
+        self.superlink_boundary_flow_coefficients(_dt=dt)
         if self.orifices is not None:
             self.orifice_flow_coefficients(u=u_o)
         if self.weirs is not None:
