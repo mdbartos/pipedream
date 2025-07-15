@@ -1145,13 +1145,20 @@ class nSuperLink(SuperLink):
         self._beta_p = _beta_p
         self._chi_p = _chi_p
 
-    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
-                                first_time=False):
-        """
-        Construct sparse matrices A, O, W, P and b.
-        """
-        # Import instance variables
-        _k = self._k                     # Superlink indices
+    def create_superjunction_matrix(self, H_bc, Q_in, _dt):
+        J = self.J
+        bc = self.bc
+        _A_sj = self._A_sj
+        _dt = self._dt
+        M = self.M
+        numba_create_J_matrix(J, bc, _A_sj, _dt, M)
+        _G_jh = np.where(bc, 0., _A_sj / _dt)
+        _G_je = np.where(bc, H_bc, Q_in)
+        return J, _G_jh, _G_je
+
+    def create_superlink_matrix(self, _dt):
+        K = self.K
+        bc = self.bc
         _J_uk = self._J_uk               # Index of superjunction upstream of superlink k
         _J_dk = self._J_dk               # Index of superjunction downstream of superlink k
         _alpha_uk = self._alpha_uk       # Superlink flow coefficient
@@ -1160,10 +1167,6 @@ class nSuperLink(SuperLink):
         _beta_dk = self._beta_dk         # Superlink flow coefficient
         _chi_uk = self._chi_uk           # Superlink flow coefficient
         _chi_dk = self._chi_dk           # Superlink flow coefficient
-        _alpha_ukm = self._alpha_ukm     # Summation of superlink flow coefficients
-        _beta_dkl = self._beta_dkl       # Summation of superlink flow coefficients
-        _chi_ukl = self._chi_ukl         # Summation of superlink flow coefficients
-        _chi_dkm = self._chi_dkm         # Summation of superlink flow coefficients
         _F_jj = self._F_jj
         _A_sj = self._A_sj               # Surface area of superjunction j
         _dx_uk = self._dx_uk
@@ -1173,53 +1176,147 @@ class nSuperLink(SuperLink):
         _theta_uk = self._theta_uk
         _theta_dk = self._theta_dk
         NK = self.NK
-        n_o = self.n_o                   # Number of orifices in system
-        n_w = self.n_w                   # Number of weirs in system
-        n_p = self.n_p                   # Number of pumps in system
+        M = self.M
+        # Clear old data
+        _F_jj.fill(0.)
+        _G_jh = np.zeros(M, dtype=np.float64)
+        _G_je = np.zeros(M, dtype=np.float64)
+        numba_clear_off_diagonals(K, bc, _J_uk, _J_dk, NK)
+        # Compute top width contributed by attached superlinks
+        _xi_uk = xi_uk(_dx_uk, _B_uk, _theta_uk)
+        _xi_dk = xi_dk(_dx_dk, _B_dk, _theta_dk)
+        # Create A matrix
+        numba_create_K_matrix(K, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
+                              _alpha_dk, _beta_uk, _beta_dk, _xi_uk, _xi_dk,
+                              _A_sj, _dt, M, NK)
+        # Create RHS vector
+        numba_add_at(_G_jh, _J_uk, _xi_uk / _dt)
+        numba_add_at(_G_jh, _J_dk, _xi_dk / _dt)
+        numba_add_at(_G_je, _J_uk, -_chi_uk)
+        numba_add_at(_G_je, _J_dk, _chi_dk)
+        # Ensure RHS is set to zero for boundary nodes
+        _G_jh[bc] = 0.
+        _G_je[bc] = 0.
+        return K, _G_jh, _G_je
+
+    def create_orifice_matrix(self):
+        O = self.O
+        n_o = self.n_o
+        bc = self.bc
+        _J_uo = self._J_uo               # Index of superjunction upstream of orifice o
+        _J_do = self._J_do               # Index of superjunction upstream of orifice o
+        _alpha_o = self._alpha_o         # Orifice flow coefficient
+        _beta_o = self._beta_o           # Orifice flow coefficient
+        _chi_o = self._chi_o             # Orifice flow coefficient
+        _O_diag = self._O_diag           # Diagonal elements of matrix O
+        _alpha_uo = _alpha_o
+        _alpha_do = _alpha_o
+        _beta_uo = _beta_o
+        _beta_do = _beta_o
+        _chi_uo = _chi_o
+        _chi_do = _chi_o
+        M = self.M
+        # Clear arrays
+        _O_diag.fill(0.)
+        _G_jh = np.zeros(M, dtype=np.float64)
+        _G_je = np.zeros(M, dtype=np.float64)
+        numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
+        # Set diagonal
+        numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _alpha_uo,
+                                _alpha_do, _beta_uo, _beta_do, M, n_o)
+        # Set right-hand side
+        numba_add_at(_G_je, _J_uo, -_chi_uo)
+        numba_add_at(_G_je, _J_do, _chi_do)
+        # Ensure RHS is set to zero for boundary nodes
+        _G_jh[bc] = 0.
+        _G_je[bc] = 0.
+        return O, _G_jh, _G_je
+
+    def create_weir_matrix(self):
+        W = self.W
+        n_w = self.n_w
+        bc = self.bc
+        _J_uw = self._J_uw               # Index of superjunction upstream of weir w
+        _J_dw = self._J_dw               # Index of superjunction downstream of weir w
+        _alpha_w = self._alpha_w         # Weir flow coefficient
+        _beta_w = self._beta_w           # Weir flow coefficient
+        _chi_w = self._chi_w             # Weir flow coefficient
+        _W_diag = self._W_diag           # Diagonal elements of matrix W
+        # Rename indexers
+        _alpha_uw = _alpha_w
+        _alpha_dw = _alpha_w
+        _beta_uw = _beta_w
+        _beta_dw = _beta_w
+        _chi_uw = _chi_w
+        _chi_dw = _chi_w
+        M = self.M
+        # Clear arrays
+        _W_diag.fill(0.)
+        _G_jh = np.zeros(M, dtype=np.float64)
+        _G_je = np.zeros(M, dtype=np.float64)
+        numba_clear_off_diagonals(W, bc, _J_uw, _J_dw, n_w)
+        # Set diagonal
+        numba_create_OWP_matrix(W, _W_diag, bc, _J_uw, _J_dw, _alpha_uw,
+                                _alpha_dw, _beta_uw, _beta_dw, M, n_w)
+        # Set right-hand side
+        numba_add_at(_G_je, _J_uw, -_chi_uw)
+        numba_add_at(_G_je, _J_dw, _chi_dw)
+        # Ensure RHS is set to zero for boundary nodes
+        _G_jh[bc] = 0.
+        _G_je[bc] = 0.
+        return W, _G_jh, _G_je
+
+    def create_pump_matrix(self):
+        P = self.P
+        n_p = self.n_p
+        bc = self.bc
+        _J_up = self._J_up               # Index of superjunction upstream of pump p
+        _J_dp = self._J_dp               # Index of superjunction downstream of pump p
+        _alpha_p = self._alpha_p         # Pump flow coefficient
+        _beta_p = self._beta_p           # Pump flow coefficient
+        _chi_p = self._chi_p             # Pump flow coefficient
+        _P_diag = self._P_diag           # Diagonal elements of matrix P
+        _alpha_up = _alpha_p
+        _alpha_dp = _alpha_p
+        _beta_up = _beta_p
+        _beta_dp = _beta_p
+        _chi_up = _chi_p
+        _chi_dp = _chi_p
+        M = self.M
+        # Clear arrays
+        _P_diag.fill(0.)
+        _G_jh = np.zeros(M, dtype=np.float64)
+        _G_je = np.zeros(M, dtype=np.float64)
+        numba_clear_off_diagonals(P, bc, _J_up, _J_dp, n_p)
+        # Set diagonal
+        numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _alpha_up,
+                                _alpha_dp, _beta_up, _beta_dp, M, n_p)
+        # Set right-hand side
+        numba_add_at(_G_je, _J_up, -_chi_up)
+        numba_add_at(_G_je, _J_dp, _chi_dp)
+        # Ensure RHS is set to zero for boundary nodes
+        _G_jh[bc] = 0.
+        _G_je[bc] = 0.
+        return P, _G_jh, _G_je
+
+
+    def sparse_matrix_equations(self, H_bc=None, _Q_0j=None, u=None, _dt=None, implicit=True,
+                                first_time=False):
+        """
+        Construct sparse matrices A, O, W, P and b.
+        """
+        # Import instance variables
         A = self.A
-        if n_o:
-            O = self.O
-            _J_uo = self._J_uo               # Index of superjunction upstream of orifice o
-            _J_do = self._J_do               # Index of superjunction upstream of orifice o
-            _alpha_o = self._alpha_o         # Orifice flow coefficient
-            _beta_o = self._beta_o           # Orifice flow coefficient
-            _chi_o = self._chi_o             # Orifice flow coefficient
-            _alpha_uom = self._alpha_uom     # Summation of orifice flow coefficients
-            _beta_dol = self._beta_dol       # Summation of orifice flow coefficients
-            _chi_uol = self._chi_uol         # Summation of orifice flow coefficients
-            _chi_dom = self._chi_dom         # Summation of orifice flow coefficients
-            _O_diag = self._O_diag           # Diagonal elements of matrix O
-        if n_w:
-            W = self.W
-            _J_uw = self._J_uw               # Index of superjunction upstream of weir w
-            _J_dw = self._J_dw               # Index of superjunction downstream of weir w
-            _alpha_w = self._alpha_w         # Weir flow coefficient
-            _beta_w = self._beta_w           # Weir flow coefficient
-            _chi_w = self._chi_w             # Weir flow coefficient
-            _alpha_uwm = self._alpha_uwm     # Summation of weir flow coefficients
-            _beta_dwl = self._beta_dwl       # Summation of weir flow coefficients
-            _chi_uwl = self._chi_uwl         # Summation of weir flow coefficients
-            _chi_dwm = self._chi_dwm         # Summation of weir flow coefficients
-            _W_diag = self._W_diag           # Diagonal elements of matrix W
-        if n_p:
-            P = self.P
-            _J_up = self._J_up               # Index of superjunction upstream of pump p
-            _J_dp = self._J_dp               # Index of superjunction downstream of pump p
-            _alpha_p = self._alpha_p         # Pump flow coefficient
-            _beta_p = self._beta_p           # Pump flow coefficient
-            _chi_p = self._chi_p             # Pump flow coefficient
-            _alpha_upm = self._alpha_upm     # Summation of pump flow coefficients
-            _beta_dpl = self._beta_dpl       # Summation of pump flow coefficients
-            _chi_upl = self._chi_upl         # Summation of pump flow coefficients
-            _chi_dpm = self._chi_dpm         # Summation of pump flow coefficients
-            _P_diag = self._P_diag           # Diagonal elements of matrix P
+        b = self.b                       # Right-hand side vector
+        M = self.M
+        NK = self.NK
+        n_o = self.n_o
+        n_w = self.n_w
+        n_p = self.n_p
         _sparse = self._sparse           # Use sparse matrix data structures (y/n)
-        M = self.M                       # Number of superjunctions in system
         H_j_next = self.H_j                   # Head at superjunction j
         H_j_prev = self.states['H_j']
         bc = self.bc                     # Superjunction j has a fixed boundary condition (y/n)
-        D = self.D                       # Vector for storing chi coefficients
-        b = self.b                       # Right-hand side vector
         # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
@@ -1232,80 +1329,43 @@ class nSuperLink(SuperLink):
         # If no control input signal specified assume zero input
         if u is None:
             u = 0
-        # Compute upstream/downstream link volume parameters
-        _xi_uk = xi_uk(_dx_uk, _B_uk, _theta_uk, _dt)
-        _xi_dk = xi_dk(_dx_dk, _B_dk, _theta_dk, _dt)
-        # Clear old data
-        _F_jj.fill(0)
-        D.fill(0)
-        numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK)
-        # Create A matrix
-        numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
-                              _alpha_dk, _beta_uk, _beta_dk, _xi_uk, _xi_dk,
-                              _A_sj, _dt, M, NK)
-        # Create D vector
-        numba_add_at(D, _J_uk, -_chi_uk)
-        numba_add_at(D, _J_dk, _chi_dk)
-        numba_add_at(D, _J_uk, _xi_uk * H_j_prev[_J_uk])
-        numba_add_at(D, _J_dk, _xi_dk * H_j_prev[_J_dk])
-        # Compute control matrix
+        # Create matrices
+        A.fill(0.)
+        b.fill(0.)
+        G_jh = np.zeros(M, dtype=np.float64)
+        G_je = np.zeros(M, dtype=np.float64)
+        # Create component matrices
+        J, G_jhj, G_jej = self.create_superjunction_matrix(H_bc, _Q_0j, _dt)
+        A += J
+        G_jh += G_jhj
+        G_je += G_jej
+        if NK:
+            K, G_jhk, G_jek = self.create_superlink_matrix(_dt)
+            A += K
+            G_jh += G_jhk
+            G_je += G_jek
         if n_o:
-            _alpha_uo = _alpha_o
-            _alpha_do = _alpha_o
-            _beta_uo = _beta_o
-            _beta_do = _beta_o
-            _chi_uo = _chi_o
-            _chi_do = _chi_o
-            _O_diag.fill(0)
-            numba_clear_off_diagonals(O, bc, _J_uo, _J_do, n_o)
-            # Set diagonal
-            numba_create_OWP_matrix(O, _O_diag, bc, _J_uo, _J_do, _alpha_uo,
-                                    _alpha_do, _beta_uo, _beta_do, M, n_o)
-            # Set right-hand side
-            numba_add_at(D, _J_uo, -_chi_uo)
-            numba_add_at(D, _J_do, _chi_do)
+            O, G_jho, G_jeo = self.create_orifice_matrix()
+            A += O
+            G_jh += G_jho
+            G_je += G_jeo
         if n_w:
-            _alpha_uw = _alpha_w
-            _alpha_dw = _alpha_w
-            _beta_uw = _beta_w
-            _beta_dw = _beta_w
-            _chi_uw = _chi_w
-            _chi_dw = _chi_w
-            _W_diag.fill(0)
-            numba_clear_off_diagonals(W, bc, _J_uw, _J_dw, n_w)
-            # Set diagonal
-            numba_create_OWP_matrix(W, _W_diag, bc, _J_uw, _J_dw, _alpha_uw,
-                                    _alpha_dw, _beta_uw, _beta_dw, M, n_w)
-            # Set right-hand side
-            numba_add_at(D, _J_uw, -_chi_uw)
-            numba_add_at(D, _J_dw, _chi_dw)
+            W, G_jhw, G_jew = self.create_weir_matrix()
+            A += W
+            G_jh += G_jhw
+            G_je += G_jew
         if n_p:
-            _alpha_up = _alpha_p
-            _alpha_dp = _alpha_p
-            _beta_up = _beta_p
-            _beta_dp = _beta_p
-            _chi_up = _chi_p
-            _chi_dp = _chi_p
-            _P_diag.fill(0)
-            numba_clear_off_diagonals(P, bc, _J_up, _J_dp, n_p)
-            # Set diagonal
-            numba_create_OWP_matrix(P, _P_diag, bc, _J_up, _J_dp, _alpha_up,
-                                    _alpha_dp, _beta_up, _beta_dp, M, n_p)
-            # Set right-hand side
-            numba_add_at(D, _J_up, -_chi_up)
-            numba_add_at(D, _J_dp, _chi_dp)
-        b.fill(0)
+            P, G_jhp, G_jep = self.create_pump_matrix()
+            A += P
+            G_jh += G_jhp
+            G_je += G_jep
         # TODO: Which A_sj? Might need to apply product rule here.
-        b = (_A_sj * H_j_prev / _dt) + _Q_0j + D
+        b[:] = (G_jh * H_j_prev) + G_je
         # Ensure boundary condition is specified
         b[bc] = H_bc[bc]
         # Export instance variables
-        self.D = D
+        self.A = A
         self.b = b
-        # self._beta_dkl = _beta_dkl
-        # self._alpha_ukm = _alpha_ukm
-        # self._chi_ukl = _chi_ukl
-        # self._chi_dkm = _chi_dkm
         if first_time and _sparse:
             self.A = self.A.tocsr()
 
@@ -1327,25 +1387,10 @@ class nSuperLink(SuperLink):
         _sparse = self._sparse        # Use sparse data structures (y/n)
         min_depth = self.min_depth    # Minimum depth at superjunctions
         max_depth = self.max_depth    # Maximum depth at superjunctions
-        # Does the system have control assets?
-        has_control = n_o + n_w + n_p
-        # Get right-hand size
-        if has_control:
-            if implicit:
-                l = A + O + W + P
-                r = b
-            else:
-                # TODO: Broken
-                # l = A
-                # r = b + np.squeeze(B @ u)
-                raise NotImplementedError
-        else:
-            l = A
-            r = b
         if _sparse:
-            H_j_next = scipy.sparse.linalg.spsolve(l, r)
+            H_j_next = scipy.sparse.linalg.spsolve(A, b)
         else:
-            H_j_next = scipy.linalg.solve(l, r)
+            H_j_next = scipy.linalg.solve(A, b)
         assert np.isfinite(H_j_next).all()
         # Constrain heads based on allowed maximum/minimum depths
         # TODO: Not sure what's happening here
@@ -1372,20 +1417,8 @@ class nSuperLink(SuperLink):
         max_depth = self.max_depth    # Maximum depth at superjunctions
         bandwidth = self.bandwidth
         M = self.M
-        # Does the system have control assets?
-        has_control = n_o + n_w + n_p
-        # Get right-hand size
-        if has_control:
-            if implicit:
-                l = A + O + W + P
-                r = b
-            else:
-                raise NotImplementedError
-        else:
-            l = A
-            r = b
-        AB = numba_create_banded(l, bandwidth, M)
-        H_j_next = scipy.linalg.solve_banded((bandwidth, bandwidth), AB, r,
+        AB = numba_create_banded(A, bandwidth, M)
+        H_j_next = scipy.linalg.solve_banded((bandwidth, bandwidth), AB, b,
                                              check_finite=False, overwrite_ab=True)
         assert np.isfinite(H_j_next).all()
         # Constrain heads based on allowed maximum/minimum depths

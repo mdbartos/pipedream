@@ -693,11 +693,15 @@ class SuperLink():
         self.bc = self.superjunctions['bc'].values.astype(np.bool_)
         if sparse:
             self.B = scipy.sparse.lil_matrix((self.M, self.n_o))
+            self.J = scipy.sparse.lil_matrix((self.M, self.M))
+            self.K = scipy.sparse.lil_matrix((self.M, self.M))
             self.O = scipy.sparse.lil_matrix((self.M, self.M))
             self.W = scipy.sparse.lil_matrix((self.M, self.M))
             self.P = scipy.sparse.lil_matrix((self.M, self.M))
         else:
             self.B = np.zeros((self.M, self.n_o))
+            self.J = np.zeros((self.M, self.M))
+            self.K = np.zeros((self.M, self.M))
             self.O = np.zeros((self.M, self.M))
             self.W = np.zeros((self.M, self.M))
             self.P = np.zeros((self.M, self.M))

@@ -1118,20 +1118,16 @@ def gamma_dk(Q_dk_t, C_dk, A_dk, g=9.81):
     result = safe_divide_vec(num, den)
     return result
 
-@njit(float64[:](float64[:], float64[:], float64[:], float64),
+@njit(float64[:](float64[:], float64[:], float64[:]),
       cache=True)
-def xi_uk(dx_uk, B_uk, theta_uk, dt):
-    num = dx_uk * B_uk * theta_uk
-    den = 2 * dt
-    result = num / den
+def xi_uk(dx_uk, B_uk, theta_uk):
+    result = (dx_uk * B_uk * theta_uk) / 2
     return result
 
-@njit(float64[:](float64[:], float64[:], float64[:], float64),
+@njit(float64[:](float64[:], float64[:], float64[:]),
       cache=True)
-def xi_dk(dx_dk, B_dk, theta_dk, dt):
-    num = dx_dk * B_dk * theta_dk
-    den = 2 * dt
-    result = num / den
+def xi_dk(dx_dk, B_dk, theta_dk):
+    result = (dx_dk * B_dk * theta_dk) / 2
     return result
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
@@ -1460,8 +1456,7 @@ def numba_create_banded(l, bandwidth, M):
     return AB
 
 @njit(void(float64[:], int64[:], float64[:]),
-      cache=True,
-      fastmath=True)
+      cache=True)
 def numba_add_at(a, indices, b):
     n = len(indices)
     for k in range(n):
@@ -1481,39 +1476,51 @@ def numba_clear_off_diagonals(A, bc, _J_uk, _J_dk, NK):
         if not _bc_d:
             A[_J_d, _J_u] = 0.0
 
+def numba_B_j(_B_j, _J_uk, _J_dk, _xi_uk, _xi_dk, _A_sj):
+    numba_add_at(_B_j, _J_uk, _xi_uk)
+    numba_add_at(_B_j, _J_dk, _xi_dk)
+    _B_j += _A_sj
+    return _B_j
+
+@njit(void(float64[:, :], boolean[:], float64[:], float64, int64),
+      cache=True)
+def numba_create_J_matrix(J, bc, _A_sj, _dt, M):
+    for i in range(M):
+        if bc[i]:
+            J[i,i] = 1.0
+        else:
+            J[i,i] = (_A_sj[i] / _dt)
+
 @njit(void(float64[:, :], float64[:], boolean[:], int64[:], int64[:], float64[:],
            float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
            float64, int64, int64),
-      cache=True,
-      fastmath=True)
-def numba_create_A_matrix(A, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
+      cache=True)
+def numba_create_K_matrix(K, _F_jj, bc, _J_uk, _J_dk, _alpha_uk,
                           _alpha_dk, _beta_uk, _beta_dk, _xi_uk, _xi_dk,
                           _A_sj, _dt, M, NK):
     numba_add_at(_F_jj, _J_uk, _alpha_uk)
     numba_add_at(_F_jj, _J_dk, -_beta_dk)
-    numba_add_at(_F_jj, _J_uk, _xi_uk)
-    numba_add_at(_F_jj, _J_dk, _xi_dk)
-    _F_jj += (_A_sj / _dt)
-    # Set diagonal of A matrix
+    numba_add_at(_F_jj, _J_uk, _xi_uk / _dt)
+    numba_add_at(_F_jj, _J_dk, _xi_dk / _dt)
+    # Set diagonal of K matrix
     for i in range(M):
         if bc[i]:
-            A[i,i] = 1.0
+            K[i,i] = 0.0
         else:
-            A[i,i] = _F_jj[i]
+            K[i,i] = _F_jj[i]
     for k in range(NK):
         _J_u = _J_uk[k]
         _J_d = _J_dk[k]
         _bc_u = bc[_J_u]
         _bc_d = bc[_J_d]
         if not _bc_u:
-            A[_J_u, _J_d] += _beta_uk[k]
+            K[_J_u, _J_d] += _beta_uk[k]
         if not _bc_d:
-            A[_J_d, _J_u] -= _alpha_dk[k]
+            K[_J_d, _J_u] -= _alpha_dk[k]
 
 @njit(void(float64[:, :], float64[:], boolean[:], int64[:], int64[:], float64[:],
            float64[:], float64[:], float64[:], int64, int64),
-      cache=True,
-      fastmath=True)
+      cache=True)
 def numba_create_OWP_matrix(X, diag, bc, _J_uc, _J_dc, _alpha_uc,
                             _alpha_dc, _beta_uc, _beta_dc, M, NC):
     # Set diagonal
