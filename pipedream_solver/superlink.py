@@ -1965,6 +1965,28 @@ class SuperLink():
         # Export to instance variables
         self._Ao = _Ao
 
+    def compute_boundary_indicator_variables(self):
+        H_j = self.H_j
+        _J_uk = self._J_uk
+        _J_dk = self._J_dk
+        _theta_uk = self._theta_uk
+        _theta_dk = self._theta_dk
+        _z_inv_uk = self._z_inv_uk
+        _z_inv_dk = self._z_inv_dk
+        # Compute upstream indicator variable
+        _H_juk = H_j[_J_uk]
+        upstream_depth_above_invert = _H_juk > _z_inv_uk
+        _theta_uk.fill(0.)
+        _theta_uk[upstream_depth_above_invert] = 1.
+        # Compute downstream indicator variable
+        _H_jdk = H_j[_J_dk]
+        downstream_depth_above_invert = _H_jdk > _z_inv_dk
+        _theta_dk.fill(0.)
+        _theta_dk[downstream_depth_above_invert] = 1.
+        # Store output
+        self._theta_uk = _theta_uk
+        self._theta_dk = _theta_dk
+
     def compute_storage_areas(self):
         """
         Compute surface area of superjunctions at current time step.
@@ -4121,6 +4143,7 @@ class SuperLink():
         self.link_hydraulic_geometry()
         self.upstream_hydraulic_geometry()
         self.downstream_hydraulic_geometry()
+        self.compute_boundary_indicator_variables()
         self.compute_storage_areas()
         self.compute_storage_volumes()
         self.node_velocities()

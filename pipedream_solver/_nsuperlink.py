@@ -105,7 +105,7 @@ def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
         i = _i_bk[k]
         I = _I_bk[k]
         j = _J_bk[k]
-        # TODO: This should incorporate theta
+        # TODO: If theta is zero, should return critical depth
         h_I = _h_Ik[I]
         h_Ip1 = _theta_bk[k] * (_H_j[j] - _z_inv_bk[k])
         h_i = (h_I + h_Ip1) / 2
@@ -425,6 +425,27 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
     t_4 = c_ik * sigma_ik
     return t_0 + t_1 + t_2 - t_3 - t_4
 
+#@njit(float64[:](float64[:], float64, float64[:], float64[:], float64[:], float64[:],
+#                 float64[:], float64[:], float64[:], boolean[:], float64[:], int64[:], float64),
+#      cache=True)
+#def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
+#               A_c_ik, C_ik, u_ik, ctrl, sigma_ik, Sf_method_ik, g=9.81):
+#    """
+#    Compute link coefficient 'b' for link i, superlink k.
+#    """
+#    # TODO: Clean up
+#    t_0 = (dx_ik / dt)
+#    t_1 = np.zeros(Q_ik_t.size)
+#    k = len(Sf_method_ik)
+#    for n in range(k):
+#        t_1[n] = friction_slope(Q_ik_t[n], dx_ik[n], A_ik[n], R_ik[n],
+#                                n_ik[n], Sf_method_ik[n], g)
+#    t_2 = np.zeros(ctrl.size)
+#    cond = ctrl
+#    t_2[cond] = C_ik[cond] * np.abs(Q_ik_t[cond]) / 2 / g / A_c_ik[cond]**2
+#    t_3 = u_ik * sigma_ik
+#    return t_0 + t_1 + t_2 + t_3
+
 @njit(float64[:](float64[:], float64[:], float64, float64[:], float64[:], float64[:], float64),
       cache=True)
 def numba_P_ik(Q_ik_t, dx_ik, dt, A_ik, S_o_ik, sigma_ik, g=9.81):
@@ -499,14 +520,15 @@ def safe_divide(num, den):
     #    return num / den
     return (num + SMALLEST_NORMAL) / (den + SMALLEST_NORMAL)
 
+# TODO: This is really just meant for orifice, weir, and pump equations
+# Where division by zero implies entire expression is zero
 @njit(float64[:](float64[:], float64[:]),
       cache=True)
 def safe_divide_vec(num, den):
-    #result = np.zeros_like(num)
-    #cond = (den != 0)
-    #result[cond] = num[cond] / den[cond]
-    #return result
-    return (num + SMALLEST_NORMAL) / (den + SMALLEST_NORMAL)
+    result = np.zeros_like(num)
+    is_safe = (np.abs(den) > SMALLEST_NORMAL)
+    result[is_safe] = num[is_safe] / den[is_safe]
+    return result
 
 @njit(float64(float64, float64, float64, float64, float64),
       cache=True)
@@ -654,37 +676,11 @@ def numba_u_ik(_Q_ik, _A_ik, _u_ik):
     for i in range(n):
         _Q_i = _Q_ik[i]
         _A_i = _A_ik[i]
-        if _A_i:
+        if _A_i > SMALLEST_NORMAL:
             _u_ik[i] = _Q_i / _A_i
         else:
-            _u_ik[i] = 0
+            _u_ik[i] = 0.
     return _u_ik
-
-@njit(float64[:](float64[:], float64[:], float64[:]),
-      cache=True)
-def numba_u_uk(_Q_uk, _A_uk, _u_uk):
-    n = _u_uk.size
-    for i in range(n):
-        _Q_u = _Q_uk[i]
-        _A_u = _A_uk[i]
-        if _A_u:
-            _u_uk[i] = _Q_u / _A_u
-        else:
-            _u_uk[i] = 0
-    return _u_uk
-
-@njit(float64[:](float64[:], float64[:], float64[:]),
-      cache=True)
-def numba_u_dk(_Q_dk, _A_dk, _u_dk):
-    n = _u_dk.size
-    for i in range(n):
-        _Q_d = _Q_dk[i]
-        _A_d = _A_dk[i]
-        if _A_d:
-            _u_dk[i] = _Q_d / _A_d
-        else:
-            _u_dk[i] = 0
-    return _u_dk
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], boolean[:], int64[:], float64[:]),
       cache=True)
@@ -695,7 +691,7 @@ def numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik):
         if _link_start[i]:
             num = _dx_ik[i] * _u_uk[k] + _dx_uk[k] * _u_ik[i]
             den = _dx_ik[i] + _dx_uk[k]
-            if den:
+            if den > SMALLEST_NORMAL:
                 _u_Ik[i] = num / den
             else:
                 _u_Ik[i] = 0.
@@ -703,7 +699,7 @@ def numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik):
             im1 = i - 1
             num = _dx_ik[i] * _u_ik[im1] + _dx_ik[im1] * _u_ik[i]
             den = _dx_ik[i] + _dx_ik[im1]
-            if den:
+            if den > SMALLEST_NORMAL:
                 _u_Ik[i] = num / den
             else:
                 _u_Ik[i] = 0.
@@ -718,7 +714,7 @@ def numba_u_Ip1k(_dx_ik, _u_ik, _dx_dk, _u_dk, _link_end, _ki, _u_Ip1k):
         if _link_end[i]:
             num = _dx_ik[i] * _u_dk[k] + _dx_dk[k] * _u_ik[i]
             den = _dx_ik[i] + _dx_dk[k]
-            if den:
+            if den > SMALLEST_NORMAL:
                 _u_Ip1k[i] = num / den
             else:
                 _u_Ip1k[i] = 0.
@@ -726,63 +722,38 @@ def numba_u_Ip1k(_dx_ik, _u_ik, _dx_dk, _u_dk, _link_end, _ki, _u_Ip1k):
             ip1 = i + 1
             num = _dx_ik[i] * _u_ik[ip1] + _dx_ik[ip1] * _u_ik[i]
             den = _dx_ik[i] + _dx_ik[ip1]
-            if den:
+            if den > SMALLEST_NORMAL:
                 _u_Ip1k[i] = num / den
             else:
                 _u_Ip1k[i] = 0.
     return _u_Ip1k
 
-@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-                 int64[:], float64, float64), cache=True)
-def kappa_uk_old(Q_uk, dx_uk, A_uk, C_uk, R_uk, n_uk, Sf_method_uk, dt, g=9.81):
-    """
-    Compute boundary coefficient 'kappa' for upstream end of superlink k.
-    """
-    k = Q_uk.size
-    t_0 = - dx_uk / g / A_uk / dt
-    t_1 = np.zeros(k, dtype=np.float64)
-    for n in range(k):
-        t_1[n] = - friction_slope(Q_uk[n], dx_uk[n], A_uk[n], R_uk[n],
-                                n_uk[n], Sf_method_uk[n], g)
-    t_2 = - C_uk * np.abs(Q_uk) / 2 / g / A_uk**2
-    return t_0 + t_1 + t_2
+#@njit(float64[:](float64[:], float64[:], float64[:], float64[:], boolean[:], int64[:], float64[:]),
+#      cache=True)
+#def numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik):
+#    n = _u_Ik.size
+#    for i in range(n):
+#        k = _ki[i]
+#        if _link_start[i]:
+#            _u_Ik[i] = _u_uk[k]
+#        else:
+#            im1 = i - 1
+#            _u_Ik[i] = _u_ik[im1]
+#    return _u_Ik
 
-@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-                 int64[:], float64, float64), cache=True)
-def kappa_dk_old(Q_dk, dx_dk, A_dk, C_dk, R_dk, n_dk, Sf_method_dk, dt, g=9.81):
-    """
-    Compute boundary coefficient 'kappa' for downstream end of superlink k.
-    """
-    k = Q_dk.size
-    t_0 = dx_dk / g / A_dk / dt
-    t_1 = np.zeros(k, dtype=np.float64)
-    for n in range(k):
-        t_1[n] = friction_slope(Q_dk[n], dx_dk[n], A_dk[n], R_dk[n],
-                                n_dk[n], Sf_method_dk[n], g)
-    t_2 = C_dk * np.abs(Q_dk) / 2 / g / A_dk**2
-    return t_0 + t_1 + t_2
+#@njit(float64[:](float64[:], float64[:], float64[:], float64[:], boolean[:], int64[:], float64[:]),
+#      cache=True)
+#def numba_u_Ip1k(_dx_ik, _u_ik, _dx_dk, _u_dk, _link_end, _ki, _u_Ip1k):
+#    n = _u_Ip1k.size
+#    for i in range(n):
+#        k = _ki[i]
+#        if _link_end[i]:
+#            _u_Ip1k[i] = _u_dk[k]
+#        else:
+#            ip1 = i + 1
+#            _u_Ip1k[i] = _u_ik[ip1]
+#    return _u_Ip1k
 
-@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:],
-                 float64[:], float64, float64), cache=True)
-def mu_uk_old(Q_uk_t, dx_uk, A_uk, theta_uk, z_inv_uk, S_o_uk, dt, g=9.81):
-    """
-    Compute boundary coefficient 'mu' for upstream end of superlink k.
-    """
-    t_0 = Q_uk_t * dx_uk / g / A_uk / dt
-    t_1 = - theta_uk * z_inv_uk
-    t_2 = dx_uk * S_o_uk
-    return t_0 + t_1 + t_2
-
-@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:],
-                 float64[:], float64, float64), cache=True)
-def mu_dk_old(Q_dk_t, dx_dk, A_dk, theta_dk, z_inv_dk, S_o_dk, dt, g=9.81):
-    """
-    Compute boundary coefficient 'mu' for downstream end of superlink k.
-    """
-    t_0 = - Q_dk_t * dx_dk / g / A_dk / dt
-    t_1 = - theta_dk * z_inv_dk
-    t_2 = - dx_dk * S_o_dk
-    return t_0 + t_1 + t_2
 
 @njit(float64(float64, float64, float64, float64, float64),
       cache=True)
@@ -1093,28 +1064,6 @@ def gamma_p(Q_p_t, b_p, c_p, u):
     """
     num = u
     den = b_p * np.abs(Q_p_t)**(c_p - 1)
-    result = safe_divide_vec(num, den)
-    return result
-
-@njit(float64[:](float64[:], float64[:], float64[:], float64),
-      cache=True)
-def gamma_uk(Q_uk_t, C_uk, A_uk, g=9.81):
-    """
-    Compute flow coefficient 'gamma' for upstream end of superlink k
-    """
-    num = -np.abs(Q_uk_t) * C_uk
-    den = 2 * (A_uk**2) * g
-    result = safe_divide_vec(num, den)
-    return result
-
-@njit(float64[:](float64[:], float64[:], float64[:], float64),
-      cache=True)
-def gamma_dk(Q_dk_t, C_dk, A_dk, g=9.81):
-    """
-    Compute flow coefficient 'gamma' for downstream end of superlink k
-    """
-    num = np.abs(Q_dk_t) * C_dk
-    den = 2 * (A_dk**2) * g
     result = safe_divide_vec(num, den)
     return result
 

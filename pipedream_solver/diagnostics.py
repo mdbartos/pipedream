@@ -428,10 +428,11 @@ def momentum_error_ik(model, dt):
     error[_i_is_start] += model._a_ik[_i_is_start] * model.Q_uk
     error[_i_is_end] += model._c_ik[_i_is_end] * model.Q_dk
     # Addition 2025-06-05
-    error[_i_is_start] += model._c_ik[_i_is_start] * model.Q_ik[_i_1k + 1]
-    error[_i_is_end] += model._a_ik[_i_is_end] * model.Q_ik[_i_nk - 1]
-    error[_i_is_internal] += model._a_ik[_i_is_internal] * model.Q_ik[_im1]
-    error[_i_is_internal] += model._c_ik[_i_is_internal] * model.Q_ik[_ip1]
+    if _i_is_internal.any():
+        error[_i_is_start] += model._c_ik[_i_is_start] * model.Q_ik[_i_1k + 1]
+        error[_i_is_end] += model._a_ik[_i_is_end] * model.Q_ik[_i_nk - 1]
+        error[_i_is_internal] += model._a_ik[_i_is_internal] * model.Q_ik[_im1]
+        error[_i_is_internal] += model._c_ik[_i_is_internal] * model.Q_ik[_ip1]
     return error
 
 def momentum_magnitude_ik(model, dt):

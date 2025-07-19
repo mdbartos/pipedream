@@ -139,6 +139,7 @@ def Circular_B_ik(h_ik, g1, g2):
     else:
         # TODO: Use absolute value instead of fraction?
         B = pslot * d
+    B = max(pslot * d, B)
     return B
 
 

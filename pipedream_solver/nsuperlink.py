@@ -353,6 +353,8 @@ class nSuperLink(SuperLink):
                 A = np.array([pipedream_solver.ngeometry.Transect_A_ik(w_i, x, y) for w_i in w])
                 B = np.array([pipedream_solver.ngeometry.Transect_B_ik(w_i, x, y) for w_i in w])
                 Pe = np.array([pipedream_solver.ngeometry.Transect_Pe_ik(w_i, x, y) for w_i in w])
+                # TODO: See if this is affected by change in definition of safe_divide_vec
+                # NOTE: R will always tend towards zero from l'hopital's rule
                 R = safe_divide_vec(A, Pe)
                 _transect_As.append(A)
                 _transect_Bs.append(B)
@@ -722,26 +724,43 @@ class nSuperLink(SuperLink):
         _link_end = self._link_end
         # Determine start and end nodes
         # Compute link velocities
-        numba_u_ik(_Q_ik, _A_ik, _u_ik)
+        _u_ik = numba_u_ik(_Q_ik, _A_ik, _u_ik)
         # Compute boundary velocities
-        numba_u_uk(_Q_uk, _A_uk, _u_uk)
-        numba_u_dk(_Q_dk, _A_dk, _u_dk)
+        _u_uk = numba_u_ik(_Q_uk, _A_uk, _u_uk)
+        _u_dk = numba_u_ik(_Q_dk, _A_dk, _u_dk)
         # Compute velocities for start nodes (1 -> Nk)
         numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik)
         # Compute velocities for end nodes (2 -> Nk+1)
         numba_u_Ip1k(_dx_ik, _u_ik, _dx_dk, _u_dk, _link_end, _ki, _u_Ip1k)
+        # Compute effective velocity at superjunctions
+        #M = self.M
+        #_J_uk = self._J_uk
+        #_J_dk = self._J_dk
+        #Qu_j = np.zeros(M)
+        #np.add.at(Qu_j, _J_uk, (_u_uk * np.abs(_Q_uk)))
+        #np.add.at(Qu_j, _J_dk, (_u_dk * np.abs(_Q_dk)))
+        #Q_j = np.zeros(M)
+        #np.add.at(Q_j, _J_dk, np.abs(_Q_dk))
+        #np.add.at(Q_j, _J_uk, np.abs(_Q_uk))
+        #_u_j = safe_divide_vec(Qu_j, Q_j)
         # Export to instance variables
         self._u_ik = _u_ik
         self._u_uk = _u_uk
         self._u_dk = _u_dk
         self._u_Ik = _u_Ik
         self._u_Ip1k = _u_Ip1k
+        #self._u_j = _u_j
 
     def link_coeffs(self, _dt=None, first_iter=True):
         """
         Compute link momentum coefficients: a_ik, b_ik, c_ik and P_ik.
         """
         # Import instance variables
+        _i_1k = self._i_1k
+        _i_nk = self._i_nk
+        _u_ik = self._u_ik
+        _u_uk = self._u_uk
+        _u_dk = self._u_dk
         _u_Ik = self._u_Ik         # Flow velocity at junction Ik
         _u_Ip1k = self._u_Ip1k     # Flow velocity at junction I + 1k
         _dx_ik = self._dx_ik       # Length of link ik
@@ -792,26 +811,42 @@ class nSuperLink(SuperLink):
         _c_ik = numba_c_ik(_u_Ip1k, _sigma_ik)
         _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik_next, _A_ik, _R_ik, _A_c_ik,
                            _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik, _Sf_method_ik, g)
+        #_b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik_next, _A_ik, _R_ik, _A_c_ik,
+        #                   _C_ik, _u_ik, _ctrl, _sigma_ik, _Sf_method_ik, g)
         _P_ik = numba_P_ik(_Q_ik_prev, _dx_ik, _dt, _A_ik, _S_o_ik,
                            _sigma_ik, g)
+        #_a_ik[_i_1k] *= _theta_uk
+        #_c_ik[_i_nk] *= _theta_dk
         # Compute momentum coefficients for upstream boundary
         _ctrl_uk = np.ones(NK, dtype=np.bool_)
         _sigma_uk = _sigma_ik[_link_start]
         _a_uk = np.zeros(NK, dtype=np.float64)
-        _c_uk = numba_c_ik(_u_Ik[_link_start], _sigma_uk)
+        #_c_uk = numba_c_ik(_u_Ik[_link_start], _sigma_uk)
+        #_c_uk = numba_c_ik(_u_uk, _sigma_uk)
+        _c_uk = numba_c_ik(_u_ik[_link_start], _sigma_uk)    # This actually seems to be more stable
         _b_uk = numba_b_ik(_dx_uk, _dt, _n_uk, _Q_uk_next, _A_uk, _R_uk, _A_uk,
                            _C_uk, _a_uk, _c_uk, _ctrl_uk , _sigma_uk, _Sf_method_uk, g)
+        #_b_uk = numba_b_ik(_dx_uk, _dt, _n_uk, _Q_uk_next, _A_uk, _R_uk, _A_uk,
+        #                   _C_uk, _u_uk, _ctrl_uk , _sigma_uk, _Sf_method_uk, g)
         _P_uk = numba_P_ik(_Q_uk_prev, _dx_uk, _dt, _A_uk, _S_o_uk, _sigma_uk, g)
         _P_uk -= g * _A_uk * _theta_uk * _z_inv_uk
+        # Try to make depth critical
+        #_c_uk *= _theta_uk
         # Compute momentum coefficients for downstream boundary
         _ctrl_dk = np.ones(NK, dtype=np.bool_)
         _sigma_dk = _sigma_ik[_link_end]
-        _a_dk = numba_a_ik(_u_Ip1k[_link_end], _sigma_dk)
+        #_a_dk = numba_a_ik(_u_Ip1k[_link_end], _sigma_dk)
+        #_a_dk = numba_a_ik(_u_dk, _sigma_dk)
+        _a_dk = numba_a_ik(_u_ik[_link_end], _sigma_dk)    # This actually seems to be more stable
         _c_dk = np.zeros(NK, dtype=np.float64)
         _b_dk = numba_b_ik(_dx_dk, _dt, _n_dk, _Q_dk_next, _A_dk, _R_dk, _A_dk,
                            _C_dk, _a_dk, _c_dk, _ctrl_dk , _sigma_dk, _Sf_method_dk, g)
+        #_b_dk = numba_b_ik(_dx_dk, _dt, _n_dk, _Q_dk_next, _A_dk, _R_dk, _A_dk,
+        #                   _C_dk, _u_dk, _ctrl_dk , _sigma_dk, _Sf_method_dk, g)
         _P_dk = numba_P_ik(_Q_dk_prev, _dx_dk, _dt, _A_dk, _S_o_dk, _sigma_dk, g)
         _P_dk += g * _A_dk * _theta_dk * _z_inv_dk
+        # Try to make depth critical
+        #_a_dk *= _theta_dk
         # Export to instance variables
         self._a_ik = _a_ik
         self._b_ik = _b_ik
@@ -1758,6 +1793,42 @@ class nSuperLink(SuperLink):
         Q_ik_f = numba_Q_im1k_next_f(_U_Ik, _h_Ik, _V_Ik, _W_Ik,
                                      _h_uk, _Ik, _ki, n)
         return Q_ik_b, Q_ik_f
+
+    def solve_superlink_flows(self):
+        """
+        Solve for superlink boundary discharges given superjunction
+        heads at time t + dt.
+        """
+        # Import instance variables
+        _J_uk = self._J_uk            # Index of superjunction upstream of superlink k
+        _J_dk = self._J_dk            # Index of superjunction downstream of superlink k
+        _alpha_uk = self._alpha_uk    # Superlink flow coefficient
+        _alpha_dk = self._alpha_dk    # Superlink flow coefficient
+        _beta_uk = self._beta_uk      # Superlink flow coefficient
+        _beta_dk = self._beta_dk      # Superlink flow coefficient
+        _chi_uk = self._chi_uk        # Superlink flow coefficient
+        _chi_dk = self._chi_dk        # Superlink flow coefficient
+        H_j = self.H_j                # Head at superjunction j
+        _theta_uk = self._theta_uk
+        _theta_dk = self._theta_dk
+        _A_uk = self._A_uk
+        _A_dk = self._A_dk
+        _B_uk = self._B_uk
+        _B_dk = self._B_dk
+        g = 9.81
+        # Compute flow at next time step
+        _Q_uk_next = _alpha_uk * H_j[_J_uk] + _beta_uk * H_j[_J_dk] + _chi_uk
+        _Q_dk_next = _alpha_dk * H_j[_J_uk] + _beta_dk * H_j[_J_dk] + _chi_dk
+        # If overflow, need to use critical depth, otherwise singular
+        # TODO: Does this need to be accounted for in recurrence relations?
+        # TODO: Should calculate depth first, then flow?
+        #_Q_uk_crit = np.sqrt(g * _A_uk**3 / _B_uk)
+        #_Q_dk_crit = np.sqrt(g * _A_dk**3 / _B_dk)
+        #_Q_uk_next[_theta_uk == 0] = _Q_uk_crit[_theta_uk == 0]
+        #_Q_dk_next[_theta_dk == 0] = _Q_dk_crit[_theta_dk == 0]
+        # Export instance variables
+        self._Q_uk = _Q_uk_next
+        self._Q_dk = _Q_dk_next
 
     def solve_orifice_flows(self, dt, u=None):
         """
