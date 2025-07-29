@@ -78,13 +78,17 @@ class ErrorTracker(BaseCallback):
         self.momentum_error_ik = momentum_error_ik(model, dt)
         self.momentum_error_uk = momentum_error_uk_2(model, dt)
         self.momentum_error_dk = momentum_error_dk_2(model, dt)
+        # Use these for tsuperlink
+        #self.momentum_error_ik = momentum_error_ik_2(model, dt)
+        #self.momentum_error_uk = momentum_error_uk_3(model, dt)
+        #self.momentum_error_dk = momentum_error_dk_3(model, dt)
         #self.momentum_error_o = 
         #self.momentum_error_w = 
         #self.momentum_error_p = 
 
     def _compute_magnitudes(self, *args, **kwargs):
         model = self.model
-        # TODO: This could cause problems, need to make sure this stays updated at each step
+        # TODO: This dt could cause problems, need to make sure this stays updated at each step
         dt = model._dt
         self.continuity_magnitude_j = continuity_magnitude_j(model, dt)
         self.continuity_magnitude_Ik = continuity_magnitude_Ik(model, dt)
@@ -139,12 +143,13 @@ class VolumeTracker(BaseCallback):
 
 
 class ConvergenceTracker(BaseCallback):
-    def __init__(self, model, rtol=1e-5, atol=1e-8):
+    def __init__(self, model, rtol=1e-5, atol=1e-8, learning_rate=0.5):
         self.model = model
         self.prior_guess = 0.
         self.next_guess = 0.
         self.rtol = rtol
         self.atol = atol
+        self.learning_rate = learning_rate
 
     def _convergence_met(self, prior_guess, next_guess, rtol=None, atol=None):
         if rtol is None:
@@ -158,11 +163,9 @@ class ConvergenceTracker(BaseCallback):
         return condition
 
     def _compute_prior_guess(self):
-        #return np.copy(self.model.H_j)
         return self.model.state_vector
     
     def _compute_next_guess(self):
-        #return np.copy(self.model.H_j)
         return self.model.state_vector
 
     def __on_step_start__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
@@ -201,11 +204,13 @@ class ConvergenceTracker(BaseCallback):
                         break
         self.model.iter_elapsed = iter_elapsed 
 
+
 class LegacyConvergenceTracker(ConvergenceTracker):
     def __init__(self, model):
         self.model = model
         self.prior_guess = 0.
         self.next_guess = 0.
+        self.learning_rate = 0.5
 
     def _convergence_met(self, prior_guess, next_guess, head_tol=0.0015):
         e = np.abs(next_guess - prior_guess)
@@ -213,12 +218,19 @@ class LegacyConvergenceTracker(ConvergenceTracker):
         return condition
 
     def _compute_prior_guess(self):
-        #return np.copy(self.model.H_j)
         return self.model.H_j
     
     def _compute_next_guess(self):
-        #return np.copy(self.model.H_j)
         return self.model.H_j
+
+    def _set_states(self, prior_states, next_states):
+        model = self.model
+        alpha = self.learning_rate
+        for state_name in next_states:
+            prior_state = prior_states[state_name]
+            next_state = next_states[state_name]
+            updated_state = (1 - alpha) * prior_state + (alpha) * next_state
+            setattr(model, state_name, updated_state)
 
     def __on_step_end__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
                         first_time=False, implicit=True, banded=None, first_iter=True,
@@ -234,6 +246,7 @@ class LegacyConvergenceTracker(ConvergenceTracker):
                     self.model.iter_count -= 1
                     self.model.t -= dt
                     self.prior_guess = self._compute_prior_guess()
+                    self.prior_states = self.model.return_state()
                     try:
                         self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                             first_time=first_time, implicit=implicit, banded=banded,
@@ -245,8 +258,10 @@ class LegacyConvergenceTracker(ConvergenceTracker):
                         self.model.load_state()
                         raise
                     self.next_guess = self._compute_next_guess()
+                    self.next_states = self.model.return_state()
                     iter_elapsed += 1
                     convergence_met = self._convergence_met(self.prior_guess, self.next_guess, head_tol=head_tol)
+                    self._set_states(self.prior_states, self.next_states)
                     if convergence_met:
                         break
         self.model.iter_elapsed = iter_elapsed 
@@ -328,6 +343,21 @@ def momentum_error_uk_2(model, dt):
     error = LHS - RHS
     return error
 
+# To be used with tsuperlink
+def momentum_error_uk_3(model, dt):
+    error = np.zeros(model.NK)
+    Q_uk_next = model.Q_uk
+    h_uk_next = model._h_uk
+    H_juk_next = model.H_j[model._J_uk]
+    a_uk = model._a_uk
+    b_uk = model._b_uk
+    c_uk = model._c_uk
+    P_uk = model._P_uk
+    LHS = a_uk * H_juk_next + b_uk * Q_uk_next + c_uk * h_uk_next
+    RHS = P_uk
+    error = LHS - RHS
+    return error
+
 def momentum_magnitude_uk(model, dt):
     Q_uk_next = model.Q_uk
     Q_uk_prev = model.states['Q_uk']
@@ -362,6 +392,21 @@ def momentum_error_dk_2(model, dt):
     # Friction and local losses
     LHS = b_dk * Q_dk_next + a_dk * Q_nk_next
     RHS = P_dk + g * A_dk * (h_dk_next - H_jdk_next)
+    error = LHS - RHS
+    return error
+
+# To be used with tsuperlink
+def momentum_error_dk_3(model, dt):
+    error = np.zeros(model.NK)
+    Q_dk_next = model.Q_dk
+    h_dk_next = model._h_dk
+    H_jdk_next = model.H_j[model._J_dk]
+    a_dk = model._a_dk
+    b_dk = model._b_dk
+    c_dk = model._c_dk
+    P_dk = model._P_dk
+    LHS = a_dk * h_dk_next + b_dk * Q_dk_next + c_dk * H_jdk_next
+    RHS = P_dk
     error = LHS - RHS
     return error
 
@@ -433,6 +478,17 @@ def momentum_error_ik(model, dt):
         error[_i_is_end] += model._a_ik[_i_is_end] * model.Q_ik[_i_nk - 1]
         error[_i_is_internal] += model._a_ik[_i_is_internal] * model.Q_ik[_im1]
         error[_i_is_internal] += model._c_ik[_i_is_internal] * model.Q_ik[_ip1]
+    return error
+
+# To be used with tsuperlink
+def momentum_error_ik_2(model, dt):
+    error = np.zeros(model._i.size)
+    Q_ik_next = model.Q_ik
+    h_Ik_next = model.h_Ik
+    error -= model._P_ik
+    error += model._a_ik * h_Ik_next[model._Ik]
+    error += model._b_ik * Q_ik_next
+    error += model._c_ik * h_Ik_next[model._Ip1k]
     return error
 
 def momentum_magnitude_ik(model, dt):

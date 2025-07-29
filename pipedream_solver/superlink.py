@@ -4003,6 +4003,18 @@ class SuperLink():
         H_bc = np.where(bc, H_bc, 0.)
         return A_1, A_2, B, D, H_j_next, H_j_prev, Q_in, H_bc
 
+    def return_state(self):
+        states = {}
+        states['H_j'] = np.copy(self.H_j)
+        states['Q_uk'] = np.copy(self.Q_uk)
+        states['Q_dk'] = np.copy(self.Q_dk)
+        states['Q_o'] = np.copy(self.Q_o)
+        states['Q_w'] = np.copy(self.Q_w)
+        states['Q_p'] = np.copy(self.Q_p)
+        states['h_Ik'] = np.copy(self.h_Ik)
+        states['Q_ik'] = np.copy(self.Q_ik)
+        return states
+
     def save_state(self):
         """
         Save current model state to dict stored in self.states.
