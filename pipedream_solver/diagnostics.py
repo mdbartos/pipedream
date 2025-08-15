@@ -124,6 +124,33 @@ class VolumeTracker(BaseCallback):
         self.volume_flux_Ik = np.zeros(model._I.size)
         self.cumulative_vol_flux_j = np.zeros(model.M)
         self.cumulative_vol_flux_Ik = np.zeros(model._I.size)
+        self.init_volume_j = volume_j(model)
+        self.init_volume_Ik = volume_Ik(model)
+        self.init_volume_ik = volume_ik(model)
+        self.init_volume_uk = volume_uk(model)
+        self.init_volume_dk = volume_dk(model)
+
+    @property
+    def init_volume(self):
+        result = (self.init_volume_j.sum() + self.init_volume_Ik.sum() + self.init_volume_ik.sum() 
+                  + self.init_volume_uk.sum() + self.init_volume_dk.sum())
+        return result
+
+    @property
+    def total_volume(self):
+        result = (self.volume_j.sum() + self.volume_Ik.sum() + self.volume_ik.sum() 
+                  + self.volume_uk.sum() + self.volume_dk.sum())
+        return result
+
+    @property
+    def total_volume_flux(self):
+        result = (self.volume_flux_j.sum() + self.volume_flux_Ik.sum())
+        return result
+
+    @property
+    def cumulative_volume_flux(self):
+        result = (self.cumulative_vol_flux_j.sum() + self.cumulative_vol_flux_Ik.sum())
+        return result
 
     def __on_step_end__(self, *args, **kwargs):
         model = self.model
@@ -211,6 +238,7 @@ class LegacyConvergenceTracker(ConvergenceTracker):
         self.prior_guess = 0.
         self.next_guess = 0.
         self.learning_rate = 0.5
+        self.min_depth = 1e-5
 
     def _convergence_met(self, prior_guess, next_guess, head_tol=0.0015):
         e = np.abs(next_guess - prior_guess)
@@ -247,6 +275,8 @@ class LegacyConvergenceTracker(ConvergenceTracker):
                     self.model.t -= dt
                     self.prior_guess = self._compute_prior_guess()
                     self.prior_states = self.model.return_state()
+                    self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.min_depth)
+                    self.model.h_Ik = np.maximum(self.model.h_Ik, self.min_depth)
                     try:
                         self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                             first_time=first_time, implicit=implicit, banded=banded,
