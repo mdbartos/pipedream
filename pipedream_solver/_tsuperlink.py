@@ -519,6 +519,14 @@ def Q_i_b(h_Ik, h_Np1k, X_Ik, Y_Ik, Z_Ik):
 
 @njit(float64(float64, float64, float64, float64, float64),
       cache=True)
+def h_i_f(Q_ik, h_1k, U_Ik, V_Ik, W_Ik):
+    num = Q_ik - V_Ik - W_Ik * h_1k
+    den = U_Ik
+    result = safe_divide(num, den)
+    return result
+
+@njit(float64(float64, float64, float64, float64, float64),
+      cache=True)
 def h_i_b(Q_ik, h_Np1k, X_Ik, Y_Ik, Z_Ik):
     num = Q_ik - Y_Ik - Z_Ik * h_Np1k
     den = X_Ik
@@ -526,44 +534,60 @@ def h_i_b(Q_ik, h_Np1k, X_Ik, Y_Ik, Z_Ik):
     return result
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], int64[:], int64[:], int64[:], int64,
-            float64, float64[:], boolean),
+            float64[:], float64[:], float64[:], int64[:], int64[:], int64[:], int64[:], int64),
       cache=True)
-def numba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
-                          _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, nk, NK,
-                          min_depth, max_depth_k, first_link_backwards=True):
+def tnumba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
+                          _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, _I_Nk, nk, NK):
     for k in range(NK):
         n = nk[k]
         i_1 = _i_1k[k]
         I_1 = _I_1k[k]
+        I_N = _I_Nk[k]
         i_n = i_1 + n - 1
         I_Np1 = I_1 + n
-        I_N = I_Np1 - 1
         # Set boundary depths
         _h_1k = _h_uk[k]
         _h_Np1k = _h_dk[k]
         _h_Ik[I_1] = _h_1k
         _h_Ik[I_Np1] = _h_Np1k
-        # Set max depth
-        max_depth = max_depth_k[k]
-        # Compute internal depths and flows (except first link flow)
-        for j in range(n - 1):
-            I = I_N - j
-            Ip1 = I + 1
-            i = i_n - j
-            _Q_ik[i] = Q_i_f(_h_Ik[Ip1], _h_1k, _U_Ik[I], _V_Ik[I], _W_Ik[I])
-            _h_Ik[I] = h_i_b(_Q_ik[i], _h_Np1k, _X_Ik[I], _Y_Ik[I], _Z_Ik[I])
-            #if _h_Ik[I] < min_depth:
-            #    _h_Ik[I] = min_depth
-            #if _h_Ik[I] > max_depth:
-            #    _h_Ik[I] = max_depth
-        if first_link_backwards:
-            _Q_ik[i_1] = Q_i_b(_h_Ik[I_1], _h_Np1k, _X_Ik[I_1], _Y_Ik[I_1],
-                            _Z_Ik[I_1])
+        # Determine direction (proxy for Froude number)
+        ratio = 0.
+        # Todo: check this range
+        for j in range(n):
+            I = I_1 + j
+            ratio += (np.log10(_U_Ik[I]) - np.log10(_X_Ik[I]))
+        go_forwards = ratio > 0.
+        go_backwards = (ratio <= 0.) or (not np.isfinite(ratio))
+        # If ratio > 0, go forwards
+        if go_forwards:
+            _Q_ik[i_1] = _X_Ik[I_1] * _h_1k + _Z_Ik[I_1] * _h_Np1k + _Y_Ik[I_1]
+            for j in range(I_N - I_1):
+                I = I_1 + j
+                Ip1 = I + 1
+                i = i_1 + j
+                ip1 = i + 1
+                _h_Ik[Ip1] = h_i_f(_Q_ik[i], _h_1k, _U_Ik[I], _V_Ik[I], _W_Ik[I])
+                _Q_ik[ip1] = Q_i_b(_h_Ik[Ip1], _h_Np1k, _X_Ik[Ip1], _Y_Ik[Ip1], _Z_Ik[Ip1])
+                #_h_Ik[Ip1] = (_Q_ik[i] - _W_Ik[I] * _h_1k - _V_Ik[I]) / _U_Ik[I]
+                #_Q_ik[ip1] = _X_Ik[Ip1] * _h_Ik[Ip1] + _Z_Ik[Ip1] * _h_Np1k + _Y_Ik[Ip1]
+            assert ip1 == i_n
+            assert Ip1 == I_N
+        # If ratio <= 0, go backwards
+        elif go_backwards:
+            _Q_ik[i_n] = _U_Ik[I_N] * _h_Np1k + _W_Ik[I_N] * _h_1k + _V_Ik[I_N]
+            for j in range(I_N - I_1):
+                I = I_N - j
+                Im1 = I - 1
+                i = i_n - j
+                im1 = i - 1
+                _h_Ik[I] = h_i_b(_Q_ik[i], _h_Np1k, _X_Ik[I], _Y_Ik[I], _Z_Ik[I])
+                _Q_ik[im1] = Q_i_f(_h_Ik[I], _h_1k, _U_Ik[Im1], _V_Ik[Im1], _W_Ik[Im1])
+                #_h_Ik[I] = (_Q_ik[i] - _Z_Ik[I] * _h_Np1k - _Y_Ik[I]) / _X_Ik[I]
+                #_Q_ik[im1] = _U_Ik[Im1] * _h_Ik[I] + _W_Ik[Im1] * _h_1k + _V_Ik[Im1]
+            assert im1 == i_1
+            assert I == I_1 + 1
         else:
-            # Not theoretically correct, but seems to be more stable sometimes
-            _Q_ik[i_1] = Q_i_f(_h_Ik[I_1 + 1], _h_1k, _U_Ik[I_1], _V_Ik[I_1],
-                            _W_Ik[I_1])
+            raise ValueError('Invalid Froude Number.')
     return 1
 
 
@@ -640,18 +664,29 @@ def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
         _h_Ik[jstart+1:jstart+nlinks] = _h_inner
     return _h_Ik
 
-@njit(float64[:](float64[:], float64[:], float64[:]),
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_u_ik(_Q_ik, _A_ik, _u_ik):
+def numba_u_ik(_Q_ik, _A_ik, _A_ik_min, _u_ik):
     n = _u_ik.size
     for i in range(n):
         _Q_i = _Q_ik[i]
         _A_i = _A_ik[i]
-        if _A_i > SMALLEST_NORMAL:
-            _u_ik[i] = _Q_i / _A_i
-        else:
-            _u_ik[i] = 0.
+        _A_i_min = _A_ik_min[i]
+        _u_ik[i] = _Q_i / (_A_i + _A_i_min**2 / _A_i)
     return _u_ik
+
+#@njit(float64[:](float64[:], float64[:], float64[:]),
+#      cache=True)
+#def numba_u_ik(_Q_ik, _A_ik, _u_ik):
+#    n = _u_ik.size
+#    for i in range(n):
+#        _Q_i = _Q_ik[i]
+#        _A_i = _A_ik[i]
+#        if _A_i > SMALLEST_NORMAL:
+#            _u_ik[i] = _Q_i / _A_i
+#        else:
+#            _u_ik[i] = 0.
+#    return _u_ik
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], boolean[:], int64[:], float64[:]),
       cache=True)

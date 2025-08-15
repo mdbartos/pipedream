@@ -1,7 +1,7 @@
 import numpy as np
 
 from pipedream_solver.nsuperlink import nSuperLink
-from pipedream_solver._tsuperlink import tnumba_a_ik, tnumba_b_ik, tnumba_c_ik, tnumba_P_ik, tnumba_forward_recurrence, tnumba_backward_recurrence
+from pipedream_solver._tsuperlink import tnumba_a_ik, tnumba_b_ik, tnumba_c_ik, tnumba_P_ik, tnumba_forward_recurrence, tnumba_backward_recurrence, tnumba_solve_internals
 
 class tSuperLink(nSuperLink):
     def __init__(self, superlinks, superjunctions,
@@ -226,3 +226,71 @@ class tSuperLink(nSuperLink):
         self._alpha_dk = alpha_dk
         self._beta_dk = beta_dk
         self._chi_dk = chi_dk
+
+    def solve_internals_backwards(self, subcritical_only=False):
+        """
+        Solve for internal states of each superlink in the backward direction.
+        """
+        # Import instance variables
+        _I_1k = self._I_1k                  # Index of first junction in superlink k
+        _I_Nk = self._I_Nk
+        _i_1k = self._i_1k                  # Index of first link in superlink k
+        nk = self.nk
+        NK = self.NK
+        _h_Ik = self._h_Ik                  # Depth at junction Ik
+        _Q_ik = self._Q_ik                  # Flow rate at link ik
+        _D_Ik = self._D_Ik                  # Continuity coefficient
+        _E_Ik = self._E_Ik                  # Continuity coefficient
+        _U_Ik = self._U_Ik                  # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                  # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                  # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                  # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                  # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
+        _Q_uk = self._Q_uk                  # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk                  # Flow rate at downstream end of superlink k
+        _h_uk = self._h_uk                  # Depth at upstream end of superlink k
+        _h_dk = self._h_dk                  # Depth at downstream end of superlink k
+        min_depth = self.min_depth          # Minimum allowable water depth
+        max_depth_k = self.max_depth_k
+        # Solve internals
+        tnumba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
+                              _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, _I_Nk, nk, NK)
+        # TODO: Temporary
+        assert np.isfinite(_h_Ik).all()
+        # Export instance variables
+        self._h_Ik = _h_Ik
+        self._Q_ik = _Q_ik
+
+    def solve_internals_forwards(self, subcritical_only=False):
+        """
+        Solve for internal states of each superlink in the backward direction.
+        """
+        # Import instance variables
+        _I_1k = self._I_1k                  # Index of first junction in superlink k
+        _i_1k = self._i_1k                  # Index of first link in superlink k
+        _I_Nk = self._I_Nk
+        nk = self.nk
+        NK = self.NK
+        _h_Ik = self._h_Ik                  # Depth at junction Ik
+        _Q_ik = self._Q_ik                  # Flow rate at link ik
+        _D_Ik = self._D_Ik                  # Continuity coefficient
+        _E_Ik = self._E_Ik                  # Continuity coefficient
+        _U_Ik = self._U_Ik                  # Forward recurrence coefficient
+        _V_Ik = self._V_Ik                  # Forward recurrence coefficient
+        _W_Ik = self._W_Ik                  # Forward recurrence coefficient
+        _X_Ik = self._X_Ik                  # Backward recurrence coefficient
+        _Y_Ik = self._Y_Ik                  # Backward recurrence coefficient
+        _Z_Ik = self._Z_Ik                  # Backward recurrence coefficient
+        _Q_uk = self._Q_uk                  # Flow rate at upstream end of superlink k
+        _Q_dk = self._Q_dk                  # Flow rate at downstream end of superlink k
+        _h_uk = self._h_uk                  # Depth at upstream end of superlink k
+        _h_dk = self._h_dk                  # Depth at downstream end of superlink k
+        min_depth = self.min_depth          # Minimum allowable water depth
+        max_depth_k = self.max_depth_k
+        # Solve internals
+        tnumba_solve_internals(_h_Ik, _Q_ik, _h_uk, _h_dk, _U_Ik, _V_Ik, _W_Ik,
+                              _X_Ik, _Y_Ik, _Z_Ik, _i_1k, _I_1k, _I_Nk, nk, NK)
+        # Export instance variables
+        self._h_Ik = _h_Ik
+        self._Q_ik = _Q_ik
