@@ -170,35 +170,95 @@ class VolumeTracker(BaseCallback):
 
 
 class ConvergenceTracker(BaseCallback):
-    def __init__(self, model, rtol=1e-5, atol=1e-8, learning_rate=0.5):
+    def __init__(self, model, xtol=1e-6, max_learning_rate=0.5, min_learning_rate=0.01, beta=2.):
         self.model = model
-        self.prior_guess = 0.
-        self.next_guess = 0.
-        self.rtol = rtol
-        self.atol = atol
-        self.learning_rate = learning_rate
+        self.x_old = self._compute_prior_guess()
+        self.x_new = self._compute_next_guess()
+        self.dx = self._compute_guess_difference(self.x_old, self.x_new)
+        self.xtol = xtol
+        self.max_learning_rate = max_learning_rate
+        self.min_learning_rate = min_learning_rate
+        self.learning_rate = max_learning_rate
+        self.beta = beta
+        self.success = None
+        self.convergence_queue = []
+        self.convergence_metric = np.inf
 
-    def _convergence_met(self, prior_guess, next_guess, rtol=None, atol=None):
-        if rtol is None:
-            rtol = self.rtol
-        if atol is None:
-            atol = self.atol
-        e = np.abs(next_guess - prior_guess)
-        ewt = np.maximum(rtol * np.maximum(np.abs(prior_guess), np.abs(next_guess)),  atol)
-        valid = (e > 0.) & (ewt > 0.)
-        condition = (np.log(e[valid]) - np.log(ewt[valid])).max() <= 0.
+    def _compute_step_ratio(self, dx):
+        model = self.model
+        # Compute bounds on allowable discharges
+        Q_ik_ub = model._E_Ik[model._Ik] * model._h_Ik[model._Ik]
+        Q_ik_lb = -model._E_Ik[model._Ip1k] * model._h_Ik[model._Ip1k]
+        Q_uk_ub = (model._A_sj[model._J_uk] * model.H_j[model._J_uk] 
+                + (model._B_uk * model._dx_uk / 2) 
+                * ((model._theta_uk * (model.H_j[model._J_uk] - model._z_inv_j[model._J_uk]) 
+                    + model._h_Ik[model._I_1k]) / 2)) / model._dt
+        Q_uk_lb = -model._E_Ik[model._I_1k] * model._h_Ik[model._I_1k]
+        Q_dk_ub = model._E_Ik[model._I_Np1k] * model._h_Ik[model._I_Np1k]
+        Q_dk_lb = -(model._A_sj[model._J_dk] * model.H_j[model._J_dk] 
+                + (model._B_dk * model._dx_dk / 2) 
+                * ((model._theta_dk * (model.H_j[model._J_dk] - model._z_inv_j[model._J_dk]) 
+                    + model._h_Ik[model._I_Np1k]) / 2)) / model._dt
+        # Compute binding step ratio
+        ratio_ub = max(max((dx['Q_ik'] / Q_ik_ub).max(), 0.), 
+                       max((dx['Q_uk'] / Q_uk_ub).max(), 0.),
+                       max((dx['Q_dk'] / Q_dk_ub).max(), 0.))
+        ratio_lb = max(max(-(dx['Q_ik'] / Q_ik_lb).min(), 0.), 
+                       max(-(dx['Q_uk'] / Q_uk_lb).max(), 0.), 
+                       max(-(dx['Q_dk'] / Q_dk_lb).max(), 0.))
+        step_ratio = max(ratio_ub, ratio_lb)
+        return step_ratio
+
+    def _compute_learning_rate(self, step_ratio):
+        max_learning_rate = self.max_learning_rate
+        min_learning_rate = self.min_learning_rate
+        beta = self.beta
+        if step_ratio > 0:
+            learning_rate = min(1 / step_ratio / beta, 1.)
+        else:
+            learning_rate = 1.
+        learning_rate = max(min(learning_rate, max_learning_rate), min_learning_rate)
+        return learning_rate
+
+    def _convergence_metric(self, dx, x_old, x_new):
+        assert x_old.keys() == x_new.keys() == dx.keys()
+        abs_dx = {k : np.abs(dx[k]) for k in dx}
+        abs_mag = {k : 1. + np.maximum(np.abs(x_new[k]), np.abs(x_old[k])) for k in x_new}
+        max_step = max([(abs_dx[k] / abs_mag[k]).max() for k in abs_dx])
+        return max_step
+
+    def _convergence_met(self, convergence_metric, xtol):
+        condition = (convergence_metric <= xtol)
         return condition
 
     def _compute_prior_guess(self):
-        return self.model.state_vector
+        state = self.model.return_state()
+        x_old = {k : v for k, v in state.items() if v.size > 0}
+        return x_old
     
     def _compute_next_guess(self):
-        return self.model.state_vector
+        state = self.model.return_state()
+        x_new = {k : v for k, v in state.items() if v.size > 0}
+        return x_new
+
+    def _compute_guess_difference(self, x_old, x_new):
+        assert x_old.keys() == x_new.keys()
+        dx = {k : x_new[k] - x_old[k] for k in x_new}
+        return dx
+
+    def _set_states(self, x_old, x_new, learning_rate):
+        model = self.model
+        for state_name in x_new:
+            prior_state = x_old[state_name]
+            next_state = x_new[state_name]
+            updated_state = (1 - learning_rate) * prior_state + (learning_rate) * next_state
+            setattr(model, state_name, updated_state)
 
     def __on_step_start__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
                           first_time=False, implicit=True, banded=None, first_iter=True,
                           num_iter=0, rtol=None, atol=None, head_tol=0.0015):
-       self.prior_guess = self._compute_prior_guess() 
+       self.x_old = self._compute_prior_guess() 
+       self.success = False
     
     def __on_step_end__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
                         first_time=False, implicit=True, banded=None, first_iter=True,
@@ -206,14 +266,17 @@ class ConvergenceTracker(BaseCallback):
         # Perform fixed-point iteration until convergence
         iter_elapsed = 1
         if (num_iter > 0):
-            self.next_guess = self._compute_next_guess()
-            convergence_met = self._convergence_met(self.prior_guess, self.next_guess, rtol=rtol, atol=atol)
-            if not convergence_met:
+            self.convergence_queue = []
+            self.x_new = self._compute_next_guess()
+            self.dx = self._compute_guess_difference(self.x_old, self.x_new)
+            self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
+            self.success = self._convergence_met(self.convergence_metric, self.xtol)
+            if not self.success:
                 for _ in range(num_iter):
                     # TODO: Rename this to step count
                     self.model.iter_count -= 1
                     self.model.t -= dt
-                    self.prior_guess = self._compute_prior_guess()
+                    self.x_old = self._compute_prior_guess()
                     try:
                         self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                             first_time=first_time, implicit=implicit, banded=banded,
@@ -224,15 +287,21 @@ class ConvergenceTracker(BaseCallback):
                     except:
                         self.model.load_state()
                         raise
-                    self.next_guess = self._compute_next_guess()
+                    self.x_new = self._compute_next_guess()
+                    self.dx = self._compute_guess_difference(self.x_old, self.x_new)
+                    self.step_ratio = self._compute_step_ratio(self.dx)
+                    self.learning_rate = self._compute_learning_rate(self.step_ratio)
+                    self._set_states(self.x_old, self.x_new, self.learning_rate)
+                    self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
+                    self.success = self._convergence_met(self.convergence_metric, self.xtol)
+                    self.convergence_queue.append(self.convergence_metric)
                     iter_elapsed += 1
-                    convergence_met = self._convergence_met(self.prior_guess, self.next_guess, rtol=rtol, atol=atol)
-                    if convergence_met:
+                    if self.success:
                         break
         self.model.iter_elapsed = iter_elapsed 
 
 
-class LegacyConvergenceTracker(ConvergenceTracker):
+class LegacyConvergenceTracker(BaseCallback):
     def __init__(self, model):
         self.model = model
         self.prior_guess = 0.
@@ -259,6 +328,11 @@ class LegacyConvergenceTracker(ConvergenceTracker):
             next_state = next_states[state_name]
             updated_state = (1 - alpha) * prior_state + (alpha) * next_state
             setattr(model, state_name, updated_state)
+
+    def __on_step_end__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
+                        first_time=False, implicit=True, banded=None, first_iter=True,
+                        num_iter=1, rtol=None, atol=None, head_tol=0.0015):
+        self.prior_guess = self._compute_prior_guess() 
 
     def __on_step_end__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
                         first_time=False, implicit=True, banded=None, first_iter=True,
