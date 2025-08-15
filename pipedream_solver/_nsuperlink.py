@@ -669,18 +669,29 @@ def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
         _h_Ik[jstart+1:jstart+nlinks] = _h_inner
     return _h_Ik
 
-@njit(float64[:](float64[:], float64[:], float64[:]),
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:]),
       cache=True)
-def numba_u_ik(_Q_ik, _A_ik, _u_ik):
+def numba_u_ik(_Q_ik, _A_ik, _A_ik_min, _u_ik):
     n = _u_ik.size
     for i in range(n):
         _Q_i = _Q_ik[i]
         _A_i = _A_ik[i]
-        if _A_i > SMALLEST_NORMAL:
-            _u_ik[i] = _Q_i / _A_i
-        else:
-            _u_ik[i] = 0.
+        _A_i_min = _A_ik_min[i]
+        _u_ik[i] = _Q_i / (_A_i + _A_i_min**2 / _A_i)
     return _u_ik
+
+#@njit(float64[:](float64[:], float64[:], float64[:]),
+#      cache=True)
+#def numba_u_ik(_Q_ik, _A_ik, _u_ik):
+#    n = _u_ik.size
+#    for i in range(n):
+#        _Q_i = _Q_ik[i]
+#        _A_i = _A_ik[i]
+#        if _A_i > SMALLEST_NORMAL:
+#            _u_ik[i] = _Q_i / _A_i
+#        else:
+#            _u_ik[i] = 0.
+#    return _u_ik
 
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], boolean[:], int64[:], float64[:]),
       cache=True)

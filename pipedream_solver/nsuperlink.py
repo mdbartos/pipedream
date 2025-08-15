@@ -482,6 +482,97 @@ class nSuperLink(SuperLink):
         self._functional = _functional
         self._tabular = _tabular
 
+    def min_hydraulic_geometry(self):
+        min_depth = self.min_depth
+        _ik = self._ik                 # Link index
+        _Ik = self._Ik                 # Junction index
+        _Ip1k = self._Ip1k             # Index of next junction
+        _h_Ik_min = self._h_Ik_min
+        _A_ik_min = self._A_ik_min
+        _Pe_ik_min = self._Pe_ik_min
+        _R_ik_min = self._R_ik_min
+        _B_ik_min = self._B_ik_min
+        _A_uk_min = self._A_uk_min
+        _Pe_uk_min = self._Pe_uk_min
+        _R_uk_min = self._R_uk_min
+        _B_uk_min = self._B_uk_min
+        _A_dk_min = self._A_dk_min
+        _Pe_dk_min = self._Pe_dk_min
+        _R_dk_min = self._R_dk_min
+        _B_dk_min = self._B_dk_min
+        _z_inv_uk = self._z_inv_uk
+        _z_inv_dk = self._z_inv_dk
+        _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
+        _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
+        _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
+        _g4_ik = self._g4_ik           # Geometry 4 of link ik (other)
+        _g5_ik = self._g5_ik           # Geometry 5 of link ik (other)
+        _g6_ik = self._g6_ik           # Geometry 6 of link ik (other)
+        _g7_ik = self._g7_ik           # Geometry 7 of link ik (other)
+        _geom_codes = self._geom_codes
+        _ellipse_ix = self._ellipse_ix
+        _is_irregular = self._is_irregular
+        _has_irregular = self._has_irregular
+        _transect_zs = self._transect_zs
+        _transect_As = self._transect_As
+        _transect_Bs = self._transect_Bs
+        _transect_Pes = self._transect_Pes
+        _transect_Rs = self._transect_Rs
+        _transect_codes = self._transect_codes
+        _transect_inds = self._transect_inds
+        _transect_lens = self._transect_lens
+        _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
+        _J_uk = self._J_uk             # Index of junction upstream of superlink k
+        _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
+        _J_dk = self._J_dk             # Index of junction downstream of superlink k
+        _uk_has_irregular = self._uk_has_irregular
+        _i_1k = self._i_1k
+        _I_1k = self._I_1k
+        _dk_has_irregular = self._dk_has_irregular
+        _i_nk = self._i_nk
+        _I_Np1k = self._I_Np1k
+        _theta_uk = np.ones(self._theta_uk.size, dtype=np.float64)
+        _theta_dk = np.ones(self._theta_dk.size, dtype=np.float64)
+        # Compute hydraulic geometry for regular geometries
+        # NOTE: Handle case for elliptical perimeter first
+        handle_elliptical_perimeter(_Pe_ik_min, _ellipse_ix, _Ik, _Ip1k, _h_Ik_min,
+                                    _g1_ik, _g2_ik)
+        # Compute hydraulic geometries for all other regular geometries
+        numba_hydraulic_geometry(_A_ik_min, _Pe_ik_min, _R_ik_min, _B_ik_min, _h_Ik_min,
+                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
+                                 _geom_codes, _Ik, _ik)
+        # Compute hydraulic geometry for irregular geometries
+        if _has_irregular:
+            numba_transect_geometry(_A_ik_min, _Pe_ik_min, _R_ik_min, _B_ik_min, _h_Ik_min, _is_irregular,
+                                    _transect_zs, _transect_As, _transect_Bs, _transect_Pes,
+                                    _transect_Rs, _transect_codes, _transect_inds,
+                                    _transect_lens, _Ik, _ik)
+        # Compute hydraulic geometry for regular geometries
+        numba_boundary_geometry(_A_uk_min, _Pe_uk_min, _R_uk_min, _B_uk_min, _h_Ik_min, _z_inv_uk + min_depth, _z_inv_uk, _theta_uk,
+                                _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
+                                _geom_codes, _i_1k, _I_1k, _J_uk)
+        # Compute hydraulic geometry for irregular geometries
+        if _uk_has_irregular:
+            numba_boundary_transect(_A_uk_min, _Pe_uk_min, _R_uk_min, _B_uk_min, _h_Ik_min, _z_inv_uk + min_depth, _z_inv_uk, _theta_uk,
+                                    _is_irregular, _transect_zs, _transect_As, _transect_Bs,
+                                    _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
+                                    _transect_lens, _I_1k, _i_1k, _J_uk)
+        # Compute hydraulic geometry for regular geometries
+        numba_boundary_geometry(_A_dk_min, _Pe_dk_min, _R_dk_min, _B_dk_min, _h_Ik_min, _z_inv_dk + min_depth, _z_inv_dk, _theta_dk,
+                                _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
+                                _geom_codes, _i_nk, _I_Np1k, _J_dk)
+        # Compute hydraulic geometry for irregular geometries
+        if _dk_has_irregular:
+            numba_boundary_transect(_A_dk_min, _Pe_dk_min, _R_dk_min, _B_dk_min, _h_Ik_min, _z_inv_dk + min_depth, _z_inv_dk, _theta_dk,
+                                    _is_irregular, _transect_zs, _transect_As, _transect_Bs,
+                                    _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
+                                    _transect_lens, _I_Np1k, _i_nk, _J_dk)
+        # Export to instance variables
+        self._A_ik_min = _A_ik_min
+        self._Pe_ik_min = _Pe_ik_min
+        self._R_ik_min = _R_ik_min
+        self._B_ik_min = _B_ik_min
+
     def link_hydraulic_geometry(self):
         """
         Compute hydraulic geometry for each link.
@@ -722,12 +813,15 @@ class nSuperLink(SuperLink):
         _ki = self._ki
         _link_start = self._link_start
         _link_end = self._link_end
+        _A_ik_min = self._A_ik_min
+        _A_uk_min = self._A_uk_min
+        _A_dk_min = self._A_dk_min
         # Determine start and end nodes
         # Compute link velocities
-        _u_ik = numba_u_ik(_Q_ik, _A_ik, _u_ik)
+        _u_ik = numba_u_ik(_Q_ik, _A_ik, _A_ik_min, _u_ik)
         # Compute boundary velocities
-        _u_uk = numba_u_ik(_Q_uk, _A_uk, _u_uk)
-        _u_dk = numba_u_ik(_Q_dk, _A_dk, _u_dk)
+        _u_uk = numba_u_ik(_Q_uk, _A_uk, _A_uk_min, _u_uk)
+        _u_dk = numba_u_ik(_Q_dk, _A_dk, _A_dk_min, _u_dk)
         # Compute velocities for start nodes (1 -> Nk)
         numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik)
         # Compute velocities for end nodes (2 -> Nk+1)

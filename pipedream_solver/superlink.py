@@ -773,6 +773,21 @@ class SuperLink():
         self._dt_ck = np.ones(self.NK, dtype=np.float64)
         self._Q_in = np.zeros(self.M, dtype=np.float64)
         self._H_bc = np.zeros(self.M, dtype=np.float64)
+        # Set minimum hydraulic geometries
+        self._h_Ik_min = np.full(self._h_Ik.size, self.min_depth, dtype=np.float64)
+        self._A_ik_min = np.copy(self._A_ik)
+        self._B_ik_min = np.copy(self._B_ik)
+        self._Pe_ik_min = np.copy(self._Pe_ik)
+        self._R_ik_min = np.copy(self._R_ik)
+        self._A_uk_min = np.copy(self._A_uk)
+        self._B_uk_min = np.copy(self._B_uk)
+        self._Pe_uk_min = np.copy(self._Pe_uk)
+        self._R_uk_min = np.copy(self._R_uk)
+        self._A_dk_min = np.copy(self._A_dk)
+        self._B_dk_min = np.copy(self._B_dk)
+        self._Pe_dk_min = np.copy(self._Pe_dk)
+        self._R_dk_min = np.copy(self._R_dk)
+        self.min_hydraulic_geometry()
         # Initialize state dictionary
         self.states = {}
         # Iteration counter
