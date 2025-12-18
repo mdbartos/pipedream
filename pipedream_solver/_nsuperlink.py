@@ -1599,3 +1599,80 @@ def numba_reposition_junctions(_x_Ik, _z_inv_Ik, _h_Ik, _dx_ik, _Q_ik, _H_dk,
                 _Q_i = _Q_ik[_i_1:_i_end]
                 _Q_i[pos_prev - 1] = (1 - r) * _Q_i[pos_prev - 1] + r * _Q_i[pos_prev]
                 _Q_ik[_i_1:_i_end] = _Q_i[ix]
+
+@njit(float64[:](float64[:], float64[:], float64[:], int64[:], 
+                 int64[:], int64[:], boolean[:], boolean[:]),
+      cache=True)
+def junction_numerator(_dQ_ik, _dQ_uk, _dQ_dk, _kI, 
+                       _forward_I_i, _backward_I_i, _is_start, _is_end):
+    N = _kI.size
+    num = np.zeros(N, dtype=np.float64)
+    for I in range(N):
+        k = _kI[I]
+        if _is_start[I]:
+            i = _forward_I_i[I]
+            num[I] = _dQ_ik[i] - _dQ_uk[k]
+        elif _is_end[I]:
+            im1 = _backward_I_i[I]
+            num[I] = _dQ_dk[k] - _dQ_ik[im1]
+        else:
+            i = _forward_I_i[I]
+            im1 = i - 1
+            num[I] = _dQ_ik[i] - _dQ_ik[im1]
+    return num
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], int64[:],
+                 int64[:], int64[:], boolean[:], boolean[:]),
+      cache=True)
+def junction_denominator(_D_Ik, _Q_ik, _Q_uk, _Q_dk, _kI, 
+                         _forward_I_i, _backward_I_i, _is_start, _is_end):
+    N = _kI.size
+    denom = np.zeros(N, dtype=np.float64)
+    for I in range(N):
+        k = _kI[I]
+        if _is_start[I]:
+            i = _forward_I_i[I]
+            denom[I] = _D_Ik[I] + _Q_uk[k] - _Q_ik[i]
+        elif _is_end[I]:
+            im1 = _backward_I_i[I]
+            denom[I] = _D_Ik[I] + _Q_ik[im1] - _Q_dk[k]
+        else:
+            i = _forward_I_i[I]
+            im1 = i - 1
+            denom[I] = _D_Ik[I] + _Q_ik[im1] - _Q_ik[i]
+    return denom
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+                 int64[:], int64[:], int64[:], int64[:], int64[:], int64[:], int64[:], int64[:]),
+      cache=True)
+def superjunction_numerator(D_j, _dQ_uk, _dQ_dk, _dQ_o, _dQ_w, _dQ_p, 
+                            _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp):
+    M = D_j.size
+    num = np.zeros(M, dtype=np.float64)
+    numba_add_at(num, _J_uk, _dQ_uk)
+    numba_add_at(num, _J_dk, -_dQ_dk)
+    numba_add_at(num, _J_uo, _dQ_o)
+    numba_add_at(num, _J_do, -_dQ_o)
+    numba_add_at(num, _J_uw, _dQ_w)
+    numba_add_at(num, _J_dw, -_dQ_w)
+    numba_add_at(num, _J_up, _dQ_p)
+    numba_add_at(num, _J_dp, -_dQ_p)
+    return num
+
+@njit(float64[:](float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+                 int64[:], int64[:], int64[:], int64[:], int64[:], int64[:], int64[:], int64[:]),
+      cache=True)
+def superjunction_denominator(D_j, _Q_uk, _Q_dk, _Q_o, _Q_w, _Q_p, 
+                            _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp):
+    M = D_j.size
+    denom = np.zeros(M, dtype=np.float64)
+    denom[:] += D_j
+    numba_add_at(denom, _J_dk, _Q_dk)
+    numba_add_at(denom, _J_uk, -_Q_uk)
+    numba_add_at(denom, _J_do, _Q_o)
+    numba_add_at(denom, _J_uo, -_Q_o)
+    numba_add_at(denom, _J_dw, _Q_w)
+    numba_add_at(denom, _J_uw, -_Q_w)
+    numba_add_at(denom, _J_dp, _Q_p)
+    numba_add_at(denom, _J_up, -_Q_p)
+    return denom

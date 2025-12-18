@@ -1,6 +1,10 @@
 import numpy as np
 from pipedream_solver._nsuperlink import numba_compute_functional_storage_volumes, numba_compute_tabular_storage_volumes
+from pipedream_solver._nsuperlink import junction_numerator, junction_denominator, superjunction_numerator, superjunction_denominator
 from pipedream_solver.callbacks import BaseCallback
+
+from numba import njit, prange
+from numba.types import float64, int64, uint32, uint16, uint8, boolean, UniTuple, Tuple, List, DictType, void
 
 class ErrorTracker(BaseCallback):
     """
@@ -334,6 +338,64 @@ class ConvergenceTracker(BaseCallback):
         # Enforce minimum depth
         self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.model.min_depth)
         self.model.h_Ik = np.maximum(self.model.h_Ik, self.model.min_depth)
+
+
+class ExperimentalConvergenceTracker(ConvergenceTracker):
+
+    def _compute_step_ratio(self, dx):
+        # TODO: Need to add weirs, orifices, pumps
+        model = self.model
+        _D_Ik = model._D_Ik
+        _Q_ik = model.Q_ik
+        _Q_uk = model.Q_uk
+        _Q_dk = model.Q_dk
+        _Q_o = model.Q_o
+        _Q_w = model.Q_w
+        _Q_p = model.Q_p
+        _kI = model._kI
+        _forward_I_i = model.forward_I_i
+        _backward_I_i = model.backward_I_i
+        _is_start = model._is_start
+        _is_end = model._is_end
+        _D_j = model.b
+        _J_uk = model._J_uk
+        _J_dk = model._J_dk
+        _J_uo = model._J_uo
+        _J_do = model._J_do
+        _J_uw = model._J_uw
+        _J_dw = model._J_dw
+        _J_up = model._J_up
+        _J_dp = model._J_dp
+        default = np.array([], dtype=np.float64)
+        _dQ_ik = self.dx.get('Q_ik', default)
+        _dQ_uk = self.dx.get('Q_uk', default)
+        _dQ_dk = self.dx.get('Q_dk', default)
+        _dQ_o = self.dx.get('Q_o', default)
+        _dQ_w = self.dx.get('Q_w', default)
+        _dQ_p = self.dx.get('Q_p', default)
+        num_I = junction_numerator(_dQ_ik, _dQ_uk, _dQ_dk, _kI, 
+                                   _forward_I_i, _backward_I_i, _is_start, _is_end)
+        denom_I = junction_denominator(_D_Ik, _Q_ik, _Q_uk, _Q_dk, _kI, 
+                                       _forward_I_i, _backward_I_i, _is_start, _is_end)
+        num_j = superjunction_numerator(_D_j, _dQ_uk, _dQ_dk, _dQ_o, _dQ_w, _dQ_p, 
+                                        _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp)
+        denom_j = superjunction_denominator(_D_j, _Q_uk, _Q_dk, _Q_o, _Q_w, _Q_p, 
+                                            _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp)
+        beta_I = (num_I / denom_I).max()
+        beta_j = (num_j / denom_j).max()
+        step_ratio = max(beta_I, beta_j)
+        return step_ratio
+
+    def _compute_learning_rate(self, step_ratio):
+        max_learning_rate = self.max_learning_rate
+        min_learning_rate = self.min_learning_rate
+        beta = self.beta
+        if step_ratio > 0:
+            learning_rate = min(1 / step_ratio / beta, 1.)
+        else:
+            learning_rate = 1.
+        learning_rate = max(min(learning_rate, max_learning_rate), min_learning_rate)
+        return learning_rate
 
 
 class LegacyConvergenceTracker(BaseCallback):
