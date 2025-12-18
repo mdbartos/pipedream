@@ -669,6 +669,7 @@ def numba_solve_internals_ls(_h_Ik, NK, nk, _k_1k, _i_1k, _I_1k, _U, _X, _b):
         _h_Ik[jstart+1:jstart+nlinks] = _h_inner
     return _h_Ik
 
+# NOTE: This writes to u_ik in place
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:]),
       cache=True)
 def numba_u_ik(_Q_ik, _A_ik, _A_ik_min, _u_ik):
@@ -693,6 +694,7 @@ def numba_u_ik(_Q_ik, _A_ik, _A_ik_min, _u_ik):
 #            _u_ik[i] = 0.
 #    return _u_ik
 
+# NOTE: This writes to u_Ik in place
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], boolean[:], int64[:], float64[:]),
       cache=True)
 def numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik):
@@ -716,6 +718,7 @@ def numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik):
                 _u_Ik[i] = 0.
     return _u_Ik
 
+# NOTE: This writes to u_Ip1k in place
 @njit(float64[:](float64[:], float64[:], float64[:], float64[:], boolean[:], int64[:], float64[:]),
       cache=True)
 def numba_u_Ip1k(_dx_ik, _u_ik, _dx_dk, _u_dk, _link_end, _ki, _u_Ip1k):

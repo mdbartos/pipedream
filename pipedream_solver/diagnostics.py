@@ -124,11 +124,7 @@ class VolumeTracker(BaseCallback):
         self.volume_flux_Ik = np.zeros(model._I.size)
         self.cumulative_vol_flux_j = np.zeros(model.M)
         self.cumulative_vol_flux_Ik = np.zeros(model._I.size)
-        self.init_volume_j = volume_j(model)
-        self.init_volume_Ik = volume_Ik(model)
-        self.init_volume_ik = volume_ik(model)
-        self.init_volume_uk = volume_uk(model)
-        self.init_volume_dk = volume_dk(model)
+        self.set_init_volume()
 
     @property
     def init_volume(self):
@@ -151,6 +147,14 @@ class VolumeTracker(BaseCallback):
     def cumulative_volume_flux(self):
         result = (self.cumulative_vol_flux_j.sum() + self.cumulative_vol_flux_Ik.sum())
         return result
+
+    def set_init_volume(self):
+        model = self.model
+        self.init_volume_j = volume_j(model)
+        self.init_volume_Ik = volume_Ik(model)
+        self.init_volume_ik = volume_ik(model)
+        self.init_volume_uk = volume_uk(model)
+        self.init_volume_dk = volume_dk(model)
 
     def __on_step_end__(self, *args, **kwargs):
         model = self.model
@@ -182,9 +186,12 @@ class ConvergenceTracker(BaseCallback):
         self.beta = beta
         self.success = None
         self.convergence_queue = []
+        self.learning_queue = []
         self.convergence_metric = np.inf
 
     def _compute_step_ratio(self, dx):
+        # TODO: Need to add weirs, orifices, pumps
+        # TODO: Need to account for elements with multiple outflows
         model = self.model
         # Compute bounds on allowable discharges
         Q_ik_ub = model._E_Ik[model._Ik] * model._h_Ik[model._Ik]
@@ -199,13 +206,32 @@ class ConvergenceTracker(BaseCallback):
                 + (model._B_dk * model._dx_dk / 2) 
                 * ((model._theta_dk * (model.H_j[model._J_dk] - model._z_inv_j[model._J_dk]) 
                     + model._h_Ik[model._I_Np1k]) / 2)) / model._dt
+        Q_w_ub = (model._A_sj[model._J_uw] * model.H_j[model._J_uw]) / model._dt
+        Q_w_lb = -(model._A_sj[model._J_dw] * model.H_j[model._J_dw]) / model._dt
+        Q_o_ub = (model._A_sj[model._J_uo] * model.H_j[model._J_uo]) / model._dt
+        Q_o_lb = -(model._A_sj[model._J_do] * model.H_j[model._J_do]) / model._dt
+        Q_p_ub = (model._A_sj[model._J_up] * model.H_j[model._J_up]) / model._dt
+        Q_p_lb = -(model._A_sj[model._J_dp] * model.H_j[model._J_dp]) / model._dt
+
+
         # Compute binding step ratio
-        ratio_ub = max(max((dx['Q_ik'] / Q_ik_ub).max(), 0.), 
-                       max((dx['Q_uk'] / Q_uk_ub).max(), 0.),
-                       max((dx['Q_dk'] / Q_dk_ub).max(), 0.))
-        ratio_lb = max(max(-(dx['Q_ik'] / Q_ik_lb).min(), 0.), 
-                       max(-(dx['Q_uk'] / Q_uk_lb).max(), 0.), 
-                       max(-(dx['Q_dk'] / Q_dk_lb).max(), 0.))
+        ratio_ub = max(max(max_if(dx.get('Q_ik', 0.) / Q_ik_ub), 0.), 
+                       max(max_if(dx.get('Q_uk', 0.) / Q_uk_ub), 0.),
+                       max(max_if(dx.get('Q_dk', 0.) / Q_dk_ub), 0.),
+                       max(max_if(dx.get('Q_w', 0.) / Q_w_ub), 0.),
+                       max(max_if(dx.get('Q_o', 0.) / Q_o_ub), 0.),
+                       max(max_if(dx.get('Q_p', 0.) / Q_p_ub), 0.)
+                       )
+        # TODO: Check if this should be max or min for maxif
+        ####################################################
+        # Negative signs removed before max_if because lb should be negative
+        ratio_lb = max(max(max_if(dx.get('Q_ik', 0.) / Q_ik_lb), 0.), 
+                       max(max_if(dx.get('Q_uk', 0.) / Q_uk_lb), 0.), 
+                       max(max_if(dx.get('Q_dk', 0.) / Q_dk_lb), 0.),
+                       max(max_if(dx.get('Q_w', 0.) / Q_w_lb), 0.),
+                       max(max_if(dx.get('Q_o', 0.) / Q_o_lb), 0.),
+                       max(max_if(dx.get('Q_p', 0.) / Q_p_lb), 0.)
+                       )
         step_ratio = max(ratio_ub, ratio_lb)
         return step_ratio
 
@@ -267,6 +293,7 @@ class ConvergenceTracker(BaseCallback):
         iter_elapsed = 1
         if (num_iter > 0):
             self.convergence_queue = []
+            self.learning_queue = []
             self.x_new = self._compute_next_guess()
             self.dx = self._compute_guess_difference(self.x_old, self.x_new)
             self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
@@ -277,6 +304,9 @@ class ConvergenceTracker(BaseCallback):
                     self.model.iter_count -= 1
                     self.model.t -= dt
                     self.x_old = self._compute_prior_guess()
+                    # Enforce minimum depth
+                    self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.model.min_depth)
+                    self.model.h_Ik = np.maximum(self.model.h_Ik, self.model.min_depth)
                     try:
                         self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                             first_time=first_time, implicit=implicit, banded=banded,
@@ -285,7 +315,8 @@ class ConvergenceTracker(BaseCallback):
                                             first_time=first_time, implicit=implicit, banded=banded,
                                             first_iter=False)
                     except:
-                        self.model.load_state()
+                        self.model.iter_elapsed = iter_elapsed 
+                        #self.model.load_state()
                         raise
                     self.x_new = self._compute_next_guess()
                     self.dx = self._compute_guess_difference(self.x_old, self.x_new)
@@ -295,10 +326,14 @@ class ConvergenceTracker(BaseCallback):
                     self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
                     self.success = self._convergence_met(self.convergence_metric, self.xtol)
                     self.convergence_queue.append(self.convergence_metric)
+                    self.learning_queue.append(self.learning_rate)
                     iter_elapsed += 1
                     if self.success:
                         break
         self.model.iter_elapsed = iter_elapsed 
+        # Enforce minimum depth
+        self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.model.min_depth)
+        self.model.h_Ik = np.maximum(self.model.h_Ik, self.model.min_depth)
 
 
 class LegacyConvergenceTracker(BaseCallback):
@@ -673,3 +708,15 @@ def total_volume(model):
     V_ik = volume_ik(model)
     V_total = np.concatenate([V_sj, V_uk, V_dk, V_o, V_w, V_p, V_Ik, V_ik])
     return V_total
+
+def max_if(arr):
+    if arr.size > 0:
+        return arr.max()
+    else:
+        return 0.
+
+def min_if(arr):
+    if arr.size > 0:
+        return arr.min()
+    else:
+        return 0.
