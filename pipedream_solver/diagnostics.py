@@ -12,7 +12,7 @@ class ErrorTracker(BaseCallback):
     """
     def __init__(self, model, rtol=1e-1, atol=1e-10):
         self.model = model
-        self.errors = {}
+        #self.errors = {}
         self.continuity_error_j = np.zeros(model.M)
         self.continuity_error_Ik = np.zeros(model._I.size)
         self.momentum_error_ik = np.zeros(model._i.size)
@@ -51,6 +51,14 @@ class ErrorTracker(BaseCallback):
         return np.concatenate([self.continuity_magnitude_j, self.momentum_magnitude_uk,
                                self.momentum_magnitude_dk, self.continuity_magnitude_Ik,
                                self.momentum_magnitude_ik])
+    
+    @property
+    def errors(self):
+        return {'H_j' : self.continuity_error_j, 
+                'Q_uk' : self.momentum_error_uk,
+                'Q_dk' : self.momentum_error_dk, 
+                'h_Ik' : self.continuity_error_Ik,
+                'Q_ik' : self.momentum_error_ik}
 
     @property
     def error_metric(self):
@@ -69,9 +77,9 @@ class ErrorTracker(BaseCallback):
         condition = error_metric <= 1.
         return condition
     
-    def _record_error(self, *args, **kwargs):
-        t = self.model.t
-        self.errors[t] = self.error
+    #def _record_error(self, *args, **kwargs):
+    #    t = self.model.t
+    #    self.errors[t] = self.error
         
     def _compute_error(self, *args, **kwargs):
         model = self.model
@@ -82,6 +90,7 @@ class ErrorTracker(BaseCallback):
         self.momentum_error_ik = momentum_error_ik(model, dt)
         self.momentum_error_uk = momentum_error_uk_2(model, dt)
         self.momentum_error_dk = momentum_error_dk_2(model, dt)
+        #self.momentum_error_w = momentum_error_w(model, dt)
         # Use these for tsuperlink
         #self.momentum_error_ik = momentum_error_ik_2(model, dt)
         #self.momentum_error_uk = momentum_error_uk_3(model, dt)
@@ -160,6 +169,10 @@ class VolumeTracker(BaseCallback):
         self.init_volume_uk = volume_uk(model)
         self.init_volume_dk = volume_dk(model)
 
+    def __on_step_start__(self, *args, **kwargs):
+        # TODO: Need a function to save and load volumes
+        self.total_volume_previous = self.total_volume
+
     def __on_step_end__(self, *args, **kwargs):
         model = self.model
         dt = model._dt
@@ -178,7 +191,7 @@ class VolumeTracker(BaseCallback):
 
 
 class ConvergenceTracker(BaseCallback):
-    def __init__(self, model, xtol=1e-6, max_learning_rate=0.5, min_learning_rate=0.01, beta=2.):
+    def __init__(self, model, xtol=1e-6, max_learning_rate=1., min_learning_rate=0.01, beta=1.):
         self.model = model
         self.x_old = self._compute_prior_guess()
         self.x_new = self._compute_next_guess()
@@ -191,60 +204,58 @@ class ConvergenceTracker(BaseCallback):
         self.success = None
         self.convergence_queue = []
         self.learning_queue = []
+        self.error_queue = []
         self.convergence_metric = np.inf
 
     def _compute_step_ratio(self, dx):
-        # TODO: Need to add weirs, orifices, pumps
-        # TODO: Need to account for elements with multiple outflows
         model = self.model
-        # Compute bounds on allowable discharges
-        Q_ik_ub = model._E_Ik[model._Ik] * model._h_Ik[model._Ik]
-        Q_ik_lb = -model._E_Ik[model._Ip1k] * model._h_Ik[model._Ip1k]
-        Q_uk_ub = (model._A_sj[model._J_uk] * model.H_j[model._J_uk] 
-                + (model._B_uk * model._dx_uk / 2) 
-                * ((model._theta_uk * (model.H_j[model._J_uk] - model._z_inv_j[model._J_uk]) 
-                    + model._h_Ik[model._I_1k]) / 2)) / model._dt
-        Q_uk_lb = -model._E_Ik[model._I_1k] * model._h_Ik[model._I_1k]
-        Q_dk_ub = model._E_Ik[model._I_Np1k] * model._h_Ik[model._I_Np1k]
-        Q_dk_lb = -(model._A_sj[model._J_dk] * model.H_j[model._J_dk] 
-                + (model._B_dk * model._dx_dk / 2) 
-                * ((model._theta_dk * (model.H_j[model._J_dk] - model._z_inv_j[model._J_dk]) 
-                    + model._h_Ik[model._I_Np1k]) / 2)) / model._dt
-        Q_w_ub = (model._A_sj[model._J_uw] * model.H_j[model._J_uw]) / model._dt
-        Q_w_lb = -(model._A_sj[model._J_dw] * model.H_j[model._J_dw]) / model._dt
-        Q_o_ub = (model._A_sj[model._J_uo] * model.H_j[model._J_uo]) / model._dt
-        Q_o_lb = -(model._A_sj[model._J_do] * model.H_j[model._J_do]) / model._dt
-        Q_p_ub = (model._A_sj[model._J_up] * model.H_j[model._J_up]) / model._dt
-        Q_p_lb = -(model._A_sj[model._J_dp] * model.H_j[model._J_dp]) / model._dt
-
-
-        # Compute binding step ratio
-        ratio_ub = max(max(max_if(dx.get('Q_ik', 0.) / Q_ik_ub), 0.), 
-                       max(max_if(dx.get('Q_uk', 0.) / Q_uk_ub), 0.),
-                       max(max_if(dx.get('Q_dk', 0.) / Q_dk_ub), 0.),
-                       max(max_if(dx.get('Q_w', 0.) / Q_w_ub), 0.),
-                       max(max_if(dx.get('Q_o', 0.) / Q_o_ub), 0.),
-                       max(max_if(dx.get('Q_p', 0.) / Q_p_ub), 0.)
-                       )
-        # TODO: Check if this should be max or min for maxif
-        ####################################################
-        # Negative signs removed before max_if because lb should be negative
-        ratio_lb = max(max(max_if(dx.get('Q_ik', 0.) / Q_ik_lb), 0.), 
-                       max(max_if(dx.get('Q_uk', 0.) / Q_uk_lb), 0.), 
-                       max(max_if(dx.get('Q_dk', 0.) / Q_dk_lb), 0.),
-                       max(max_if(dx.get('Q_w', 0.) / Q_w_lb), 0.),
-                       max(max_if(dx.get('Q_o', 0.) / Q_o_lb), 0.),
-                       max(max_if(dx.get('Q_p', 0.) / Q_p_lb), 0.)
-                       )
-        step_ratio = max(ratio_ub, ratio_lb)
+        _D_Ik = model._D_Ik
+        _Q_ik = model.Q_ik
+        _Q_uk = model.Q_uk
+        _Q_dk = model.Q_dk
+        _Q_o = model.Q_o
+        _Q_w = model.Q_w
+        _Q_p = model.Q_p
+        _kI = model._kI
+        _forward_I_i = model.forward_I_i
+        _backward_I_i = model.backward_I_i
+        _is_start = model._is_start
+        _is_end = model._is_end
+        _D_j = model.b
+        _J_uk = model._J_uk
+        _J_dk = model._J_dk
+        _J_uo = model._J_uo
+        _J_do = model._J_do
+        _J_uw = model._J_uw
+        _J_dw = model._J_dw
+        _J_up = model._J_up
+        _J_dp = model._J_dp
+        default = np.array([], dtype=np.float64)
+        _dQ_ik = self.dx.get('Q_ik', default)
+        _dQ_uk = self.dx.get('Q_uk', default)
+        _dQ_dk = self.dx.get('Q_dk', default)
+        _dQ_o = self.dx.get('Q_o', default)
+        _dQ_w = self.dx.get('Q_w', default)
+        _dQ_p = self.dx.get('Q_p', default)
+        num_I = junction_numerator(_dQ_ik, _dQ_uk, _dQ_dk, _kI, 
+                                   _forward_I_i, _backward_I_i, _is_start, _is_end)
+        denom_I = junction_denominator(_D_Ik, _Q_ik, _Q_uk, _Q_dk, _kI, 
+                                       _forward_I_i, _backward_I_i, _is_start, _is_end)
+        num_j = superjunction_numerator(_D_j, _dQ_uk, _dQ_dk, _dQ_o, _dQ_w, _dQ_p, 
+                                        _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp)
+        denom_j = superjunction_denominator(_D_j, _Q_uk, _Q_dk, _Q_o, _Q_w, _Q_p, 
+                                            _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp)
+        beta_I = (num_I / denom_I).max()
+        beta_j = (num_j / denom_j).max()
+        step_ratio = max(beta_I, beta_j)
         return step_ratio
 
     def _compute_learning_rate(self, step_ratio):
         max_learning_rate = self.max_learning_rate
         min_learning_rate = self.min_learning_rate
-        beta = self.beta
-        if step_ratio > 0:
-            learning_rate = min(1 / step_ratio / beta, 1.)
+        threshold = 1 / self.beta
+        if step_ratio > threshold:
+            learning_rate = min(threshold / step_ratio, 1.)
         else:
             learning_rate = 1.
         learning_rate = max(min(learning_rate, max_learning_rate), min_learning_rate)
@@ -342,60 +353,55 @@ class ConvergenceTracker(BaseCallback):
 
 class ExperimentalConvergenceTracker(ConvergenceTracker):
 
-    def _compute_step_ratio(self, dx):
-        # TODO: Need to add weirs, orifices, pumps
-        model = self.model
-        _D_Ik = model._D_Ik
-        _Q_ik = model.Q_ik
-        _Q_uk = model.Q_uk
-        _Q_dk = model.Q_dk
-        _Q_o = model.Q_o
-        _Q_w = model.Q_w
-        _Q_p = model.Q_p
-        _kI = model._kI
-        _forward_I_i = model.forward_I_i
-        _backward_I_i = model.backward_I_i
-        _is_start = model._is_start
-        _is_end = model._is_end
-        _D_j = model.b
-        _J_uk = model._J_uk
-        _J_dk = model._J_dk
-        _J_uo = model._J_uo
-        _J_do = model._J_do
-        _J_uw = model._J_uw
-        _J_dw = model._J_dw
-        _J_up = model._J_up
-        _J_dp = model._J_dp
-        default = np.array([], dtype=np.float64)
-        _dQ_ik = self.dx.get('Q_ik', default)
-        _dQ_uk = self.dx.get('Q_uk', default)
-        _dQ_dk = self.dx.get('Q_dk', default)
-        _dQ_o = self.dx.get('Q_o', default)
-        _dQ_w = self.dx.get('Q_w', default)
-        _dQ_p = self.dx.get('Q_p', default)
-        num_I = junction_numerator(_dQ_ik, _dQ_uk, _dQ_dk, _kI, 
-                                   _forward_I_i, _backward_I_i, _is_start, _is_end)
-        denom_I = junction_denominator(_D_Ik, _Q_ik, _Q_uk, _Q_dk, _kI, 
-                                       _forward_I_i, _backward_I_i, _is_start, _is_end)
-        num_j = superjunction_numerator(_D_j, _dQ_uk, _dQ_dk, _dQ_o, _dQ_w, _dQ_p, 
-                                        _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp)
-        denom_j = superjunction_denominator(_D_j, _Q_uk, _Q_dk, _Q_o, _Q_w, _Q_p, 
-                                            _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp)
-        beta_I = (num_I / denom_I).max()
-        beta_j = (num_j / denom_j).max()
-        step_ratio = max(beta_I, beta_j)
-        return step_ratio
-
-    def _compute_learning_rate(self, step_ratio):
-        max_learning_rate = self.max_learning_rate
-        min_learning_rate = self.min_learning_rate
-        beta = self.beta
-        if step_ratio > 0:
-            learning_rate = min(1 / step_ratio / beta, 1.)
-        else:
-            learning_rate = 1.
-        learning_rate = max(min(learning_rate, max_learning_rate), min_learning_rate)
-        return learning_rate
+    def __on_step_end__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
+                        first_time=False, implicit=True, banded=None, first_iter=True,
+                        num_iter=1, rtol=None, atol=None, head_tol=0.0015):
+        # Perform fixed-point iteration until convergence
+        alpha = 1.
+        iter_elapsed = 1
+        if (num_iter > 0):
+            self.convergence_queue = []
+            self.learning_queue = []
+            self.error_queue = []
+            self.x_new = self._compute_next_guess()
+            self.dx = self._compute_guess_difference(self.x_old, self.x_new)
+            self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
+            self.success = self._convergence_met(self.convergence_metric, self.xtol)
+            if not self.success:
+                for _ in range(num_iter):
+                    # TODO: Rename this to step count
+                    self.model.iter_count -= 1
+                    self.model.t -= dt
+                    self.x_old = self._compute_prior_guess()
+                    # Enforce minimum depth
+                    self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.model.min_depth)
+                    self.model.h_Ik = np.maximum(self.model.h_Ik, self.model.min_depth)
+                    self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                        first_time=first_time, implicit=implicit, banded=banded,
+                                        first_iter=False)
+                    self.model.error_tracker._compute_error()
+                    err = self.model.error_tracker.errors
+                    err_norm = norm_inf(err)
+                    self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                        first_time=first_time, implicit=implicit, banded=banded,
+                                        first_iter=False)
+                    self.x_new = self._compute_next_guess()
+                    self.dx = self._compute_guess_difference(self.x_old, self.x_new)
+                    self.step_ratio = self._compute_step_ratio(self.dx)
+                    self.learning_rate = self._compute_learning_rate(self.step_ratio)
+                    self._set_states(self.x_old, self.x_new, self.learning_rate)
+                    self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
+                    self.success = self._convergence_met(self.convergence_metric, self.xtol)
+                    self.convergence_queue.append(self.convergence_metric)
+                    self.learning_queue.append(self.learning_rate)
+                    self.error_queue.append(err_norm)
+                    iter_elapsed += 1
+                    if self.success:
+                        break
+        self.model.iter_elapsed = iter_elapsed 
+        # Enforce minimum depth
+        self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.model.min_depth)
+        self.model.h_Ik = np.maximum(self.model.h_Ik, self.model.min_depth)
 
 
 class LegacyConvergenceTracker(BaseCallback):
@@ -533,14 +539,15 @@ def momentum_error_uk_2(model, dt):
     g = 9.81
     Q_1k_next = model.Q_ik[model._i_1k]
     Q_uk_next = model.Q_uk
-    h_uk_next = model._h_uk
+    h_uk_next = model._h_Ik[model._I_1k]
     H_juk_next = model.H_j[model._J_uk]
     b_uk = model._b_uk
     c_uk = model._c_uk
     P_uk = model._P_uk
     A_uk = model._A_uk
+    theta_uk = model._theta_uk
     LHS = b_uk * Q_uk_next + c_uk * Q_1k_next
-    RHS = P_uk + g * A_uk * (H_juk_next - h_uk_next)
+    RHS = P_uk + g * A_uk * (theta_uk * H_juk_next - h_uk_next)
     error = LHS - RHS
     return error
 
@@ -584,15 +591,16 @@ def momentum_error_dk_2(model, dt):
     g = 9.81
     Q_dk_next = model.Q_dk
     Q_nk_next = model.Q_ik[model._i_nk]
-    h_dk_next = model._h_dk
+    h_dk_next = model._h_Ik[model._I_Np1k]
     H_jdk_next = model.H_j[model._J_dk]
     b_dk = model._b_dk
     a_dk = model._a_dk
     A_dk = model._A_dk
     P_dk = model._P_dk
+    theta_dk = model._theta_dk
     # Friction and local losses
     LHS = b_dk * Q_dk_next + a_dk * Q_nk_next
-    RHS = P_dk + g * A_dk * (h_dk_next - H_jdk_next)
+    RHS = P_dk + g * A_dk * (h_dk_next - theta_dk * H_jdk_next)
     error = LHS - RHS
     return error
 
@@ -622,7 +630,9 @@ def momentum_error_o(model, dt):
     raise NotImplementedError
 
 def momentum_error_w(model, dt):
-    error = np.zeros(model.n_w)
+    H_juw = model.H_j[model._J_uw]
+    H_jdw = model.H_j[model._J_dw]
+    error = model._alpha_w * H_juw + model._beta_w * H_jdw + model._chi_w - model.Q_w
     raise NotImplementedError
 
 def momentum_error_p(model, dt):
@@ -782,3 +792,24 @@ def min_if(arr):
         return arr.min()
     else:
         return 0.
+
+def scale_vecs(scale_factor, vecs):
+    result = {key : scale_factor * vec for key, vec in vecs.items()}
+    return result
+
+def norm_2_squared(vecs):
+    result = sum((vec**2).sum() for vec in vecs.values())
+    return result
+
+def norm_2(vecs):
+    result = np.sqrt(norm_2_squared(vecs))
+    return result
+
+def norm_inf(vecs):
+    result = max(np.abs(vec).max() for vec in vecs.values())
+    return result
+
+def inner_product(vecs_1, vecs_2):
+    assert vecs_1.keys() == vecs_2.keys()
+    result = sum((vecs_1[key] * vecs_2[key]).sum() for key in vecs_1)
+    return result
