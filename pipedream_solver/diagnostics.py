@@ -191,7 +191,7 @@ class VolumeTracker(BaseCallback):
 
 
 class ConvergenceTracker(BaseCallback):
-    def __init__(self, model, xtol=1e-6, max_learning_rate=1., min_learning_rate=0.01, beta=1.):
+    def __init__(self, model, xtol=1e-6, max_learning_rate=0.5, min_learning_rate=0.01, beta=2.):
         self.model = model
         self.x_old = self._compute_prior_guess()
         self.x_new = self._compute_next_guess()
@@ -544,10 +544,11 @@ def momentum_error_uk_2(model, dt):
     b_uk = model._b_uk
     c_uk = model._c_uk
     P_uk = model._P_uk
-    A_uk = model._A_uk
+    A_uuk = model._A_uuk
+    A_duk = model._A_duk
     theta_uk = model._theta_uk
     LHS = b_uk * Q_uk_next + c_uk * Q_1k_next
-    RHS = P_uk + g * A_uk * (theta_uk * H_juk_next - h_uk_next)
+    RHS = P_uk + g * (A_uuk * theta_uk * H_juk_next - A_duk * h_uk_next)
     error = LHS - RHS
     return error
 
@@ -595,12 +596,13 @@ def momentum_error_dk_2(model, dt):
     H_jdk_next = model.H_j[model._J_dk]
     b_dk = model._b_dk
     a_dk = model._a_dk
-    A_dk = model._A_dk
+    A_udk = model._A_udk
+    A_ddk = model._A_ddk
     P_dk = model._P_dk
     theta_dk = model._theta_dk
     # Friction and local losses
     LHS = b_dk * Q_dk_next + a_dk * Q_nk_next
-    RHS = P_dk + g * A_dk * (h_dk_next - theta_dk * H_jdk_next)
+    RHS = P_dk + g * (A_udk * h_dk_next - A_ddk * theta_dk * H_jdk_next)
     error = LHS - RHS
     return error
 
@@ -676,10 +678,9 @@ def momentum_error_ik(model, dt):
     _ip1 = (model._i + 1)[_i_is_internal]
     g = 9.81
     Q_ik_next = model.Q_ik
-    Q_ik_prev = model.states['Q_ik']
     h_Ik_next = model.h_Ik
     error -= model._P_ik
-    error -= g * model._A_ik * (h_Ik_next[model._Ik] - h_Ik_next[model._Ip1k])
+    error -= g * (model._A_uik * h_Ik_next[model._Ik] - model._A_dik * h_Ik_next[model._Ip1k])
     error += model._b_ik * Q_ik_next
     error[_i_is_start] += model._a_ik[_i_is_start] * model.Q_uk
     error[_i_is_end] += model._c_ik[_i_is_end] * model.Q_dk

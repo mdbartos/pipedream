@@ -486,7 +486,6 @@ class nSuperLink(SuperLink):
         min_depth = self.min_depth
         _ik = self._ik                 # Link index
         _Ik = self._Ik                 # Junction index
-        _Ip1k = self._Ip1k             # Index of next junction
         _h_Ik_min = self._h_Ik_min
         _A_ik_min = self._A_ik_min
         _Pe_ik_min = self._Pe_ik_min
@@ -500,8 +499,6 @@ class nSuperLink(SuperLink):
         _Pe_dk_min = self._Pe_dk_min
         _R_dk_min = self._R_dk_min
         _B_dk_min = self._B_dk_min
-        _z_inv_uk = self._z_inv_uk
-        _z_inv_dk = self._z_inv_dk
         _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
         _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
         _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
@@ -521,22 +518,18 @@ class nSuperLink(SuperLink):
         _transect_codes = self._transect_codes
         _transect_inds = self._transect_inds
         _transect_lens = self._transect_lens
-        _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
-        _J_uk = self._J_uk             # Index of junction upstream of superlink k
-        _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
-        _J_dk = self._J_dk             # Index of junction downstream of superlink k
         _uk_has_irregular = self._uk_has_irregular
         _i_1k = self._i_1k
         _I_1k = self._I_1k
         _dk_has_irregular = self._dk_has_irregular
         _i_nk = self._i_nk
         _I_Np1k = self._I_Np1k
-        _theta_uk = np.ones(self._theta_uk.size, dtype=np.float64)
-        _theta_dk = np.ones(self._theta_dk.size, dtype=np.float64)
         # Compute hydraulic geometry for regular geometries
+        _h_uk_min = _h_Ik_min[_I_1k]
+        _h_dk_min = _h_Ik_min[_I_Np1k]
         # NOTE: Handle case for elliptical perimeter first
-        handle_elliptical_perimeter(_Pe_ik_min, _ellipse_ix, _Ik, _Ip1k, _h_Ik_min,
-                                    _g1_ik, _g2_ik)
+        #handle_elliptical_perimeter(_Pe_ik_min, _ellipse_ix, _Ik, _Ip1k, _h_Ik_min,
+        #                            _g1_ik, _g2_ik)
         # Compute hydraulic geometries for all other regular geometries
         numba_hydraulic_geometry(_A_ik_min, _Pe_ik_min, _R_ik_min, _B_ik_min, _h_Ik_min,
                                  _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
@@ -548,25 +541,25 @@ class nSuperLink(SuperLink):
                                     _transect_Rs, _transect_codes, _transect_inds,
                                     _transect_lens, _Ik, _ik)
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_uk_min, _Pe_uk_min, _R_uk_min, _B_uk_min, _h_Ik_min, _z_inv_uk + min_depth, _z_inv_uk, _theta_uk,
+        numba_boundary_geometry(_A_uk_min, _Pe_uk_min, _R_uk_min, _B_uk_min, _h_uk_min,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
-                                _geom_codes, _i_1k, _I_1k, _J_uk)
+                                _geom_codes, _i_1k)
         # Compute hydraulic geometry for irregular geometries
         if _uk_has_irregular:
-            numba_boundary_transect(_A_uk_min, _Pe_uk_min, _R_uk_min, _B_uk_min, _h_Ik_min, _z_inv_uk + min_depth, _z_inv_uk, _theta_uk,
+            numba_boundary_transect(_A_uk_min, _Pe_uk_min, _R_uk_min, _B_uk_min, _h_uk_min,
                                     _is_irregular, _transect_zs, _transect_As, _transect_Bs,
                                     _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
-                                    _transect_lens, _I_1k, _i_1k, _J_uk)
+                                    _transect_lens, _i_1k)
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_dk_min, _Pe_dk_min, _R_dk_min, _B_dk_min, _h_Ik_min, _z_inv_dk + min_depth, _z_inv_dk, _theta_dk,
+        numba_boundary_geometry(_A_dk_min, _Pe_dk_min, _R_dk_min, _B_dk_min, _h_dk_min,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
-                                _geom_codes, _i_nk, _I_Np1k, _J_dk)
+                                _geom_codes, _i_nk)
         # Compute hydraulic geometry for irregular geometries
         if _dk_has_irregular:
-            numba_boundary_transect(_A_dk_min, _Pe_dk_min, _R_dk_min, _B_dk_min, _h_Ik_min, _z_inv_dk + min_depth, _z_inv_dk, _theta_dk,
+            numba_boundary_transect(_A_dk_min, _Pe_dk_min, _R_dk_min, _B_dk_min, _h_dk_min,
                                     _is_irregular, _transect_zs, _transect_As, _transect_Bs,
                                     _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
-                                    _transect_lens, _I_Np1k, _i_nk, _J_dk)
+                                    _transect_lens, _i_nk)
         # Export to instance variables
         self._A_ik_min = _A_ik_min
         self._Pe_ik_min = _Pe_ik_min
@@ -586,7 +579,14 @@ class nSuperLink(SuperLink):
         _Pe_ik = self._Pe_ik           # Hydraulic perimeter at link ik
         _R_ik = self._R_ik             # Hydraulic radius at link ik
         _B_ik = self._B_ik             # Top width at link ik
-        _dx_ik = self._dx_ik           # Length of link ik
+        _A_uik = self._A_uik           
+        _Pe_uik = self._Pe_uik         
+        _R_uik = self._R_uik           
+        _B_uik = self._B_uik           
+        _A_dik = self._A_dik           
+        _Pe_dik = self._Pe_dik         
+        _R_dik = self._R_dik           
+        _B_dik = self._B_dik           
         _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
         _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
         _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
@@ -607,39 +607,63 @@ class nSuperLink(SuperLink):
         _transect_inds = self._transect_inds
         _transect_lens = self._transect_lens
         # Compute hydraulic geometry for regular geometries
+        #_h_ik = (_h_Ik[_Ik] + _h_Ik[_Ip1k]) / 2
         # NOTE: Handle case for elliptical perimeter first
-        handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik,
-                                    _g1_ik, _g2_ik)
+        #handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik,
+        #                            _g1_ik, _g2_ik)
         # Compute hydraulic geometries for all other regular geometries
-        numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
+        numba_hydraulic_geometry(_A_uik, _Pe_uik, _R_uik, _B_uik, _h_Ik,
                                  _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                                  _geom_codes, _Ik, _ik)
+        numba_hydraulic_geometry(_A_dik, _Pe_dik, _R_dik, _B_dik, _h_Ik,
+                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
+                                 _geom_codes, _Ip1k, _ik)
         # Compute hydraulic geometry for irregular geometries
         if _has_irregular:
-            numba_transect_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik, _is_irregular,
+            numba_transect_geometry(_A_uik, _Pe_uik, _R_uik, _B_uik, _h_Ik, _is_irregular,
                                     _transect_zs, _transect_As, _transect_Bs, _transect_Pes,
                                     _transect_Rs, _transect_codes, _transect_inds,
                                     _transect_lens, _Ik, _ik)
+            numba_transect_geometry(_A_dik, _Pe_dik, _R_dik, _B_dik, _h_Ik, _is_irregular,
+                                    _transect_zs, _transect_As, _transect_Bs, _transect_Pes,
+                                    _transect_Rs, _transect_codes, _transect_inds,
+                                    _transect_lens, _Ip1k, _ik)
+        _A_ik[:] = (_A_uik + _A_dik) / 2
+        _Pe_ik[:] = (_Pe_uik + _Pe_dik) / 2
+        _R_ik[:] = (_R_uik + _R_dik) / 2
+        _B_ik[:] = (_B_uik + _B_dik) / 2
         # Export to instance variables
         self._A_ik = _A_ik
         self._Pe_ik = _Pe_ik
         self._R_ik = _R_ik
         self._B_ik = _B_ik
+        self._A_uik = _A_uik
+        self._Pe_uik = _Pe_uik
+        self._R_uik = _R_uik
+        self._B_uik = _B_uik
+        self._A_dik = _A_dik
+        self._Pe_dik = _Pe_dik
+        self._R_dik = _R_dik
+        self._B_dik = _B_dik
 
     def upstream_hydraulic_geometry(self, area='avg'):
         """
         Compute hydraulic geometry of upstream ends of superlinks.
         """
         # Import instance variables
-        _ik = self._ik                 # Link index
-        _Ik = self._Ik                 # Junction index
-        _ki = self._ki                 # Superlink index containing link ik
         _h_Ik = self._h_Ik             # Depth at junction Ik
         _A_uk = self._A_uk             # Flow area at upstream end of superlink k
-        _B_uk = self._B_uk             # Top width at upstream end of superlink k
         _Pe_uk = self._Pe_uk
         _R_uk = self._R_uk
-        _dx_ik = self._dx_ik           # Length of link ik
+        _B_uk = self._B_uk             # Top width at upstream end of superlink k
+        _A_uuk = self._A_uuk           
+        _Pe_uuk = self._Pe_uuk
+        _R_uuk = self._R_uuk
+        _B_uuk = self._B_uuk           
+        _A_duk = self._A_duk           
+        _Pe_duk = self._Pe_duk
+        _R_duk = self._R_duk
+        _B_duk = self._B_duk           
         _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
         _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
         _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
@@ -665,33 +689,61 @@ class nSuperLink(SuperLink):
         _transect_inds = self._transect_inds
         _transect_lens = self._transect_lens
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk, _theta_uk,
+        #_h_uk = (_h_Ik[_I_1k] + _theta_uk * (H_j[_J_uk] - _z_inv_uk)) / 2
+        _h_uuk = _theta_uk * (H_j[_J_uk] - _z_inv_uk)
+        _h_duk = _h_Ik[_I_1k]
+        numba_boundary_geometry(_A_uuk, _Pe_uuk, _R_uuk, _B_uuk, _h_uuk,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
-                                _geom_codes, _i_1k, _I_1k, _J_uk)
+                                _geom_codes, _i_1k)
+        numba_boundary_geometry(_A_duk, _Pe_duk, _R_duk, _B_duk, _h_duk,
+                                _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
+                                _geom_codes, _i_1k)
         # Compute hydraulic geometry for irregular geometries
         if _uk_has_irregular:
-            numba_boundary_transect(_A_uk, _Pe_uk, _R_uk, _B_uk, _h_Ik, H_j, _z_inv_uk, _theta_uk,
+            numba_boundary_transect(_A_uuk, _Pe_uuk, _R_uuk, _B_uuk, _h_uuk,
                                     _is_irregular, _transect_zs, _transect_As, _transect_Bs,
                                     _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
-                                    _transect_lens, _I_1k, _i_1k, _J_uk)
-        # TODO: Export rest of instance variables here?
+                                    _transect_lens, _i_1k)
+            numba_boundary_transect(_A_duk, _Pe_duk, _R_duk, _B_duk, _h_duk,
+                                    _is_irregular, _transect_zs, _transect_As, _transect_Bs,
+                                    _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
+                                    _transect_lens, _i_1k)
+        _A_uk[:] = (_A_uuk + _A_duk) / 2
+        _Pe_uk[:] = (_Pe_uuk + _Pe_duk) / 2
+        _R_uk[:] = (_R_uuk + _R_duk) / 2
+        _B_uk[:] = (_B_uuk + _B_duk) / 2
         # Export to instance variables
         self._A_uk = _A_uk
+        self._Pe_uk = _Pe_uk
+        self._R_uk = _R_uk
+        self._B_uk = _B_uk
+        self._A_uuk = _A_uuk
+        self._Pe_uuk = _Pe_uuk
+        self._R_uuk = _R_uuk
+        self._B_uuk = _B_uuk
+        self._A_duk = _A_duk
+        self._Pe_duk = _Pe_duk
+        self._R_duk = _R_duk
+        self._B_duk = _B_duk
 
     def downstream_hydraulic_geometry(self, area='avg'):
         """
         Compute hydraulic geometry of downstream ends of superlinks.
         """
         # Import instance variables
-        _ik = self._ik                 # Link index
-        _Ip1k = self._Ip1k             # Next junction index
-        _ki = self._ki                 # Superlink index containing link ik
         _h_Ik = self._h_Ik             # Depth at junction Ik
         _A_dk = self._A_dk             # Flow area at downstream end of superlink k
-        _B_dk = self._B_dk             # Top width at downstream end of superlink k
         _Pe_dk = self._Pe_dk
         _R_dk = self._R_dk
-        _dx_ik = self._dx_ik           # Length of link ik
+        _B_dk = self._B_dk             # Top width at downstream end of superlink k
+        _A_udk = self._A_udk           
+        _Pe_udk = self._Pe_udk
+        _R_udk = self._R_udk
+        _B_udk = self._B_udk           
+        _A_ddk = self._A_ddk           
+        _Pe_ddk = self._Pe_ddk
+        _R_ddk = self._R_ddk
+        _B_ddk = self._B_ddk           
         _g1_ik = self._g1_ik           # Geometry 1 of link ik (vertical)
         _g2_ik = self._g2_ik           # Geometry 2 of link ik (horizontal)
         _g3_ik = self._g3_ik           # Geometry 3 of link ik (other)
@@ -717,17 +769,43 @@ class nSuperLink(SuperLink):
         _transect_inds = self._transect_inds
         _transect_lens = self._transect_lens
         # Compute hydraulic geometry for regular geometries
-        numba_boundary_geometry(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk, _theta_dk,
+        #_h_dk = (_h_Ik[_I_Np1k] + _theta_dk * (H_j[_J_dk] - _z_inv_dk)) / 2
+        _h_udk = _h_Ik[_I_Np1k]
+        _h_ddk = _theta_dk * (H_j[_J_dk] - _z_inv_dk)
+        numba_boundary_geometry(_A_udk, _Pe_udk, _R_udk, _B_udk, _h_udk,
                                 _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
-                                _geom_codes, _i_nk, _I_Np1k, _J_dk)
+                                _geom_codes, _i_nk)
+        numba_boundary_geometry(_A_ddk, _Pe_ddk, _R_ddk, _B_ddk, _h_ddk,
+                                _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
+                                _geom_codes, _i_nk)
         # Compute hydraulic geometry for irregular geometries
         if _dk_has_irregular:
-            numba_boundary_transect(_A_dk, _Pe_dk, _R_dk, _B_dk, _h_Ik, H_j, _z_inv_dk, _theta_dk,
+            numba_boundary_transect(_A_udk, _Pe_udk, _R_udk, _B_udk, _h_udk,
                                     _is_irregular, _transect_zs, _transect_As, _transect_Bs,
                                     _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
-                                    _transect_lens, _I_Np1k, _i_nk, _J_dk)
+                                    _transect_lens, _i_nk)
+            numba_boundary_transect(_A_ddk, _Pe_ddk, _R_ddk, _B_ddk, _h_ddk,
+                                    _is_irregular, _transect_zs, _transect_As, _transect_Bs,
+                                    _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
+                                    _transect_lens, _i_nk)
+        # Export to instance variables
+        _A_dk[:] = (_A_udk + _A_ddk) / 2
+        _Pe_dk[:] = (_Pe_udk + _Pe_ddk) / 2
+        _R_dk[:] = (_R_udk + _R_ddk) / 2
+        _B_dk[:] = (_B_udk + _B_ddk) / 2
         # Export to instance variables
         self._A_dk = _A_dk
+        self._Pe_dk = _Pe_dk
+        self._R_dk = _R_dk
+        self._B_dk = _B_dk
+        self._A_udk = _A_udk
+        self._Pe_udk = _Pe_udk
+        self._R_udk = _R_udk
+        self._B_udk = _B_udk
+        self._A_ddk = _A_ddk
+        self._Pe_ddk = _Pe_ddk
+        self._R_ddk = _R_ddk
+        self._B_ddk = _B_ddk
 
     def orifice_hydraulic_geometry(self, u=None):
         """
@@ -826,24 +904,12 @@ class nSuperLink(SuperLink):
         numba_u_Ik(_dx_ik, _u_ik, _dx_uk, _u_uk, _link_start, _ki, _u_Ik)
         # Compute velocities for end nodes (2 -> Nk+1)
         numba_u_Ip1k(_dx_ik, _u_ik, _dx_dk, _u_dk, _link_end, _ki, _u_Ip1k)
-        # Compute effective velocity at superjunctions
-        #M = self.M
-        #_J_uk = self._J_uk
-        #_J_dk = self._J_dk
-        #Qu_j = np.zeros(M)
-        #np.add.at(Qu_j, _J_uk, (_u_uk * np.abs(_Q_uk)))
-        #np.add.at(Qu_j, _J_dk, (_u_dk * np.abs(_Q_dk)))
-        #Q_j = np.zeros(M)
-        #np.add.at(Q_j, _J_dk, np.abs(_Q_dk))
-        #np.add.at(Q_j, _J_uk, np.abs(_Q_uk))
-        #_u_j = safe_divide_vec(Qu_j, Q_j)
         # Export to instance variables
         self._u_ik = _u_ik
         self._u_uk = _u_uk
         self._u_dk = _u_dk
         self._u_Ik = _u_Ik
         self._u_Ip1k = _u_Ip1k
-        #self._u_j = _u_j
 
     def link_coeffs(self, _dt=None, first_iter=True):
         """
@@ -897,6 +963,8 @@ class nSuperLink(SuperLink):
         _S_o_dk = self._S_o_dk
         _theta_dk = self._theta_dk
         _z_inv_dk = self._z_inv_dk
+        _A_uuk = self._A_uuk
+        _A_ddk = self._A_ddk
         # If time step not specified, use instance time
         if _dt is None:
             _dt = self._dt
@@ -923,7 +991,7 @@ class nSuperLink(SuperLink):
         #_b_uk = numba_b_ik(_dx_uk, _dt, _n_uk, _Q_uk_next, _A_uk, _R_uk, _A_uk,
         #                   _C_uk, _u_uk, _ctrl_uk , _sigma_uk, _Sf_method_uk, g)
         _P_uk = numba_P_ik(_Q_uk_prev, _dx_uk, _dt, _A_uk, _S_o_uk, _sigma_uk, g)
-        _P_uk -= g * _A_uk * _theta_uk * _z_inv_uk
+        _P_uk -= g * _A_uuk * _theta_uk * _z_inv_uk
         # Try to make depth critical
         #_c_uk *= _theta_uk
         # Compute momentum coefficients for downstream boundary
@@ -938,7 +1006,7 @@ class nSuperLink(SuperLink):
         #_b_dk = numba_b_ik(_dx_dk, _dt, _n_dk, _Q_dk_next, _A_dk, _R_dk, _A_dk,
         #                   _C_dk, _u_dk, _ctrl_dk , _sigma_dk, _Sf_method_dk, g)
         _P_dk = numba_P_ik(_Q_dk_prev, _dx_dk, _dt, _A_dk, _S_o_dk, _sigma_dk, g)
-        _P_dk += g * _A_dk * _theta_dk * _z_inv_dk
+        _P_dk += g * _A_ddk * _theta_dk * _z_inv_dk
         # Try to make depth critical
         #_a_dk *= _theta_dk
         # Export to instance variables
@@ -996,7 +1064,8 @@ class nSuperLink(SuperLink):
         # Import instance variables
         _I_1k = self._I_1k                # Index of first junction in each superlink
         _i_1k = self._i_1k                # Index of first link in each superlink
-        _A_ik = self._A_ik                # Flow area in link ik
+        _A_uik = self._A_uik              
+        _A_dik = self._A_dik              
         _E_Ik = self._E_Ik                # Continuity coefficient E_Ik
         _D_Ik = self._D_Ik                # Continuity coefficient D_Ik
         _a_ik = self._a_ik                # Momentum coefficient a_ik
@@ -1010,7 +1079,7 @@ class nSuperLink(SuperLink):
         NK = self.NK
         nk = self.nk
         numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
-                                 _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_1k, _i_1k)
+                                 _P_ik, _A_uik, _A_dik, _E_Ik, _D_Ik, NK, nk, _I_1k, _i_1k)
         # Export instance variables
         self._T_ik = _T_ik
         self._U_Ik = _U_Ik
@@ -1023,7 +1092,8 @@ class nSuperLink(SuperLink):
         """
         _I_Nk = self._I_Nk                # Index of penultimate junction in each superlink
         _i_nk = self._i_nk                # Index of last link in each superlink
-        _A_ik = self._A_ik                # Flow area in link ik
+        _A_uik = self._A_uik              
+        _A_dik = self._A_dik              
         _E_Ik = self._E_Ik                # Continuity coefficient E_Ik
         _D_Ik = self._D_Ik                # Continuity coefficient D_Ik
         _a_ik = self._a_ik                # Momentum coefficient a_ik
@@ -1037,7 +1107,7 @@ class nSuperLink(SuperLink):
         NK = self.NK
         nk = self.nk
         numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
-                                    _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_Nk, _i_nk)
+                                    _P_ik, _A_uik, _A_dik, _E_Ik, _D_Ik, NK, nk, _I_Nk, _i_nk)
         # Export instance variables
         self._O_ik = _O_ik
         self._X_Ik = _X_Ik
@@ -1102,8 +1172,10 @@ class nSuperLink(SuperLink):
         _I_1k = self._I_1k
         _I_Nk = self._I_Nk
         _I_Np1k = self._I_Np1k
-        A_uk = self._A_uk
-        A_dk = self._A_dk
+        A_uuk = self._A_uuk
+        A_udk = self._A_udk
+        A_duk = self._A_duk
+        A_ddk = self._A_ddk
         a_dk = self._a_dk
         b_uk = self._b_uk
         b_dk = self._b_dk
@@ -1131,14 +1203,14 @@ class nSuperLink(SuperLink):
         d = X_1k + E_1k
         e = Y_1k - D_1k
         f = D_Np1k + V_Nk
-        q = (-A_dk * g + a_dk * U_Nk)
-        r = (A_uk * g + c_uk * X_1k)
+        q = (-A_udk * g + a_dk * U_Nk)
+        r = (A_duk * g + c_uk * X_1k)
         s = a * b_dk
         t = d * b_uk
         u = (a_dk + b_dk)
         v = (b_uk + c_uk)
-        w = (A_uk * g - c_uk * E_1k)
-        x = (A_dk * g - a_dk * E_Np1k)
+        w = (A_duk * g - c_uk * E_1k)
+        x = (A_udk * g - a_dk * E_Np1k)
         y = (c_uk * D_1k - P_uk)
         z = (P_dk - b_dk * D_Np1k - u * V_Nk)
         p = (d * P_uk + w * Y_1k - r * D_1k)
@@ -1146,10 +1218,10 @@ class nSuperLink(SuperLink):
         m = (P_uk + b_uk * D_1k - v * Y_1k)
         o = (a * P_dk - x * V_Nk + q * D_Np1k)
         # Create inverse matrix
-        aa = A_uk * theta_uk * g * ((c * b * u) - d * (q + s))
-        bb = A_dk * theta_dk * g * (b * w) 
-        cc = A_uk * theta_uk * g * (c * x)
-        dd = A_dk * theta_dk * g * (a * (r + t) - (c * b * v))
+        aa = A_uuk * theta_uk * g * ((c * b * u) - d * (q + s))
+        bb = A_ddk * theta_dk * g * (b * w) 
+        cc = A_uuk * theta_uk * g * (c * x)
+        dd = A_ddk * theta_dk * g * (a * (r + t) - (c * b * v))
         ee = (-p * (q + s) - (b * c * u * y) - (b * w * z))
         ff = (-o * (r + t) + (b * c * v * n) + (c * x * m))
         denom =  (c * b * u * v) - (q + s) * (r + t)
@@ -1167,195 +1239,6 @@ class nSuperLink(SuperLink):
         self._alpha_dk = alpha_dk
         self._beta_dk = beta_dk
         self._chi_dk = chi_dk
-
-    def superlink_upstream_head_coefficients(self, _dt=None):
-        raise NotImplementedError('Deprecated')
-        """
-        Compute upstream head coefficients for superlinks: kappa_uk, lambda_uk, and mu_uk.
-        """
-        # Import instance variables
-        _I_1k = self._I_1k             # Index of first junction in superlink k
-        _i_1k = self._i_1k             # Index of first link in superlink k
-        _h_Ik = self._h_Ik             # Depth at junction Ik
-        _J_uk = self._J_uk             # Superjunction upstream of superlink k
-        _z_inv_uk = self._z_inv_uk     # Invert offset of upstream end of superlink k
-        _A_ik = self._A_ik             # Flow area of link ik
-        _B_ik = self._B_ik             # Top width of link ik
-        _Q_ik = self._Q_ik             # Flow rate of link ik
-        _bc_method = self._bc_method   # Method for computing superlink boundary condition (j/z)
-        H_j = self.H_j                 # Head at superjunction j
-        _A_uk = self._A_uk             # Flow area at upstream end of superlink k
-        _B_uk = self._B_uk             # Top width at upstream end of superlink k
-        _R_uk = self._R_uk
-        _dx_uk = self._dx_uk
-        _S_o_uk = self._S_o_uk
-        _theta_uk = self._theta_uk
-        # Placeholder discharge coefficient
-        _C_uk = self._C_uk
-        # Current upstream flows
-        _Q_uk_next = self._Q_uk
-        _Q_uk_prev = np.copy(self.states['Q_uk'])
-        # Friction parameters
-        _n_uk = self._n_uk
-        _Sf_method_uk = self._Sf_method_uk
-        g = 9.81
-        # If time step not specified, use instance time
-        if _dt is None:
-            _dt = self._dt
-        # Compute theta indicator variables
-        _H_juk = H_j[_J_uk]
-        upstream_depth_above_invert = _H_juk >= _z_inv_uk
-        _theta_uk.fill(0.)
-        _theta_uk[upstream_depth_above_invert] = 1.
-        if _bc_method == 'z':
-            # Compute superlink upstream coefficients (Zahner)
-            _gamma_uk = gamma_uk(_Q_uk_next, _C_uk, _A_uk, g)
-            self._kappa_uk = _gamma_uk
-            self._lambda_uk = _theta_uk
-            self._mu_uk = - _theta_uk * _z_inv_uk
-        elif _bc_method == 'b':
-            # Compute superlink upstream coefficients (momentum)
-            self._kappa_uk = kappa_uk_old(_Q_uk_next, _dx_uk, _A_uk, _C_uk,
-                                      _R_uk, _n_uk, _Sf_method_uk, _dt, g)
-            self._lambda_uk = _theta_uk
-            self._mu_uk = mu_uk_old(_Q_uk_prev, _dx_uk, _A_uk, _theta_uk, _z_inv_uk,
-                                _S_o_uk, _dt, g)
-        else:
-            raise ValueError('Invalid BC method {}.'.format(_bc_method))
-        self._theta_uk = _theta_uk
-
-    def superlink_downstream_head_coefficients(self, _dt=None):
-        raise NotImplementedError('Deprecated')
-        """
-        Compute downstream head coefficients for superlinks: kappa_dk, lambda_dk, and mu_dk.
-        """
-        # Import instance variables
-        _I_Np1k = self._I_Np1k         # Index of last junction in superlink k
-        _i_nk = self._i_nk             # Index of last link in superlink k
-        _h_Ik = self._h_Ik             # Depth at junction Ik
-        _J_dk = self._J_dk             # Superjunction downstream of superlink k
-        _z_inv_dk = self._z_inv_dk     # Invert offset of downstream end of superlink k
-        _A_ik = self._A_ik             # Flow area of link ik
-        _B_ik = self._B_ik             # Top width of link ik
-        _Q_ik = self._Q_ik             # Flow rate of link ik
-        _bc_method = self._bc_method   # Method for computing superlink boundary condition (j/z)
-        H_j = self.H_j                 # Head at superjunction j
-        _A_dk = self._A_dk             # Flow area at downstream end of superlink k
-        _B_dk = self._B_dk             # Top width at downstream end of superlink k
-        _R_dk = self._R_dk
-        _dx_dk = self._dx_dk
-        _S_o_dk = self._S_o_dk
-        _theta_dk = self._theta_dk
-        # Placeholder discharge coefficient
-        _C_dk = self._C_dk
-        # Current downstream flows
-        _Q_dk_next = self._Q_dk
-        _Q_dk_prev = np.copy(self.states['Q_dk'])
-        # Friction parameters
-        _n_dk = self._n_dk
-        _Sf_method_dk = self._Sf_method_dk
-        g = 9.81
-        if _dt is None:
-            _dt = self._dt
-        # Compute theta indicator variables
-        _H_jdk = H_j[_J_dk]
-        downstream_depth_above_invert = _H_jdk >= _z_inv_dk
-        _theta_dk.fill(0.)
-        _theta_dk[downstream_depth_above_invert] = 1.
-        if _bc_method == 'z':
-            # Compute superlink downstream coefficients (Zahner)
-            _gamma_dk = gamma_dk(_Q_dk_next, _C_dk, _A_dk, g)
-            self._kappa_dk = _gamma_dk
-            self._lambda_dk = _theta_dk
-            self._mu_dk = - _theta_dk * _z_inv_dk
-        elif _bc_method == 'b':
-            # Compute superlink upstream coefficients (momentum)
-            self._kappa_dk = kappa_dk_old(_Q_dk_next, _dx_dk, _A_dk, _C_dk,
-                                      _R_dk, _n_dk, _Sf_method_dk, _dt, g)
-            self._lambda_dk = _theta_dk
-            self._mu_dk = mu_dk_old(_Q_dk_prev, _dx_dk, _A_dk, _theta_dk, _z_inv_dk, _S_o_dk, _dt, g)
-        else:
-            raise ValueError('Invalid BC method {}.'.format(_bc_method))
-        self._theta_dk = _theta_dk
-
-    def superlink_flow_coefficients(self):
-        raise NotImplementedError('Deprecated')
-        """
-        Compute superlink flow coefficients: alpha_uk, beta_uk, chi_uk,
-        alpha_dk, beta_dk, chi_dk.
-        """
-        # Import instance variables
-        _I_1k = self._I_1k              # Index of first junction in superlink k
-        _I_Nk = self._I_Nk              # Index of penultimate junction in superlink k
-        _I_Np1k = self._I_Np1k          # Index of last junction in superlink k
-        _D_Ik = self._D_Ik              # Continuity coefficient
-        _E_Ik = self._E_Ik              # Continuity coefficient
-        _X_Ik = self._X_Ik              # Backward recurrence coefficient X_Ik
-        _Y_Ik = self._Y_Ik              # Backward recurrence coefficient Y_Ik
-        _Z_Ik = self._Z_Ik              # Backward recurrence coefficient Z_Ik
-        _U_Ik = self._U_Ik              # Forward recurrence coefficient U_Ik
-        _V_Ik = self._V_Ik              # Forward recurrence coefficient V_Ik
-        _W_Ik = self._W_Ik              # Forward recurrence coefficient W_Ik
-        _kappa_uk = self._kappa_uk      # Upstream superlink head coefficient kappa_uk
-        _kappa_dk = self._kappa_dk      # Downstream superlink head coefficient kappa_dk
-        _lambda_uk = self._lambda_uk    # Upstream superlink head coefficient lambda_uk
-        _lambda_dk = self._lambda_dk    # Downstream superlink head coefficient lambda_dk
-        _mu_uk = self._mu_uk            # Upstream superlink head coefficient mu_uk
-        _mu_dk = self._mu_dk            # Downstream superlink head coefficient mu_dk
-        _J_uk = self._J_uk              # Superjunction upstream of superlink k
-        _J_dk = self._J_dk              # Superjunction downstream of superlink k
-        H_j = self.H_j                  # Head at superjunction j
-        _z_inv_uk = self._z_inv_uk      # Invert offset of upstream end of superlink k
-        _z_inv_dk = self._z_inv_dk      # Invert offset of downstream end of superlink k
-        _z_inv_j = self._z_inv_j        # Invert elevation at superjunction j
-        _end_method = self._end_method    # Method for computing flow at pipe ends
-        _theta_uk = self._theta_uk      # Upstream indicator variable
-        _theta_dk = self._theta_dk      # Downstream indicator variable
-        if _end_method == 'o':
-            _X_1k = _X_Ik[_I_1k]
-            _Y_1k = _Y_Ik[_I_1k]
-            _Z_1k = _Z_Ik[_I_1k]
-            _U_Nk = _U_Ik[_I_Nk]
-            _V_Nk = _V_Ik[_I_Nk]
-            _W_Nk = _W_Ik[_I_Nk]
-        else:
-            _X_1k = _X_Ik[_I_1k] + _E_Ik[_I_1k]
-            _Y_1k = _Y_Ik[_I_1k] - _D_Ik[_I_1k]
-            _Z_1k = _Z_Ik[_I_1k]
-            _U_Nk = _U_Ik[_I_Nk] - _E_Ik[_I_Np1k]
-            _V_Nk = _V_Ik[_I_Nk] + _D_Ik[_I_Np1k]
-            _W_Nk = _W_Ik[_I_Nk]
-        # Compute D_k_star
-        _D_k_star = numba_D_k_star_old(_X_1k, _kappa_uk, _U_Nk,
-                                   _kappa_dk, _Z_1k, _W_Nk)
-        # Compute upstream superlink flow coefficients
-        _alpha_uk = numba_alpha_uk_old(_U_Nk, _kappa_dk, _X_1k,
-                                   _Z_1k, _W_Nk, _D_k_star,
-                                   _lambda_uk)
-        _beta_uk = numba_beta_uk_old(_U_Nk, _kappa_dk, _Z_1k,
-                                 _W_Nk, _D_k_star, _lambda_dk)
-        _chi_uk = numba_chi_uk_old(_U_Nk, _kappa_dk, _Y_1k,
-                               _X_1k, _mu_uk, _Z_1k,
-                               _mu_dk, _V_Nk, _W_Nk,
-                               _D_k_star)
-        # Compute downstream superlink flow coefficients
-        _alpha_dk = numba_alpha_dk_old(_X_1k, _kappa_uk, _W_Nk,
-                                   _D_k_star, _lambda_uk)
-        _beta_dk = numba_beta_dk_old(_X_1k, _kappa_uk, _U_Nk,
-                                 _W_Nk, _Z_1k, _D_k_star,
-                                 _lambda_dk)
-        _chi_dk = numba_chi_dk_old(_X_1k, _kappa_uk, _V_Nk,
-                               _W_Nk, _mu_uk, _U_Nk,
-                               _mu_dk, _Y_1k, _Z_1k,
-                               _D_k_star)
-        # Export instance variables
-        self._D_k_star = _D_k_star
-        self._alpha_uk = _alpha_uk
-        self._beta_uk = _beta_uk
-        self._chi_uk = _chi_uk
-        self._alpha_dk = _alpha_dk
-        self._beta_dk = _beta_dk
-        self._chi_dk = _chi_dk
 
     def orifice_flow_coefficients(self, u=None):
         """
@@ -1903,23 +1786,9 @@ class nSuperLink(SuperLink):
         _chi_uk = self._chi_uk        # Superlink flow coefficient
         _chi_dk = self._chi_dk        # Superlink flow coefficient
         H_j = self.H_j                # Head at superjunction j
-        _theta_uk = self._theta_uk
-        _theta_dk = self._theta_dk
-        _A_uk = self._A_uk
-        _A_dk = self._A_dk
-        _B_uk = self._B_uk
-        _B_dk = self._B_dk
-        g = 9.81
         # Compute flow at next time step
         _Q_uk_next = _alpha_uk * H_j[_J_uk] + _beta_uk * H_j[_J_dk] + _chi_uk
         _Q_dk_next = _alpha_dk * H_j[_J_uk] + _beta_dk * H_j[_J_dk] + _chi_dk
-        # If overflow, need to use critical depth, otherwise singular
-        # TODO: Does this need to be accounted for in recurrence relations?
-        # TODO: Should calculate depth first, then flow?
-        #_Q_uk_crit = np.sqrt(g * _A_uk**3 / _B_uk)
-        #_Q_dk_crit = np.sqrt(g * _A_dk**3 / _B_dk)
-        #_Q_uk_next[_theta_uk == 0] = _Q_uk_crit[_theta_uk == 0]
-        #_Q_dk_next[_theta_dk == 0] = _Q_dk_crit[_theta_dk == 0]
         # Export instance variables
         self._Q_uk = _Q_uk_next
         self._Q_dk = _Q_dk_next

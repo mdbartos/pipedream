@@ -28,11 +28,11 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
     n = len(_ik)
     for i in range(n):
         I = _Ik[i]
-        Ip1 = I + 1
+        #Ip1 = I + 1
         geom_code = _geom_codes[i]
-        h_I = _h_Ik[I]
-        h_Ip1 = _h_Ik[Ip1]
-        h_i = (h_I + h_Ip1) / 2
+        h_i = _h_Ik[I]
+        #h_Ip1 = _h_Ik[Ip1]
+        #h_i = (h_I + h_Ip1) / 2
         g1_i = _g1_ik[i]
         g2_i = _g2_ik[i]
         g3_i = _g3_ik[i]
@@ -93,22 +93,22 @@ def numba_hydraulic_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik,
                                                                       g3_i, g4_i, g5_i, g6_i, g7_i)
     return 1
 
-@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-            int64[:], int64[:], int64[:], int64[:]),
+            int64[:], int64[:]),
       cache=True)
-def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk, _theta_bk,
+def numba_boundary_geometry(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik,
                             _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
-                            _geom_codes, _i_bk, _I_bk, _J_bk):
+                            _geom_codes, _i_bk):
     n = len(_i_bk)
     for k in range(n):
         i = _i_bk[k]
-        I = _I_bk[k]
-        j = _J_bk[k]
+        #I = _I_bk[k]
+        #j = _J_bk[k]
         # TODO: If theta is zero, should return critical depth
-        h_I = _h_Ik[I]
-        h_Ip1 = _theta_bk[k] * (_H_j[j] - _z_inv_bk[k])
-        h_i = (h_I + h_Ip1) / 2
+        h_i = _h_Ik[k]
+        #h_Ip1 = _theta_bk[k] * (_H_j[j] - _z_inv_bk[k])
+        #h_i = (h_I + h_Ip1) / 2
         geom_code = _geom_codes[i]
         g1_i = _g1_ik[i]
         g2_i = _g2_ik[i]
@@ -217,11 +217,11 @@ def numba_transect_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik, _is_irregular, _
         is_irregular = _is_irregular[i]
         if is_irregular:
             I = _Ik[i]
-            Ip1 = I + 1
+            #Ip1 = I + 1
             transect_code = _transect_codes[i]
-            h_I = _h_Ik[I]
-            h_Ip1 = _h_Ik[Ip1]
-            h_i = (h_I + h_Ip1) / 2
+            h_i = _h_Ik[I]
+            #h_Ip1 = _h_Ik[Ip1]
+            #h_i = (h_I + h_Ip1) / 2
             start = _transect_inds[transect_code]
             size = _transect_lens[transect_code]
             end = start + size
@@ -236,27 +236,27 @@ def numba_transect_geometry(_A_ik, _Pe_ik, _R_ik, _B_ik, _h_Ik, _is_irregular, _
             _R_ik[i] = pipedream_solver.ngeometry.interpolate_geometry(h_i, _z_range, _R_range, 1)
     return 1
 
-@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-            float64[:], boolean[:], float64[:], float64[:], float64[:],
+@njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:],
+            boolean[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], int64[:], int64[:],
-            int64[:], int64[:], int64[:], int64[:]),
+            int64[:], int64[:]),
       cache=True)
-def numba_boundary_transect(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik, _H_j, _z_inv_bk,
-                            _theta_bk, _is_irregular, _transect_zs, _transect_As, _transect_Bs,
+def numba_boundary_transect(_A_bk, _Pe_bk, _R_bk, _B_bk, _h_Ik,
+                            _is_irregular, _transect_zs, _transect_As, _transect_Bs,
                             _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
-                            _transect_lens, _I_bk, _i_bk, _J_bk):
+                            _transect_lens, _i_bk):
     n = len(_i_bk)
     for k in range(n):
         i = _i_bk[k]
-        I = _I_bk[k]
-        j = _J_bk[k]
+        #I = _I_bk[k]
+        #j = _J_bk[k]
         is_irregular_bk = _is_irregular[i]
         if is_irregular_bk:
-            h_I = _h_Ik[I]
+            h_i = _h_Ik[k]
             # TODO: This should incorporate theta
-            h_Ip1 = _theta_bk[k] * (_H_j[j] - _z_inv_bk[k])
+            #h_Ip1 = _theta_bk[k] * (_H_j[j] - _z_inv_bk[k])
             transect_code = _transect_codes[i]
-            h_i = (h_I + h_Ip1) / 2
+            #h_i = (h_I + h_Ip1) / 2
             start = _transect_inds[transect_code]
             size = _transect_lens[transect_code]
             end = start + size
@@ -1337,10 +1337,10 @@ def numba_solve_pump_flows(H_j, u, _z_inv_j, _z_p, _dHp_max, _dHp_min, _a_p, _b_
     return _Qp_next
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], float64[:], int64, int64[:], int64[:], int64[:]),
+            float64[:], float64[:], float64[:], float64[:], float64[:], int64, int64[:], int64[:], int64[:]),
       cache=True)
 def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
-                             _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_1k, _i_1k):
+                             _P_ik, _A_uik, _A_dik, _E_Ik, _D_Ik, NK, nk, _I_1k, _i_1k):
     g = 9.81
     for k in range(NK):
         # Start at junction 1
@@ -1350,10 +1350,10 @@ def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
         _i_2 = _i_1 + 1
         nlinks = nk[k]
         _T_ik[_i_1] = T_1k(_a_ik[_i_1], _b_ik[_i_1], _c_ik[_i_1])
-        _U_Ik[_I_1] = U_1k(_E_Ik[_I_2], _c_ik[_i_1], _A_ik[_i_1], _T_ik[_i_1], g)
+        _U_Ik[_I_1] = U_1k(_E_Ik[_I_2], _c_ik[_i_1], _A_dik[_i_1], _T_ik[_i_1], g)
         _V_Ik[_I_1] = V_1k(_P_ik[_i_1], _D_Ik[_I_2], _c_ik[_i_1], _T_ik[_i_1],
                             _a_ik[_i_1], _D_Ik[_I_1])
-        _W_Ik[_I_1] = W_1k(_A_ik[_i_1], _T_ik[_i_1], _a_ik[_i_1], _E_Ik[_I_1], g)
+        _W_Ik[_I_1] = W_1k(_A_uik[_i_1], _T_ik[_i_1], _a_ik[_i_1], _E_Ik[_I_1], g)
         # Loop from junction 2 -> Nk
         for i in range(nlinks - 1):
             _i_next = _i_2 + i
@@ -1361,22 +1361,22 @@ def numba_forward_recurrence(_T_ik, _U_Ik, _V_Ik, _W_Ik, _a_ik, _b_ik, _c_ik,
             _Im1_next = _I_next - 1
             _Ip1_next = _I_next + 1
             _T_ik[_i_next] = T_ik(_a_ik[_i_next], _b_ik[_i_next], _c_ik[_i_next],
-                                  _A_ik[_i_next], _E_Ik[_I_next], _U_Ik[_Im1_next], g)
+                                  _A_uik[_i_next], _E_Ik[_I_next], _U_Ik[_Im1_next], g)
             _U_Ik[_I_next] = U_Ik(_E_Ik[_Ip1_next], _c_ik[_i_next],
-                                  _A_ik[_i_next], _T_ik[_i_next], g)
+                                  _A_dik[_i_next], _T_ik[_i_next], g)
             _V_Ik[_I_next] = V_Ik(_P_ik[_i_next], _a_ik[_i_next], _D_Ik[_I_next],
-                                  _D_Ik[_Ip1_next], _c_ik[_i_next], _A_ik[_i_next],
+                                  _D_Ik[_Ip1_next], _c_ik[_i_next], _A_uik[_i_next],
                                   _E_Ik[_I_next], _V_Ik[_Im1_next], _U_Ik[_Im1_next],
                                   _T_ik[_i_next], g)
-            _W_Ik[_I_next] = W_Ik(_A_ik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
+            _W_Ik[_I_next] = W_Ik(_A_uik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
                                   _W_Ik[_Im1_next], _U_Ik[_Im1_next], _T_ik[_i_next], g)
     return 1
 
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
-            float64[:], float64[:], float64[:], float64[:], int64, int64[:], int64[:], int64[:]),
+            float64[:], float64[:], float64[:], float64[:], float64[:], int64, int64[:], int64[:], int64[:]),
       cache=True)
 def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
-                              _P_ik, _A_ik, _E_Ik, _D_Ik, NK, nk, _I_Nk, _i_nk):
+                              _P_ik, _A_uik, _A_dik, _E_Ik, _D_Ik, NK, nk, _I_Nk, _i_nk):
     g = 9.81
     for k in range(NK):
         _I_N = _I_Nk[k]
@@ -1386,23 +1386,23 @@ def numba_backward_recurrence(_O_ik, _X_Ik, _Y_Ik, _Z_Ik, _a_ik, _b_ik, _c_ik,
         _I_Np1 = _I_N + 1
         nlinks = nk[k]
         _O_ik[_i_n] = O_nk(_a_ik[_i_n], _b_ik[_i_n], _c_ik[_i_n])
-        _X_Ik[_I_N] = X_Nk(_A_ik[_i_n], _E_Ik[_I_N], _a_ik[_i_n], _O_ik[_i_n], g)
+        _X_Ik[_I_N] = X_Nk(_A_uik[_i_n], _E_Ik[_I_N], _a_ik[_i_n], _O_ik[_i_n], g)
         _Y_Ik[_I_N] = Y_Nk(_P_ik[_i_n], _D_Ik[_I_N], _a_ik[_i_n], _O_ik[_i_n],
                             _c_ik[_i_n], _D_Ik[_I_Np1])
-        _Z_Ik[_I_N] = Z_Nk(_A_ik[_i_n], _O_ik[_i_n], _c_ik[_i_n], _E_Ik[_I_Np1], g)
+        _Z_Ik[_I_N] = Z_Nk(_A_dik[_i_n], _O_ik[_i_n], _c_ik[_i_n], _E_Ik[_I_Np1], g)
         for i in range(nlinks - 1):
             _i_next = _i_nm1 - i
             _I_next = _I_Nm1 - i
             _Ip1_next = _I_next + 1
             _O_ik[_i_next] = O_ik(_a_ik[_i_next], _b_ik[_i_next], _c_ik[_i_next],
-                                  _A_ik[_i_next], _E_Ik[_Ip1_next], _X_Ik[_Ip1_next], g)
-            _X_Ik[_I_next] = X_Ik(_A_ik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
+                                  _A_dik[_i_next], _E_Ik[_Ip1_next], _X_Ik[_Ip1_next], g)
+            _X_Ik[_I_next] = X_Ik(_A_uik[_i_next], _E_Ik[_I_next], _a_ik[_i_next],
                                   _O_ik[_i_next], g)
             _Y_Ik[_I_next] = Y_Ik(_P_ik[_i_next], _a_ik[_i_next], _D_Ik[_I_next],
-                                  _D_Ik[_Ip1_next], _c_ik[_i_next], _A_ik[_i_next],
+                                  _D_Ik[_Ip1_next], _c_ik[_i_next], _A_dik[_i_next],
                                   _E_Ik[_Ip1_next], _Y_Ik[_Ip1_next], _X_Ik[_Ip1_next],
                                   _O_ik[_i_next], g)
-            _Z_Ik[_I_next] = Z_Ik(_A_ik[_i_next], _E_Ik[_Ip1_next], _c_ik[_i_next],
+            _Z_Ik[_I_next] = Z_Ik(_A_dik[_i_next], _E_Ik[_Ip1_next], _c_ik[_i_next],
                                   _Z_Ik[_Ip1_next], _X_Ik[_Ip1_next], _O_ik[_i_next], g)
     return 1
 
