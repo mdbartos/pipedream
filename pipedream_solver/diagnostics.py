@@ -368,7 +368,7 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
             self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
             self.success = self._convergence_met(self.convergence_metric, self.xtol)
             if not self.success:
-                for _ in range(num_iter):
+                for k in range(num_iter):
                     # TODO: Rename this to step count
                     self.model.iter_count -= 1
                     self.model.t -= dt
@@ -382,6 +382,11 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                     self.model.error_tracker._compute_error()
                     err = self.model.error_tracker.errors
                     err_norm = norm_inf(err)
+                    #if len(self.error_queue):
+                    #    prev_err_norm = self.error_queue[-1]
+                    #    if err_norm > prev_err_norm:
+                    #        norm_highest = norm_inf_where(err)
+                    #        print(f't={self.model.t}, k={iter_elapsed}, Error increased {err_norm - prev_err_norm:e} at {norm_highest}')
                     self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                         first_time=first_time, implicit=implicit, banded=banded,
                                         first_iter=False)
@@ -389,11 +394,12 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                     self.dx = self._compute_guess_difference(self.x_old, self.x_new)
                     self.step_ratio = self._compute_step_ratio(self.dx)
                     self.learning_rate = self._compute_learning_rate(self.step_ratio)
-                    self._set_states(self.x_old, self.x_new, self.learning_rate)
+                    adjusted_learning_rate = max(self.learning_rate * ((num_iter - k)**2 / (num_iter)**2), self.min_learning_rate)
+                    self._set_states(self.x_old, self.x_new, adjusted_learning_rate)
                     self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
                     self.success = self._convergence_met(self.convergence_metric, self.xtol)
                     self.convergence_queue.append(self.convergence_metric)
-                    self.learning_queue.append(self.learning_rate)
+                    self.learning_queue.append(adjusted_learning_rate)
                     self.error_queue.append(err_norm)
                     iter_elapsed += 1
                     if self.success:
@@ -814,3 +820,9 @@ def inner_product(vecs_1, vecs_2):
     assert vecs_1.keys() == vecs_2.keys()
     result = sum((vecs_1[key] * vecs_2[key]).sum() for key in vecs_1)
     return result
+
+def norm_inf_where(vecs):
+    norms = {key : np.abs(vec).max() for key, vec in vecs.items()}
+    inds = {key : np.abs(vec).argmax() for key, vec in vecs.items()}
+    result = max(norms, key=norms.get)
+    return {result : inds[result]}
