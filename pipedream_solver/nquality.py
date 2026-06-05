@@ -101,7 +101,7 @@ class QualityBuilder():
         self._kI = self.hydraulics._kI
         self._K_j = superjunction_params['K'].values.astype(np.float64)
         self._c_j = superjunction_params['c_0'].values.astype(np.float64)
-        self.bc = superjunction_params['bc'].values.astype(np.bool8)
+        self.bc = superjunction_params['bc'].values.astype(np.bool_)
         if junction_params is not None:
             self._K_Ik = junction_params['K'].values.astype(np.float64)
             self._c_Ik = junction_params['c_0'].values.astype(np.float64)
