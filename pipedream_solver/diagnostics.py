@@ -2,6 +2,7 @@ import numpy as np
 from pipedream_solver._nsuperlink import numba_compute_functional_storage_volumes, numba_compute_tabular_storage_volumes
 from pipedream_solver._nsuperlink import junction_numerator, junction_denominator, superjunction_numerator, superjunction_denominator
 from pipedream_solver.callbacks import BaseCallback
+from time import perf_counter
 
 from numba import njit, prange
 from numba.types import float64, int64, uint32, uint16, uint8, boolean, UniTuple, Tuple, List, DictType, void
@@ -478,6 +479,23 @@ class LegacyConvergenceTracker(BaseCallback):
                     if convergence_met:
                         break
         self.model.iter_elapsed = iter_elapsed 
+
+class PerformanceTracker(BaseCallback):
+    def __init__(self, model):
+        self.step_start_time = 0.
+        self.step_end_time = 0.
+
+    @property
+    def step_time_elapsed(self):
+        result = self.step_end_time - self.step_start_time
+        return result
+
+    def __on_step_start__(self, *args, **kwargs):
+        # TODO: Need a function to save and load volumes
+        self.step_start_time = perf_counter()
+
+    def __on_step_end__(self, *args, **kwargs):
+        self.step_end_time = perf_counter()
 
 def continuity_error_j(model, dt):
     """
