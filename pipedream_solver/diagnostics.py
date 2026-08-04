@@ -32,6 +32,7 @@ class ErrorTracker(BaseCallback):
         self.momentum_magnitude_p = np.zeros(model.n_p)
         self.rtol = rtol
         self.atol = atol
+        self.active = True
 
     @property
     def continuity_error(self):
@@ -86,11 +87,14 @@ class ErrorTracker(BaseCallback):
         model = self.model
         # TODO: This could cause problems, need to make sure this stays updated at each step
         dt = model._dt
-        self.continuity_error_j = continuity_error_j(model, dt)
-        self.continuity_error_Ik = continuity_error_Ik(model, dt)
-        self.momentum_error_ik = momentum_error_ik(model, dt)
-        self.momentum_error_uk = momentum_error_uk_2(model, dt)
-        self.momentum_error_dk = momentum_error_dk_2(model, dt)
+        if self.active:
+            self.continuity_error_j = continuity_error_j(model, dt)
+            self.continuity_error_Ik = continuity_error_Ik(model, dt)
+            self.momentum_error_ik = momentum_error_ik(model, dt)
+            self.momentum_error_uk = momentum_error_uk_2(model, dt)
+            self.momentum_error_dk = momentum_error_dk_2(model, dt)
+        else:
+            pass
         #self.momentum_error_w = momentum_error_w(model, dt)
         # Use these for tsuperlink
         #self.momentum_error_ik = momentum_error_ik_2(model, dt)
