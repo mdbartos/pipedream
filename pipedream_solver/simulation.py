@@ -573,6 +573,46 @@ class Simulation():
         assert np.isfinite(self.model.H_j).all()
         self._iter_count += 1
 
+    def _interpolate_inputs(self, dt=None, **kwargs):
+        # Specify current timestamps
+        t_next = self.t + dt
+        # Import inputs
+        interpolation_method = self.interpolation
+        if not 'Q_in' in kwargs:
+            Q_in = self.Q_in
+            # Get superjunction runoff input
+            if Q_in is not None:
+                Q_in_index, Q_in_values = Q_in.index.values, Q_in.values
+                Q_in_next = interpolate_sample(t_next, Q_in_index, Q_in_values,
+                                               interpolation_method)
+            else:
+                Q_in_next = None
+        else:
+            Q_in_next = kwargs.pop('Q_in')
+        if not 'H_bc' in kwargs:
+            H_bc = self.H_bc
+            # Get head boundary conditions
+            if H_bc is not None:
+                H_bc_index, H_bc_values = H_bc.index.values, H_bc.values
+                H_bc_next = interpolate_sample(t_next, H_bc_index, H_bc_values,
+                                               interpolation_method)
+            else:
+                H_bc_next = None
+        else:
+            H_bc_next = kwargs.pop('H_bc')
+        if not 'Q_Ik' in kwargs:
+            Q_Ik = self.Q_Ik
+            # Get junction runoff input
+            if Q_Ik is not None:
+                Q_Ik_index, Q_Ik_values = Q_Ik.index.values, Q_Ik.values
+                Q_Ik_next = interpolate_sample(t_next, Q_Ik_index, Q_Ik_values,
+                                               interpolation_method)
+            else:
+                Q_Ik_next = None
+        else:
+            Q_Ik_next = kwargs.pop('Q_Ik')
+        return Q_in_next, H_bc_next, Q_Ik_next
+
     def _step(self, dt=None, **kwargs):
         # Specify current timestamps
         t_next = self.t + dt

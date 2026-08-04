@@ -8,6 +8,9 @@ import scipy.sparse.linalg
 import pipedream_solver.geometry
 import pipedream_solver.storage
 import pipedream_solver.visualization
+from pipedream_solver.callbacks import BaseCallback
+from pipedream_solver.diagnostics import ConvergenceTracker, VolumeTracker, ErrorTracker
+from pipedream_solver.diagnostics import ExperimentalConvergenceTracker
 
 class SuperLink():
     """
@@ -293,6 +296,7 @@ class SuperLink():
         orifices = copy.deepcopy(orifices)
         weirs = copy.deepcopy(weirs)
         pumps = copy.deepcopy(pumps)
+        self.callbacks = {}
         # TODO: Ensure index is int
         # TODO: This needs to be done for orifices/weirs/pumps as well
         # Ensure nominal direction of superlinks is correct
@@ -420,6 +424,7 @@ class SuperLink():
         # Dimensions
         self.nk = np.bincount(self._ki)
         # Create forward and backward indexers
+        # TODO: Check if these are correct for single link
         self.forward_I_I = np.copy(self._I)
         self.forward_I_I[self._Ik] = self._Ip1k
         self.backward_I_I = np.copy(self._I)
@@ -640,6 +645,15 @@ class SuperLink():
         self._R_ik = np.zeros(self._ik.size, dtype=np.float64)
         self._B_ik = np.zeros(self._ik.size, dtype=np.float64)
         self._sigma_ik = np.ones(self._ik.size, dtype=np.float64)
+        # Edge geometries
+        self._A_uik = np.zeros(self._ik.size, dtype=np.float64)
+        self._Pe_uik = np.zeros(self._ik.size, dtype=np.float64)
+        self._R_uik = np.zeros(self._ik.size, dtype=np.float64)
+        self._B_uik = np.zeros(self._ik.size, dtype=np.float64)
+        self._A_dik = np.zeros(self._ik.size, dtype=np.float64)
+        self._Pe_dik = np.zeros(self._ik.size, dtype=np.float64)
+        self._R_dik = np.zeros(self._ik.size, dtype=np.float64)
+        self._B_dik = np.zeros(self._ik.size, dtype=np.float64)
         # Node velocities
         self._u_ik = np.zeros(self._ik.size, dtype=np.float64)
         self._u_Ik = np.zeros(self._Ik.size, dtype=np.float64)
@@ -689,11 +703,15 @@ class SuperLink():
         self.bc = self.superjunctions['bc'].values.astype(np.bool_)
         if sparse:
             self.B = scipy.sparse.lil_matrix((self.M, self.n_o))
+            self.J = scipy.sparse.lil_matrix((self.M, self.M))
+            self.K = scipy.sparse.lil_matrix((self.M, self.M))
             self.O = scipy.sparse.lil_matrix((self.M, self.M))
             self.W = scipy.sparse.lil_matrix((self.M, self.M))
             self.P = scipy.sparse.lil_matrix((self.M, self.M))
         else:
             self.B = np.zeros((self.M, self.n_o))
+            self.J = np.zeros((self.M, self.M))
+            self.K = np.zeros((self.M, self.M))
             self.O = np.zeros((self.M, self.M))
             self.W = np.zeros((self.M, self.M))
             self.P = np.zeros((self.M, self.M))
@@ -715,6 +733,8 @@ class SuperLink():
         self._Q_dk = self._Q_ik[self._i_nk]
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
+        # Set boundary condition in/outflows
+        self._Q_bc = np.zeros(self.M, dtype=np.float64)
         # Other parameters
         self._O_diag = np.zeros(self.M)
         self._W_diag = np.zeros(self.M)
@@ -728,6 +748,26 @@ class SuperLink():
         self._Pe_dk = np.copy(self._Pe_ik[self._i_nk])
         self._R_uk = np.copy(self._R_ik[self._i_1k])
         self._R_dk = np.copy(self._R_ik[self._i_nk])
+        # Superlink edge geometries
+        self._A_uuk = np.copy(self._A_ik[self._i_1k])
+        self._A_udk = np.copy(self._A_ik[self._i_nk])
+        self._A_duk = np.copy(self._A_ik[self._i_1k])
+        self._A_ddk = np.copy(self._A_ik[self._i_nk])
+        self._B_uuk = np.copy(self._B_ik[self._i_1k])
+        self._B_udk = np.copy(self._B_ik[self._i_nk])
+        self._B_duk = np.copy(self._B_ik[self._i_1k])
+        self._B_ddk = np.copy(self._B_ik[self._i_nk])
+        self._Pe_uuk = np.copy(self._Pe_ik[self._i_1k])
+        self._Pe_udk = np.copy(self._Pe_ik[self._i_nk])
+        self._Pe_duk = np.copy(self._Pe_ik[self._i_1k])
+        self._Pe_ddk = np.copy(self._Pe_ik[self._i_nk])
+        self._R_uuk = np.copy(self._R_ik[self._i_1k])
+        self._R_udk = np.copy(self._R_ik[self._i_nk])
+        self._R_duk = np.copy(self._R_ik[self._i_1k])
+        self._R_ddk = np.copy(self._R_ik[self._i_nk])
+        # End velocities
+        self._u_uk = np.copy(self._u_ik[self._i_1k])
+        self._u_dk = np.copy(self._u_ik[self._i_nk])
         # End slopes
         cond_uk = (self._dx_uk > 0.)
         cond_dk = (self._dx_uk > 0.)
@@ -759,6 +799,22 @@ class SuperLink():
         self._A_k = np.zeros(self.NK, dtype=np.float64)
         self._dt_ck = np.ones(self.NK, dtype=np.float64)
         self._Q_in = np.zeros(self.M, dtype=np.float64)
+        self._H_bc = np.zeros(self.M, dtype=np.float64)
+        # Set minimum hydraulic geometries
+        self._h_Ik_min = np.full(self._h_Ik.size, self.min_depth, dtype=np.float64)
+        self._A_ik_min = np.copy(self._A_ik)
+        self._B_ik_min = np.copy(self._B_ik)
+        self._Pe_ik_min = np.copy(self._Pe_ik)
+        self._R_ik_min = np.copy(self._R_ik)
+        self._A_uk_min = np.copy(self._A_uk)
+        self._B_uk_min = np.copy(self._B_uk)
+        self._Pe_uk_min = np.copy(self._Pe_uk)
+        self._R_uk_min = np.copy(self._R_uk)
+        self._A_dk_min = np.copy(self._A_dk)
+        self._B_dk_min = np.copy(self._B_dk)
+        self._Pe_dk_min = np.copy(self._Pe_dk)
+        self._R_dk_min = np.copy(self._R_dk)
+        self.min_hydraulic_geometry()
         # Initialize state dictionary
         self.states = {}
         # Iteration counter
@@ -767,6 +823,12 @@ class SuperLink():
         # Compute bandwidth
         self._compute_bandwidth()
         # Initialize to stable state
+        self.convergence_tracker = ExperimentalConvergenceTracker(self)
+        self.bind_callback(self.convergence_tracker, 'convergence_tracker')
+        self.volume_tracker = VolumeTracker(self)
+        self.bind_callback(self.volume_tracker, 'volume_tracker')
+        self.error_tracker = ErrorTracker(self)
+        self.bind_callback(self.error_tracker, 'error_tracker')
         self.step(dt=1e-6, first_time=True)
         # Reset iteration counter
         self.iter_count = 0
@@ -923,6 +985,24 @@ class SuperLink():
     @x_Ik.setter
     def x_Ik(self, value):
         self._x_Ik = np.asarray(value)
+
+    @property
+    def state_vector_prior(self):
+        vec = np.concatenate([self.states['H_j'], self.states['Q_uk'],
+                              self.states['Q_dk'], self.states['Q_o'],
+                              self.states['Q_w'], self.states['Q_p'], 
+                              self.states['h_Ik'], self.states['Q_ik']])
+        return vec
+
+    @property
+    def state_vector_next(self):
+        vec = np.concatenate([self.H_j, self.Q_uk, self.Q_dk, self.Q_o, self.Q_w, self.Q_p, 
+                              self.h_Ik, self.Q_ik])
+        return vec
+
+    @property
+    def state_vector(self):
+        return self.state_vector_next
 
     @property
     def adjacency_matrix(self, J_u=None, J_d=None, symmetric=True):
@@ -1930,6 +2010,28 @@ class SuperLink():
                                        g1=_g1_g, g2=_g2_g, g3=_g3_g)
         # Export to instance variables
         self._Ao = _Ao
+
+    def compute_boundary_indicator_variables(self):
+        H_j = self.H_j
+        _J_uk = self._J_uk
+        _J_dk = self._J_dk
+        _theta_uk = self._theta_uk
+        _theta_dk = self._theta_dk
+        _z_inv_uk = self._z_inv_uk
+        _z_inv_dk = self._z_inv_dk
+        # Compute upstream indicator variable
+        _H_juk = H_j[_J_uk]
+        upstream_depth_above_invert = _H_juk > _z_inv_uk
+        _theta_uk.fill(0.)
+        _theta_uk[upstream_depth_above_invert] = 1.
+        # Compute downstream indicator variable
+        _H_jdk = H_j[_J_dk]
+        downstream_depth_above_invert = _H_jdk > _z_inv_dk
+        _theta_dk.fill(0.)
+        _theta_dk[downstream_depth_above_invert] = 1.
+        # Store output
+        self._theta_uk = _theta_uk
+        self._theta_dk = _theta_dk
 
     def compute_storage_areas(self):
         """
@@ -3141,8 +3243,6 @@ class SuperLink():
         superjunction heads at time t + dt.
         """
         # Import instance variables
-        _J_uk = self._J_uk              # Index of superjunction upstream of superlink k
-        _J_dk = self._J_dk              # Index of superjunction downstream of superlink k
         _kappa_uk = self._kappa_uk      # Superlink head coefficient
         _kappa_dk = self._kappa_dk      # Superlink head coefficient
         _lambda_uk = self._lambda_uk    # Superlink head coefficient
@@ -3151,11 +3251,10 @@ class SuperLink():
         _mu_dk = self._mu_dk            # Superlink head coefficient
         _Q_uk = self._Q_uk              # Flow rate at upstream end of superlink k
         _Q_dk = self._Q_dk              # Flow rate at downstream end of superlink k
-        H_j = self.H_j                  # Head at superjunction j
         min_depth = self.min_depth      # Minimum allowable depth at boundaries
         # Compute flow at next time step
-        _h_uk_next = _kappa_uk * _Q_uk + _lambda_uk * H_j[_J_uk] + _mu_uk
-        _h_dk_next = _kappa_dk * _Q_dk + _lambda_dk * H_j[_J_dk] + _mu_dk
+        _h_uk_next = _kappa_uk * _Q_uk + _lambda_uk * _Q_dk + _mu_uk
+        _h_dk_next = _kappa_dk * _Q_uk + _lambda_dk * _Q_dk + _mu_dk
         # Set minimum values
         # TODO: Is this causing the difference between normal/numba versions?
         # _h_uk_next[_h_uk_next < min_depth] = min_depth
@@ -3533,6 +3632,46 @@ class SuperLink():
         self._Q_ik = _Q_ik
         self._h_Ik = _h_Ik
 
+    def compute_boundary_flows(self, dt=None):
+        # Import instance variables
+        bc = self.bc
+        if not bc.any():
+            return None
+        _Q_bc = self._Q_bc
+        _H_j_next = self.H_j
+        _H_j_prev = self.states['H_j']
+        _Q_in = self._Q_in
+        _A_sj = self._A_sj
+        _J_uk = self._J_uk
+        _J_dk = self._J_dk
+        _J_uo = self._J_uo
+        _J_do = self._J_do
+        _J_uw = self._J_uw
+        _J_dw = self._J_dw
+        _J_up = self._J_up
+        _J_dp = self._J_dp
+        _Q_uk = self._Q_uk
+        _Q_dk = self._Q_dk
+        _Q_o = self._Qo
+        _Q_w = self._Qw
+        _Q_p = self._Qp
+        if dt is None:
+            dt = self._dt
+        # Compute boundary flows
+        _Q_bc.fill(0.)
+        _Q_bc -= _Q_in
+        _Q_bc += (_H_j_next - _H_j_prev) * _A_sj / dt
+        _Q_bc[self._J_uk] += _Q_uk
+        _Q_bc[self._J_dk] -= _Q_dk
+        _Q_bc[self._J_uo] += _Q_o
+        _Q_bc[self._J_do] -= _Q_o
+        _Q_bc[self._J_uw] += _Q_w
+        _Q_bc[self._J_dw] -= _Q_w
+        _Q_bc[self._J_up] += _Q_p
+        _Q_bc[self._J_dp] -= _Q_p
+        _Q_bc[~bc] = 0.
+        self._Q_bc = _Q_bc
+
     def exit_conditions(self):
         """
         Determine which superlinks have exit depths below the pipe crown elevation.
@@ -3890,6 +4029,7 @@ class SuperLink():
         n_w = self.n_w                # Number of weirs
         n_p = self.n_p                # Number of pumps
         Q_in = self._Q_in
+        H_bc = self._H_bc
         # If no time step specified, use instance time step
         if _dt is None:
             _dt = self._dt
@@ -3900,8 +4040,26 @@ class SuperLink():
         else:
             A_1 = A
         # Get A_2
-        A_2 = np.diag(np.where(~bc, _A_sj / _dt, 0))
-        return A_1, A_2, D, H_j_next, H_j_prev, Q_in
+        A_2_diag = _A_sj / _dt
+        np.add.at(A_2_diag, self._J_uk, self._B_uk * self._dx_uk * self._theta_uk / 2 / _dt)
+        np.add.at(A_2_diag, self._J_dk, self._B_dk * self._dx_dk * self._theta_dk / 2 / _dt) 
+        A_2 = np.diag(np.where(~bc, A_2_diag, 0.))
+        D = np.where(~bc, D, 0.)
+        B = np.diag(np.where(~bc, 1., 0.))
+        H_bc = np.where(bc, H_bc, 0.)
+        return A_1, A_2, B, D, H_j_next, H_j_prev, Q_in, H_bc
+
+    def return_state(self):
+        states = {}
+        states['H_j'] = np.copy(self.H_j)
+        states['Q_uk'] = np.copy(self.Q_uk)
+        states['Q_dk'] = np.copy(self.Q_dk)
+        states['Q_o'] = np.copy(self.Q_o)
+        states['Q_w'] = np.copy(self.Q_w)
+        states['Q_p'] = np.copy(self.Q_p)
+        states['h_Ik'] = np.copy(self.h_Ik)
+        states['Q_ik'] = np.copy(self.Q_ik)
+        return states
 
     def save_state(self):
         """
@@ -3914,18 +4072,17 @@ class SuperLink():
         self.states['Q_uk'] = np.copy(self.Q_uk)
         self.states['Q_dk'] = np.copy(self.Q_dk)
         self.states['x_Ik'] = np.copy(self.x_Ik)
-        if self.n_o:
-            self.states['Q_o'] = np.copy(self.Q_o)
-            # TODO: Need to add orifice area here
-        if self.n_w:
-            self.states['Q_w'] = np.copy(self.Q_w)
-        if self.n_p:
-            self.states['Q_p'] = np.copy(self.Q_p)
+        self.states['Q_o'] = np.copy(self.Q_o)
+        # TODO: Need to add orifice area here
+        self.states['Q_w'] = np.copy(self.Q_w)
+        self.states['Q_p'] = np.copy(self.Q_p)
         self.states['A_ik'] = np.copy(self.A_ik)
         self.states['A_uk'] = np.copy(self.A_uk)
         self.states['A_dk'] = np.copy(self.A_dk)
         self.states['A_sj'] = np.copy(self.A_sj)
         self.states['V_j'] = np.copy(self.V_j)
+        for _, callback in self.callbacks.items():
+            callback.__on_save_state__()
 
     def load_state(self, states={}, exclude_states=set(),
                    compute_hydraulic_geometries=True):
@@ -3951,6 +4108,8 @@ class SuperLink():
             self.downstream_hydraulic_geometry()
             self.compute_storage_areas()
             self.node_velocities()
+        for _, callback in self.callbacks.items():
+            callback.__on_load_state__()
 
     def spinup(self, n_steps=100, dt=10, Q_in=None, Q_0Ik=None, reposition_junctions=False,
                reset_counters=True, **kwargs):
@@ -4012,20 +4171,37 @@ class SuperLink():
                                  weir_kwargs=weir_kwargs,
                                  pump_kwargs=pump_kwargs))
 
+    def bind_callback(self, callback, key):
+        assert isinstance(callback, BaseCallback)
+        self.callbacks[key] = callback
+
+    def unbind_callback(self, key):
+        return self.callbacks.pop(key)
+
     def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
         if first_iter:
             self.save_state()
         if dt is None:
             dt = self._dt
-        self._Q_in = Q_in
-        self._Q_0Ik = Q_0Ik
+        else:
+            self._dt = dt
+        if Q_in is None:
+            self._Q_in = np.zeros(self.M, dtype=np.float64)
+        else:
+            self._Q_in = Q_in
+        if Q_0Ik is None:
+            self._Q_0Ik = np.zeros(self._I.size, dtype=np.float64)
+        else:
+            self._Q_0Ik = Q_0Ik
+        self._H_bc = H_bc
         if not implicit:
             raise NotImplementedError
         # Compute all hydraulic geometries
         self.link_hydraulic_geometry()
         self.upstream_hydraulic_geometry()
         self.downstream_hydraulic_geometry()
+        self.compute_boundary_indicator_variables()
         self.compute_storage_areas()
         self.compute_storage_volumes()
         self.node_velocities()
@@ -4037,9 +4213,11 @@ class SuperLink():
         self.node_coeffs(_Q_0Ik=Q_0Ik, _dt=dt, first_iter=first_iter)
         self.forward_recurrence()
         self.backward_recurrence()
-        self.superlink_upstream_head_coefficients(_dt=dt)
-        self.superlink_downstream_head_coefficients(_dt=dt)
-        self.superlink_flow_coefficients()
+        #self.superlink_upstream_head_coefficients(_dt=dt)
+        #self.superlink_downstream_head_coefficients(_dt=dt)
+        #self.superlink_flow_coefficients()
+        self.superlink_boundary_depth_coefficients(_dt=dt)
+        self.superlink_boundary_flow_coefficients(_dt=dt)
         if self.orifices is not None:
             self.orifice_flow_coefficients(u=u_o)
         if self.weirs is not None:
@@ -4079,12 +4257,13 @@ class SuperLink():
             self.solve_internals_nnls()
         elif _method == 'lsq':
             self.solve_internals_lsq()
+        self.compute_boundary_flows(dt=dt)
         self.iter_count += 1
         self.t += dt
 
     def step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=None, first_iter=True,
-             num_iter=1, head_tol=0.0015):
+             num_iter=1, rtol=1e-5, atol=1e-5, head_tol=0.0015):
         """
         Advance model forward to next time step, computing hydraulic states.
 
@@ -4117,34 +4296,29 @@ class SuperLink():
         implicit : bool
             (Deprecated)
         """
+        for _, callback in self.callbacks.items():
+            callback.__on_step_start__(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                       first_time=first_time, implicit=implicit, banded=banded,
+                                       first_iter=first_iter, num_iter=num_iter, rtol=rtol, atol=atol,
+                                       head_tol=head_tol)
         if banded is None:
             banded = self.banded
-        self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                         first_time=first_time, implicit=implicit, banded=banded,
-                         first_iter=first_iter)
-        self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                         first_time=first_time, implicit=implicit, banded=banded,
-                         first_iter=first_iter)
-        # Perform fixed-point iteration until convergence
+        try:
+            self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                            first_time=first_time, implicit=implicit, banded=banded,
+                            first_iter=first_iter)
+            self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                            first_time=first_time, implicit=implicit, banded=banded,
+                            first_iter=first_iter)
+        except:
+            #self.load_state()
+            raise
+
+        first_iter = False
         num_iter -= 1
-        iter_elapsed = 1
-        if (num_iter > 0):
-            H_j_prev = self.states['H_j']
-            H_j_next = np.copy(self.H_j)
-            residual = np.abs(H_j_next - H_j_prev)
-            if not (residual < head_tol).all():
-                for _ in range(num_iter):
-                    self.iter_count -= 1
-                    self.t -= dt
-                    self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+        self.iter_elapsed = 1
+        for _, callback in self.callbacks.items():
+            callback.__on_step_end__(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                      first_time=first_time, implicit=implicit, banded=banded,
-                                     first_iter=False)
-                    self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                     first_time=first_time, implicit=implicit, banded=banded,
-                                     first_iter=False)
-                    iter_elapsed += 1
-                    residual = np.abs(H_j_next - self.H_j)
-                    if (residual < head_tol).all():
-                        break
-                    H_j_next = np.copy(self.H_j)
-        self.iter_elapsed = iter_elapsed
+                                     first_iter=first_iter, num_iter=num_iter, rtol=rtol, atol=atol,
+                                     head_tol=head_tol)

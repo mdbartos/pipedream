@@ -3,6 +3,8 @@ import scipy.interpolate
 from numba import njit
 from numba.types import float64, int64, uint32, uint16, uint8, boolean, UniTuple, Tuple, List, DictType, void
 
+MIN_DEPTH = 1e-5
+
 geom_code = {
     'circular' : 1,
     'rect_closed' : 2,
@@ -20,7 +22,7 @@ eps = np.finfo(float).eps
 
 @njit(float64(float64, float64, float64),
       cache=True)
-def Circular_A_ik(h_Ik, h_Ip1k, g1):
+def Circular_A_ik(h_ik, g1, g2):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -34,9 +36,10 @@ def Circular_A_ik(h_Ik, h_Ip1k, g1):
         Diameter of channel (meters)
     """
     d = g1
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    pslot = g2
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > d:
         y = d
     r = d / 2
@@ -51,7 +54,7 @@ def Circular_A_ik(h_Ik, h_Ip1k, g1):
 
 @njit(float64(float64, float64, float64),
       cache=True)
-def Circular_Pe_ik(h_Ik, h_Ip1k, g1):
+def Circular_Pe_ik(h_ik, g1, g2):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -65,9 +68,10 @@ def Circular_Pe_ik(h_Ik, h_Ip1k, g1):
         Diameter of channel (meters)
     """
     d = g1
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    pslot = g2
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > d:
         y = d
     r = d / 2
@@ -100,9 +104,9 @@ def Circular_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Circular_B_ik(h_Ik, h_Ip1k, g1, g2):
+def Circular_B_ik(h_ik, g1, g2):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -119,10 +123,9 @@ def Circular_B_ik(h_Ik, h_Ip1k, g1, g2):
     """
     d = g1
     pslot = g2
-    y = (h_Ik + h_Ip1k) / 2
-    # y[y < 0] = 0
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     r = d / 2
     phi = y / r
     if phi < 0:
@@ -134,13 +137,15 @@ def Circular_B_ik(h_Ik, h_Ip1k, g1, g2):
     if cond:
         B = 2 * r * np.sin(theta)
     else:
+        # TODO: Use absolute value instead of fraction?
         B = pslot * d
+    B = max(pslot * d, B)
     return B
 
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Rect_Closed_A_ik(h_Ik, h_Ip1k, g1, g2):
+def Rect_Closed_A_ik(h_ik, g1, g2):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -157,17 +162,17 @@ def Rect_Closed_A_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     b = g2
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     A = y * b
     return A
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Rect_Closed_Pe_ik(h_Ik, h_Ip1k, g1, g2):
+def Rect_Closed_Pe_ik(h_ik, g1, g2):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -184,9 +189,9 @@ def Rect_Closed_Pe_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     b = g2
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     Pe = b + 2 * y
@@ -212,9 +217,9 @@ def Rect_Closed_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64),
       cache=True)
-def Rect_Closed_B_ik(h_Ik, h_Ip1k, g1, g2, g3):
+def Rect_Closed_B_ik(h_ik, g1, g2, g3):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -234,9 +239,9 @@ def Rect_Closed_B_ik(h_Ik, h_Ip1k, g1, g2, g3):
     y_max = g1
     b = g2
     pslot = g3
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     cond = (y < y_max)
     if cond:
         B = b
@@ -245,9 +250,9 @@ def Rect_Closed_B_ik(h_Ik, h_Ip1k, g1, g2, g3):
     return B
 
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Rect_Open_A_ik(h_Ik, h_Ip1k, g1, g2):
+def Rect_Open_A_ik(h_ik, g1, g2):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -264,17 +269,17 @@ def Rect_Open_A_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     b = g2
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     A = y * b
     return A
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Rect_Open_Pe_ik(h_Ik, h_Ip1k, g1, g2):
+def Rect_Open_Pe_ik(h_ik, g1, g2):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -291,9 +296,9 @@ def Rect_Open_Pe_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     b = g2
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     Pe = b + 2 * y
@@ -319,9 +324,9 @@ def Rect_Open_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Rect_Open_B_ik(h_Ik, h_Ip1k, g1, g2):
+def Rect_Open_B_ik(h_ik, g1, g2):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -341,9 +346,9 @@ def Rect_Open_B_ik(h_Ik, h_Ip1k, g1, g2):
     return b
 
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Triangular_A_ik(h_Ik, h_Ip1k, g1, g2):
+def Triangular_A_ik(h_ik, g1, g2):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -360,17 +365,17 @@ def Triangular_A_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     m = g2
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     A = m * y**2
     return A
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Triangular_Pe_ik(h_Ik, h_Ip1k, g1, g2):
+def Triangular_Pe_ik(h_ik, g1, g2):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -387,9 +392,9 @@ def Triangular_Pe_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     m = g2
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     Pe = 2 * y * np.sqrt(1 + m**2)
@@ -415,9 +420,9 @@ def Triangular_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Triangular_B_ik(h_Ik, h_Ip1k, g1, g2):
+def Triangular_B_ik(h_ik, g1, g2):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -434,9 +439,9 @@ def Triangular_B_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     m = g2
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     cond = (y < y_max)
     if cond:
         B = 2 * m * y
@@ -445,9 +450,9 @@ def Triangular_B_ik(h_Ik, h_Ip1k, g1, g2):
     return B
 
 
-@njit(float64(float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64),
       cache=True)
-def Trapezoidal_A_ik(h_Ik, h_Ip1k, g1, g2, g3):
+def Trapezoidal_A_ik(h_ik, g1, g2, g3):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -467,17 +472,17 @@ def Trapezoidal_A_ik(h_Ik, h_Ip1k, g1, g2, g3):
     y_max = g1
     b = g2
     m = g3
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     A = y * (b + m * y)
     return A
 
-@njit(float64(float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64),
       cache=True)
-def Trapezoidal_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3):
+def Trapezoidal_Pe_ik(h_ik, g1, g2, g3):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -497,9 +502,9 @@ def Trapezoidal_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3):
     y_max = g1
     b = g2
     m = g3
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     if y > y_max:
         y = y_max
     Pe = b + 2 * y * np.sqrt(1 + m**2)
@@ -525,9 +530,9 @@ def Trapezoidal_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64),
       cache=True)
-def Trapezoidal_B_ik(h_Ik, h_Ip1k, g1, g2, g3):
+def Trapezoidal_B_ik(h_ik, g1, g2, g3):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -547,9 +552,9 @@ def Trapezoidal_B_ik(h_Ik, h_Ip1k, g1, g2, g3):
     y_max = g1
     b = g2
     m = g3
-    y = (h_Ik + h_Ip1k) / 2
-    if y < 0:
-        y = 0
+    y = h_ik
+    if y < MIN_DEPTH:
+        y = MIN_DEPTH
     cond = (y < y_max)
     if cond:
         B = b + 2 * m * y
@@ -559,7 +564,38 @@ def Trapezoidal_B_ik(h_Ik, h_Ip1k, g1, g2, g3):
 
 @njit(float64(float64, float64, float64, float64),
       cache=True)
-def Parabolic_A_ik(h_Ik, h_Ip1k, g1, g2):
+def Trapezoidal_dA_dh(h, g1, g2, g3):
+    h_max = g1
+    b = g2
+    m = g3
+    if h < 0:
+        h = 0
+    if h > h_max:
+        h = h_max
+    dA_dh = b + 2 * m * h
+    return dA_dh
+
+@njit(float64(float64, float64, float64, float64),
+      cache=True)
+def Trapezoidal_dPe_dh(h, g1, g2, g3):
+    h_max = g1
+    b = g2
+    m = g3
+    dPe_dh = 2 * np.sqrt(1 + m**2)
+    return dPe_dh
+
+@njit(float64(float64, float64, float64, float64),
+      cache=True)
+def Trapezoidal_dB_dh(h, g1, g2, g3):
+    h_max = g1
+    b = g2
+    m = g3
+    dB_dh = 2 * m
+    return dB_dh
+
+@njit(float64(float64, float64, float64),
+      cache=True)
+def Parabolic_A_ik(h_ik, g1, g2):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -576,7 +612,7 @@ def Parabolic_A_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     b = g2
-    y = (h_Ik + h_Ip1k) / 2
+    y = h_ik
     if y < 0:
         y = 0
     if y > y_max:
@@ -584,9 +620,9 @@ def Parabolic_A_ik(h_Ik, h_Ip1k, g1, g2):
     A = 2 * b * y / 3
     return A
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Parabolic_Pe_ik(h_Ik, h_Ip1k, g1, g2):
+def Parabolic_Pe_ik(h_ik, g1, g2):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -603,7 +639,7 @@ def Parabolic_Pe_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     b = g2
-    y = (h_Ik + h_Ip1k) / 2
+    y = h_ik
     if y <= 0:
         y = eps
     if y > y_max:
@@ -632,9 +668,9 @@ def Parabolic_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Parabolic_B_ik(h_Ik, h_Ip1k, g1, g2):
+def Parabolic_B_ik(h_ik, g1, g2):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -651,15 +687,15 @@ def Parabolic_B_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     b = g2
-    y = (h_Ik + h_Ip1k) / 2
+    y = h_ik
     if y < 0:
         y = 0
     B = b * np.sqrt(y / y_max)
     return B
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Elliptical_A_ik(h_Ik, h_Ip1k, g1, g2):
+def Elliptical_A_ik(h_ik, g1, g2):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -677,7 +713,7 @@ def Elliptical_A_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     b = g1 / 2
     a = g2 / 2
-    y = (h_Ik + h_Ip1k) / 2
+    y = h_ik
     if y < 0:
         y = 0
     if y > y_max:
@@ -708,9 +744,9 @@ def Elliptical_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Elliptical_B_ik(h_Ik, h_Ip1k, g1, g2):
+def Elliptical_B_ik(h_ik, g1, g2):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -728,7 +764,7 @@ def Elliptical_B_ik(h_Ik, h_Ip1k, g1, g2):
     y_max = g1
     b = g1 / 2
     a = g2 / 2
-    y = (h_Ik + h_Ip1k) / 2
+    y = h_ik
     if y < 0:
         y = 0
     if y > y_max:
@@ -739,9 +775,9 @@ def Elliptical_B_ik(h_Ik, h_Ip1k, g1, g2):
     return B
 
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Wide_A_ik(h_Ik, h_Ip1k, g1, g2):
+def Wide_A_ik(h_ik, g1, g2):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -758,7 +794,7 @@ def Wide_A_ik(h_Ik, h_Ip1k, g1, g2):
     """
     y_max = g1
     b = g2
-    y = (h_Ik + h_Ip1k) / 2
+    y = h_ik
     if y < 0:
         y = 0
     if y > y_max:
@@ -766,9 +802,9 @@ def Wide_A_ik(h_Ik, h_Ip1k, g1, g2):
     A = y * b
     return A
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Wide_Pe_ik(h_Ik, h_Ip1k, g1, g2):
+def Wide_Pe_ik(h_ik, g1, g2):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -807,9 +843,9 @@ def Wide_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Wide_B_ik(h_Ik, h_Ip1k, g1, g2):
+def Wide_B_ik(h_ik, g1, g2):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -828,9 +864,9 @@ def Wide_B_ik(h_Ik, h_Ip1k, g1, g2):
     b = g2
     return b
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Force_Main_A_ik(h_Ik, h_Ip1k, g1, g2):
+def Force_Main_A_ik(h_ik, g1, g2):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -850,9 +886,9 @@ def Force_Main_A_ik(h_Ik, h_Ip1k, g1, g2):
     A = np.pi * r**2
     return A
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Force_Main_Pe_ik(h_Ik, h_Ip1k, g1, g2):
+def Force_Main_Pe_ik(h_ik, g1, g2):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -891,9 +927,9 @@ def Force_Main_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64),
+@njit(float64(float64, float64, float64),
       cache=True)
-def Force_Main_B_ik(h_Ik, h_Ip1k, g1, g2):
+def Force_Main_B_ik(h_ik, g1, g2):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -913,9 +949,9 @@ def Force_Main_B_ik(h_Ik, h_Ip1k, g1, g2):
     B = pslot * d
     return B
 
-@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
       cache=True)
-def Floodplain_A_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
+def Floodplain_A_ik(h_ik, g1, g2, g3, g4, g5, g6, g7):
     """
     Compute cross-sectional area of flow for link i, superlink k.
 
@@ -950,7 +986,7 @@ def Floodplain_A_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     m_top = g4
     m_base = g5
     m_middle = g6
-    y = (h_Ik + h_Ip1k) / 2
+    y = h_ik
     if y < 0.:
         y = 0.
     if y > h_max:
@@ -980,9 +1016,9 @@ def Floodplain_A_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     return A
 
 
-@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
       cache=True)
-def Floodplain_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
+def Floodplain_Pe_ik(h_ik, g1, g2, g3, g4, g5, g6, g7):
     """
     Compute perimeter of flow for link i, superlink k.
 
@@ -1013,7 +1049,7 @@ def Floodplain_Pe_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     m_top = g4
     m_base = g5
     m_middle = g6
-    y = (h_Ik + h_Ip1k) / 2
+    y = h_ik
     if y < 0.:
         y = 0.
     if y > h_max:
@@ -1062,9 +1098,9 @@ def Floodplain_R_ik(A_ik, Pe_ik):
         R = 0
     return R
 
-@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64, float64),
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64),
       cache=True)
-def Floodplain_B_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
+def Floodplain_B_ik(h_ik, g1, g2, g3, g4, g5, g6, g7):
     """
     Compute top width of flow for link i, superlink k.
 
@@ -1095,7 +1131,7 @@ def Floodplain_B_ik(h_Ik, h_Ip1k, g1, g2, g3, g4, g5, g6, g7):
     m_top = g4
     m_base = g5
     m_middle = g6
-    y = (h_Ik + h_Ip1k) / 2
+    y = h_ik
     if y < 0:
         y = 0.
     if y > h_max:
