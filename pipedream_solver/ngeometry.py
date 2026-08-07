@@ -3,6 +3,7 @@ import scipy.interpolate
 from numba import njit
 from numba.types import float64, int64, uint32, uint16, uint8, boolean, UniTuple, Tuple, List, DictType, void
 
+STOPPING_DEPTH = 1e-3
 MIN_DEPTH = 1e-5
 
 geom_code = {
@@ -19,6 +20,24 @@ geom_code = {
 }
 
 eps = np.finfo(float).eps
+
+@njit
+def sigmoid(x, loc=0, scale=1):
+    return 1 / (1 + np.exp(-(x - loc) / scale))
+
+@njit
+def softplus(x, loc=0., scale=1., a=10.):
+    return np.log(1 + np.exp(a * scale * (x - loc))) / a
+
+@njit
+def smoothmax(x1, x2, a=10.):
+    num = x1 * np.exp(a * x1) + x2 * np.exp(a * x2)
+    den = np.exp(a * x1) + np.exp(a * x2)
+    return num / den
+
+@njit
+def smoothmin(x1, x2, a=10.):
+    return smoothmax(x1, x2, a=-a)
 
 @njit(float64(float64, float64, float64),
       cache=True)
@@ -49,7 +68,10 @@ def Circular_A_ik(h_ik, g1, g2):
     if phi > 2:
         phi = 2
     theta = np.arccos(1 - phi)
-    A = r**2 * (theta - np.cos(theta) * np.sin(theta))
+    A_main = r**2 * (theta - np.cos(theta) * np.sin(theta))
+    A_slot = max(y - r, 0.) * pslot * d
+    #A = smoothmin(A, np.pi * g1**2 / 4, a=10*g1)
+    A = A_main + A_slot
     return A
 
 @njit(float64(float64, float64, float64),
@@ -82,6 +104,8 @@ def Circular_Pe_ik(h_ik, g1, g2):
         phi = 2
     theta = np.arccos(1 - phi)
     Pe = 2 * r * theta
+    #max_Pe = np.pi * g1
+    #Pe = smoothmin(Pe, max_Pe, a=10*g1)
     return Pe
 
 @njit(float64(float64, float64),
@@ -121,27 +145,39 @@ def Circular_B_ik(h_ik, g1, g2):
     g2: float
         Width of Preissman slot (as a ratio of the diameter)
     """
+    smoothing = 10
     d = g1
     pslot = g2
     y = h_ik
-    if y < MIN_DEPTH:
-        y = MIN_DEPTH
+    y = max(y, MIN_DEPTH)
     r = d / 2
     phi = y / r
-    if phi < 0:
-        phi = 0
-    if phi > 2:
-        phi = 2
+    phi = max(min(phi, 2.), 0.)
     theta = np.arccos(1 - phi)
-    cond = (y < d)
-    if cond:
-        B = 2 * r * np.sin(theta)
-    else:
-        # TODO: Use absolute value instead of fraction?
-        B = pslot * d
-    B = max(pslot * d, B)
-    return B
-
+    B_main = 2 * r * np.sin(theta)
+    B_slot = pslot * d
+    # TODO: I don't know why this needs to be ~2x the slot width for it to match
+    return smoothmax(B_main, 2 * B_slot, a=smoothing / d)
+#    d = g1
+#    pslot = g2
+#    y = h_ik
+#    if y < MIN_DEPTH:
+#        y = MIN_DEPTH
+#    r = d / 2
+#    phi = y / r
+#    if phi < 0:
+#        phi = 0
+#    if phi > 2:
+#        phi = 2
+#    theta = np.arccos(1 - phi)
+#    cond = (y < d)
+#    if cond:
+#        B = 2 * r * np.sin(theta)
+#    else:
+#        # TODO: Use absolute value instead of fraction?
+#        B = pslot * d
+#    B = max(pslot * d, B)
+#    return B
 
 @njit(float64(float64, float64, float64),
       cache=True)
