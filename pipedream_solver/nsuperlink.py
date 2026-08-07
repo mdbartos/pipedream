@@ -575,6 +575,7 @@ class nSuperLink(SuperLink):
         _Ik = self._Ik                 # Junction index
         _Ip1k = self._Ip1k             # Index of next junction
         _h_Ik = self._h_Ik             # Depth at junction Ik
+        _h_ik = self._h_ik
         _A_ik = self._A_ik             # Flow area at link ik
         _Pe_ik = self._Pe_ik           # Hydraulic perimeter at link ik
         _R_ik = self._R_ik             # Hydraulic radius at link ik
@@ -612,6 +613,7 @@ class nSuperLink(SuperLink):
         #handle_elliptical_perimeter(_Pe_ik, _ellipse_ix, _Ik, _Ip1k, _h_Ik,
         #                            _g1_ik, _g2_ik)
         # Compute hydraulic geometries for all other regular geometries
+        # TODO: Pre-compute h_ik
         numba_hydraulic_geometry(_A_uik, _Pe_uik, _R_uik, _B_uik, _h_Ik,
                                  _g1_ik, _g2_ik, _g3_ik, _g4_ik, _g5_ik, _g6_ik, _g7_ik,
                                  _geom_codes, _Ik, _ik)
@@ -628,11 +630,13 @@ class nSuperLink(SuperLink):
                                     _transect_zs, _transect_As, _transect_Bs, _transect_Pes,
                                     _transect_Rs, _transect_codes, _transect_inds,
                                     _transect_lens, _Ip1k, _ik)
+        _h_ik[:] = (_h_Ik[_Ik] + _h_Ik[_Ip1k]) / 2
         _A_ik[:] = (_A_uik + _A_dik) / 2
         _Pe_ik[:] = (_Pe_uik + _Pe_dik) / 2
         _R_ik[:] = (_R_uik + _R_dik) / 2
         _B_ik[:] = (_B_uik + _B_dik) / 2
         # Export to instance variables
+        self._h_ik = _h_ik
         self._A_ik = _A_ik
         self._Pe_ik = _Pe_ik
         self._R_ik = _R_ik
@@ -652,6 +656,7 @@ class nSuperLink(SuperLink):
         """
         # Import instance variables
         _h_Ik = self._h_Ik             # Depth at junction Ik
+        _h_uik = self._h_uik
         _A_uk = self._A_uk             # Flow area at upstream end of superlink k
         _Pe_uk = self._Pe_uk
         _R_uk = self._R_uk
@@ -708,11 +713,13 @@ class nSuperLink(SuperLink):
                                     _is_irregular, _transect_zs, _transect_As, _transect_Bs,
                                     _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
                                     _transect_lens, _i_1k)
+        _h_uik[:] = (_h_uuk + _h_duk) / 2
         _A_uk[:] = (_A_uuk + _A_duk) / 2
         _Pe_uk[:] = (_Pe_uuk + _Pe_duk) / 2
         _R_uk[:] = (_R_uuk + _R_duk) / 2
         _B_uk[:] = (_B_uuk + _B_duk) / 2
         # Export to instance variables
+        self._h_uik = _h_uik
         self._A_uk = _A_uk
         self._Pe_uk = _Pe_uk
         self._R_uk = _R_uk
@@ -732,6 +739,7 @@ class nSuperLink(SuperLink):
         """
         # Import instance variables
         _h_Ik = self._h_Ik             # Depth at junction Ik
+        _h_dik = self._h_dik
         _A_dk = self._A_dk             # Flow area at downstream end of superlink k
         _Pe_dk = self._Pe_dk
         _R_dk = self._R_dk
@@ -789,11 +797,13 @@ class nSuperLink(SuperLink):
                                     _transect_Pes, _transect_Rs, _transect_codes, _transect_inds,
                                     _transect_lens, _i_nk)
         # Export to instance variables
+        _h_dik[:] = (_h_udk + _h_ddk) / 2
         _A_dk[:] = (_A_udk + _A_ddk) / 2
         _Pe_dk[:] = (_Pe_udk + _Pe_ddk) / 2
         _R_dk[:] = (_R_udk + _R_ddk) / 2
         _B_dk[:] = (_B_udk + _B_ddk) / 2
         # Export to instance variables
+        self._h_uik = _h_dik
         self._A_dk = _A_dk
         self._Pe_dk = _Pe_dk
         self._R_dk = _R_dk
@@ -928,6 +938,9 @@ class nSuperLink(SuperLink):
         _n_ik = self._n_ik         # Manning's roughness of link ik
         _Q_ik_prev = np.copy(self.states['Q_ik'])
         _Q_ik_next = self._Q_ik         # Flow rate at link ik
+        _h_ik = self._h_ik
+        _h_uik = self._h_uik
+        _h_dik = self._h_dik
         _A_ik = self._A_ik         # Flow area at link ik
         _R_ik = self._R_ik         # Hydraulic radius at link ik
         _S_o_ik = self._S_o_ik     # Channel bottom slope at link ik
@@ -971,7 +984,7 @@ class nSuperLink(SuperLink):
         # Compute link coefficients
         _a_ik = numba_a_ik(_u_Ik, _sigma_ik)
         _c_ik = numba_c_ik(_u_Ip1k, _sigma_ik)
-        _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik_next, _A_ik, _R_ik, _A_c_ik,
+        _b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik_next, _h_ik, _A_ik, _R_ik, _A_c_ik,
                            _C_ik, _a_ik, _c_ik, _ctrl, _sigma_ik, _Sf_method_ik, g)
         #_b_ik = numba_b_ik(_dx_ik, _dt, _n_ik, _Q_ik_next, _A_ik, _R_ik, _A_c_ik,
         #                   _C_ik, _u_ik, _ctrl, _sigma_ik, _Sf_method_ik, g)
@@ -986,7 +999,8 @@ class nSuperLink(SuperLink):
         #_c_uk = numba_c_ik(_u_Ik[_link_start], _sigma_uk)
         #_c_uk = numba_c_ik(_u_uk, _sigma_uk)
         _c_uk = numba_c_ik(_u_ik[_link_start], _sigma_uk)    # This actually seems to be more stable
-        _b_uk = numba_b_ik(_dx_uk, _dt, _n_uk, _Q_uk_next, _A_uk, _R_uk, _A_uk,
+        # TODO: _h_uk should be defined as the average, not just first link
+        _b_uk = numba_b_ik(_dx_uk, _dt, _n_uk, _Q_uk_next, _h_uik, _A_uk, _R_uk, _A_uk,
                            _C_uk, _a_uk, _c_uk, _ctrl_uk , _sigma_uk, _Sf_method_uk, g)
         #_b_uk = numba_b_ik(_dx_uk, _dt, _n_uk, _Q_uk_next, _A_uk, _R_uk, _A_uk,
         #                   _C_uk, _u_uk, _ctrl_uk , _sigma_uk, _Sf_method_uk, g)
@@ -1001,7 +1015,7 @@ class nSuperLink(SuperLink):
         #_a_dk = numba_a_ik(_u_dk, _sigma_dk)
         _a_dk = numba_a_ik(_u_ik[_link_end], _sigma_dk)    # This actually seems to be more stable
         _c_dk = np.zeros(NK, dtype=np.float64)
-        _b_dk = numba_b_ik(_dx_dk, _dt, _n_dk, _Q_dk_next, _A_dk, _R_dk, _A_dk,
+        _b_dk = numba_b_ik(_dx_dk, _dt, _n_dk, _Q_dk_next, _h_dik, _A_dk, _R_dk, _A_dk,
                            _C_dk, _a_dk, _c_dk, _ctrl_dk , _sigma_dk, _Sf_method_dk, g)
         #_b_dk = numba_b_ik(_dx_dk, _dt, _n_dk, _Q_dk_next, _A_dk, _R_dk, _A_dk,
         #                   _C_dk, _u_dk, _ctrl_dk , _sigma_dk, _Sf_method_dk, g)

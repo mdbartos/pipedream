@@ -18,6 +18,11 @@ WIDE = 8
 FORCE_MAIN = 9
 FLOODPLAIN = 10
 
+@njit
+def scaling_function(x, c, n):
+    a = c**n * (n + 1) / (n - 1)
+    return 1 + a / x**n
+
 @njit(int64(float64[:], float64[:], float64[:], float64[:], float64[:],
             float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
             int64[:], int64[:], int64[:]),
@@ -403,10 +408,10 @@ def numba_c_ik(u_Ip1k, sigma_ik):
     """
     return -np.maximum(-u_Ip1k, 0) * sigma_ik
 
-@njit(float64[:](float64[:], float64, float64[:], float64[:], float64[:], float64[:],
+@njit(float64[:](float64[:], float64, float64[:], float64[:], float64[:], float64[:], float64[:],
                  float64[:], float64[:], float64[:], float64[:], boolean[:], float64[:], int64[:], float64),
       cache=True)
-def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
+def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, h_ik, A_ik, R_ik,
                A_c_ik, C_ik, a_ik, c_ik, ctrl, sigma_ik, Sf_method_ik, g=9.81):
     """
     Compute link coefficient 'b' for link i, superlink k.
@@ -416,8 +421,9 @@ def numba_b_ik(dx_ik, dt, n_ik, Q_ik_t, A_ik, R_ik,
     t_1 = np.zeros(Q_ik_t.size)
     k = len(Sf_method_ik)
     for n in range(k):
-        t_1[n] = friction_slope(Q_ik_t[n], dx_ik[n], A_ik[n], R_ik[n],
+        S_f = friction_slope(Q_ik_t[n], dx_ik[n], A_ik[n], R_ik[n],
                                 n_ik[n], Sf_method_ik[n], g)
+        t_1[n] = S_f * scaling_function(h_ik[n], 1e-3, 2.)
     t_2 = np.zeros(ctrl.size)
     cond = ctrl
     t_2[cond] = C_ik[cond] * np.abs(Q_ik_t[cond]) / 2 / g / A_c_ik[cond]**2

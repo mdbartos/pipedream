@@ -640,6 +640,7 @@ class SuperLink():
         # Enforce minimum depth
         self._h_Ik = np.maximum(self._h_Ik, self.min_depth)
         # Computational arrays
+        self._h_ik = np.zeros(self._ik.size, dtype=np.float64)
         self._A_ik = np.zeros(self._ik.size, dtype=np.float64)
         self._Pe_ik = np.zeros(self._ik.size, dtype=np.float64)
         self._R_ik = np.zeros(self._ik.size, dtype=np.float64)
@@ -733,6 +734,9 @@ class SuperLink():
         self._Q_dk = self._Q_ik[self._i_nk]
         self._h_uk = self._h_Ik[self._I_1k]
         self._h_dk = self._h_Ik[self._I_Np1k]
+        # TODO: These should just be h_uk, h_dk
+        self._h_uik = np.zeros(self.NK)
+        self._h_dik = np.zeros(self.NK)
         # Set boundary condition in/outflows
         self._Q_bc = np.zeros(self.M, dtype=np.float64)
         # Other parameters
