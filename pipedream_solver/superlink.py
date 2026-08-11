@@ -4184,8 +4184,9 @@ class SuperLink():
 
     def _setup_step(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
              first_time=False, implicit=True, banded=False, first_iter=True):
-        if first_iter:
-            self.save_state()
+        # CHANGED: Now handling this in step
+        #if first_iter:
+        #    self.save_state()
         if dt is None:
             dt = self._dt
         else:
@@ -4307,20 +4308,14 @@ class SuperLink():
                                        head_tol=head_tol)
         if banded is None:
             banded = self.banded
-        try:
-            self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                            first_time=first_time, implicit=implicit, banded=banded,
-                            first_iter=first_iter)
-            self._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                            first_time=first_time, implicit=implicit, banded=banded,
-                            first_iter=first_iter)
-        except:
-            #self.load_state()
-            raise
-
+        self.save_state()
         first_iter = False
-        num_iter -= 1
-        self.iter_elapsed = 1
+        self.iter_elapsed = 0
+        self.H_j = np.maximum(self.H_j, self._z_inv_j + self.min_depth)
+        self.h_Ik = np.maximum(self.h_Ik, self.min_depth)
+        self._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                            first_time=first_time, implicit=implicit, banded=banded,
+                            first_iter=False)
         for _, callback in self.callbacks.items():
             callback.__on_step_end__(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
                                      first_time=first_time, implicit=implicit, banded=banded,

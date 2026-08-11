@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 from pipedream_solver._nsuperlink import numba_compute_functional_storage_volumes, numba_compute_tabular_storage_volumes
 from pipedream_solver._nsuperlink import junction_numerator, junction_denominator, superjunction_numerator, superjunction_denominator
@@ -390,53 +391,64 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
             self.learning_queue = []
             self.error_queue = []
             self.decrement_queue = []
-            self.x_new = self._compute_next_guess()
-            self.dx = self._compute_guess_difference(self.x_old, self.x_new)
-            self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
-            self.success = self._convergence_met(self.convergence_metric, self.xtol)
-            if not self.success:
-                for k in range(num_iter):
-                    # TODO: Rename this to step count
-                    self.model.iter_count -= 1
-                    self.model.t -= dt
-                    self.x_old = self._compute_prior_guess()
-                    # Enforce minimum depth
+            self.success = False
+            for k in range(num_iter):
+                # TODO: Rename this to step count
+                self.model.iter_count -= 1
+                # Get x_{k}
+                self.x_old = self._compute_prior_guess()
+                # Compute f(x_{k})
+                self.model.error_tracker._compute_error()
+                err_old = copy.deepcopy(self.model.error_tracker.errors)
+                # Compute ∇f(x_{k})
+                self.grads = self._compute_gradients(err_old)
+                err_norm_old = norm_2_squared(err_old) / 2
+                # Solve for model states x_{k+1} = x_{k} - ∇²f(x_{k}⁻¹ ∇f(x_{k})
+                self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
+                                    first_time=first_time, implicit=implicit, banded=banded,
+                                    first_iter=False)
+                # Get x_{k+1}
+                self.x_new = self._compute_next_guess()
+                # Get Δx
+                self.dx = self._compute_guess_difference(self.x_old, self.x_new)
+                # Compute newton decrement λ(x_{k}) = ∇f(x_{k}) Δx
+                newton_decrement = self._compute_newton_decrement(self.grads, self.dx)
+                # Ensure step size doesn't violate CFL condition
+                self.step_ratio = self._compute_step_ratio(self.dx)
+                self.learning_rate = self._compute_learning_rate(self.step_ratio)
+                adjusted_learning_rate = max(self.learning_rate, self.min_learning_rate)
+                # Backtracking with line search
+                for _ in range(100):
+                    # Set model states x_{k+1} = x_{k} - α ∇²f(x_{k}⁻¹ ∇f(x_{k})
+                    self._set_states(self.x_old, self.x_new, adjusted_learning_rate)
                     self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.model.min_depth)
                     self.model.h_Ik = np.maximum(self.model.h_Ik, self.model.min_depth)
+                    # Recompute nonlinear coefficients
                     self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                        first_time=first_time, implicit=implicit, banded=banded,
-                                        first_iter=False)
+                                           first_time=first_time, implicit=implicit, banded=banded,
+                                           first_iter=False)
+                    # Recompute error
                     self.model.error_tracker._compute_error()
-                    err = self.model.error_tracker.errors
-                    # TODO: Is this the correct place to compute the gradient?
-                    self.grads = self._compute_gradients(err)
-                    err_norm = norm_inf(err)
-                    #if len(self.error_queue):
-                    #    prev_err_norm = self.error_queue[-1]
-                    #    if err_norm > prev_err_norm:
-                    #        norm_highest = norm_inf_where(err)
-                    #        print(f't={self.model.t}, k={iter_elapsed}, Error increased {err_norm - prev_err_norm:e} at {norm_highest}')
-                    self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                        first_time=first_time, implicit=implicit, banded=banded,
-                                        first_iter=False)
-                    self.x_new = self._compute_next_guess()
-                    self.dx = self._compute_guess_difference(self.x_old, self.x_new)
-                    newton_decrement = self._compute_newton_decrement(self.grads, self.dx)
-                    # Ensure step size doesn't violate CFL condition
-                    self.step_ratio = self._compute_step_ratio(self.dx)
-                    self.learning_rate = self._compute_learning_rate(self.step_ratio)
-                    # Gradually reduce learning rate over time
-                    adjusted_learning_rate = max(self.learning_rate * ((num_iter - k)**2 / (num_iter)**2), self.min_learning_rate)
-                    self._set_states(self.x_old, self.x_new, adjusted_learning_rate)
-                    self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
-                    self.success = self._convergence_met(self.convergence_metric, self.xtol)
-                    self.convergence_queue.append(self.convergence_metric)
-                    self.learning_queue.append(adjusted_learning_rate)
-                    self.error_queue.append(err_norm)
-                    self.decrement_queue.append(newton_decrement)
-                    iter_elapsed += 1
-                    if self.success:
+                    err_new = copy.deepcopy(self.model.error_tracker.errors)
+                    err_norm_new = norm_2_squared(err_new) / 2
+                    if err_norm_new <= err_norm_old - 1e-4 * adjusted_learning_rate * newton_decrement:
                         break
+                    else:
+                        adjusted_learning_rate *= 0.5
+                        if adjusted_learning_rate < self.min_learning_rate:
+                            # TODO: log a warning here...
+                            break
+                self.convergence_metric = newton_decrement
+                self.success = self._convergence_met(self.convergence_metric, self.xtol)
+                self.convergence_queue.append(self.convergence_metric)
+                self.learning_queue.append(adjusted_learning_rate)
+                self.error_queue.append(err_norm_new)
+                self.decrement_queue.append(newton_decrement)
+                iter_elapsed += 1
+                if self.success:
+                    break
+                else:
+                    self.model.t -= dt
         self.model.iter_elapsed = iter_elapsed 
         # Enforce minimum depth
         self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.model.min_depth)
