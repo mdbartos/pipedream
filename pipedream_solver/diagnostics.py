@@ -2,6 +2,7 @@ import numpy as np
 from pipedream_solver._nsuperlink import numba_compute_functional_storage_volumes, numba_compute_tabular_storage_volumes
 from pipedream_solver._nsuperlink import junction_numerator, junction_denominator, superjunction_numerator, superjunction_denominator
 from pipedream_solver.callbacks import BaseCallback
+from pipedream_solver.grad import grad_Ik, grad_ik, grad_uk, grad_dk, grad_j
 from time import perf_counter
 
 from numba import njit, prange
@@ -358,6 +359,26 @@ class ConvergenceTracker(BaseCallback):
 
 class ExperimentalConvergenceTracker(ConvergenceTracker):
 
+    def _compute_gradients(self, errs):
+        bc = self.model.bc
+        # TODO: Keys don't necessarily make sense for err
+        err_Ik, err_ik, err_uk, err_dk, err_j = (errs['h_Ik'], errs['Q_ik'], errs['Q_uk'],
+                                                errs['Q_dk'], errs['H_j'])
+        g_Ik = grad_Ik(self.model, err_Ik, err_ik, err_uk, err_dk, err_j)
+        g_ik = grad_ik(self.model, err_Ik, err_ik, err_uk, err_dk, err_j)
+        g_uk = grad_uk(self.model, err_Ik, err_ik, err_uk, err_dk, err_j)
+        g_dk = grad_dk(self.model, err_Ik, err_ik, err_uk, err_dk, err_j)
+        g_j = grad_j(self.model, err_Ik, err_ik, err_uk, err_dk, err_j, bc)
+        gs = {'h_Ik' : g_Ik, 'Q_ik' : g_ik, 'Q_uk' : g_uk, 'Q_dk' : g_dk, 'H_j' : g_j}
+        return gs
+    
+    def _compute_newton_decrement(self, grads, dx):
+        assert grads.keys() == dx.keys()
+        newton_decrement = 0.
+        for k in grads.keys():
+            newton_decrement += (-grads[k] * dx[k]).sum()
+        return newton_decrement
+
     def __on_step_end__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
                         first_time=False, implicit=True, banded=None, first_iter=True,
                         num_iter=1, rtol=None, atol=None, head_tol=0.0015):
@@ -368,6 +389,7 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
             self.convergence_queue = []
             self.learning_queue = []
             self.error_queue = []
+            self.decrement_queue = []
             self.x_new = self._compute_next_guess()
             self.dx = self._compute_guess_difference(self.x_old, self.x_new)
             self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
@@ -386,6 +408,8 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                                         first_iter=False)
                     self.model.error_tracker._compute_error()
                     err = self.model.error_tracker.errors
+                    # TODO: Is this the correct place to compute the gradient?
+                    self.grads = self._compute_gradients(err)
                     err_norm = norm_inf(err)
                     #if len(self.error_queue):
                     #    prev_err_norm = self.error_queue[-1]
@@ -397,8 +421,11 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                                         first_iter=False)
                     self.x_new = self._compute_next_guess()
                     self.dx = self._compute_guess_difference(self.x_old, self.x_new)
+                    newton_decrement = self._compute_newton_decrement(self.grads, self.dx)
+                    # Ensure step size doesn't violate CFL condition
                     self.step_ratio = self._compute_step_ratio(self.dx)
                     self.learning_rate = self._compute_learning_rate(self.step_ratio)
+                    # Gradually reduce learning rate over time
                     adjusted_learning_rate = max(self.learning_rate * ((num_iter - k)**2 / (num_iter)**2), self.min_learning_rate)
                     self._set_states(self.x_old, self.x_new, adjusted_learning_rate)
                     self.convergence_metric = self._convergence_metric(self.dx, self.x_old, self.x_new)
@@ -406,6 +433,7 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                     self.convergence_queue.append(self.convergence_metric)
                     self.learning_queue.append(adjusted_learning_rate)
                     self.error_queue.append(err_norm)
+                    self.decrement_queue.append(newton_decrement)
                     iter_elapsed += 1
                     if self.success:
                         break
