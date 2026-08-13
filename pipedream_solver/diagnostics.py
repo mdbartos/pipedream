@@ -1,9 +1,9 @@
 import copy
 import numpy as np
-from pipedream_solver._nsuperlink import numba_compute_functional_storage_volumes, numba_compute_tabular_storage_volumes
+from pipedream_solver._nsuperlink import numba_compute_functional_storage_volumes, numba_compute_tabular_storage_volumes, numba_add_at
 from pipedream_solver._nsuperlink import junction_numerator, junction_denominator, superjunction_numerator, superjunction_denominator
 from pipedream_solver.callbacks import BaseCallback
-from pipedream_solver.grad import grad_Ik, grad_ik, grad_uk, grad_dk, grad_j
+from pipedream_solver.grad import grad_Ik, grad_ik, grad_uk, grad_dk, grad_j, grad_o, grad_w, grad_p
 from time import perf_counter
 
 from numba import njit, prange
@@ -15,7 +15,6 @@ class ErrorTracker(BaseCallback):
     """
     def __init__(self, model, rtol=1e-1, atol=1e-10):
         self.model = model
-        #self.errors = {}
         self.continuity_error_j = np.zeros(model.M)
         self.continuity_error_Ik = np.zeros(model._I.size)
         self.momentum_error_ik = np.zeros(model._i.size)
@@ -24,14 +23,6 @@ class ErrorTracker(BaseCallback):
         self.momentum_error_o = np.zeros(model.n_o)
         self.momentum_error_w = np.zeros(model.n_w)
         self.momentum_error_p = np.zeros(model.n_p)
-        self.continuity_magnitude_j = np.zeros(model.M)
-        self.continuity_magnitude_Ik = np.zeros(model._I.size)
-        self.momentum_magnitude_ik = np.zeros(model._i.size)
-        self.momentum_magnitude_uk = np.zeros(model.NK)
-        self.momentum_magnitude_dk = np.zeros(model.NK)
-        self.momentum_magnitude_o = np.zeros(model.n_o)
-        self.momentum_magnitude_w = np.zeros(model.n_w)
-        self.momentum_magnitude_p = np.zeros(model.n_p)
         self.rtol = rtol
         self.atol = atol
         self.active = True
@@ -50,11 +41,11 @@ class ErrorTracker(BaseCallback):
         return np.concatenate([self.continuity_error_j, self.momentum_error_uk,
                                self.momentum_error_dk, self.continuity_error_Ik,
                                self.momentum_error_ik])
-    @property
-    def magnitude(self):
-        return np.concatenate([self.continuity_magnitude_j, self.momentum_magnitude_uk,
-                               self.momentum_magnitude_dk, self.continuity_magnitude_Ik,
-                               self.momentum_magnitude_ik])
+    #@property
+    #def magnitude(self):
+    #    return np.concatenate([self.continuity_magnitude_j, self.momentum_magnitude_uk,
+    #                           self.momentum_magnitude_dk, self.continuity_magnitude_Ik,
+    #                           self.momentum_magnitude_ik])
     
     @property
     def errors(self):
@@ -62,30 +53,34 @@ class ErrorTracker(BaseCallback):
                 'Q_uk' : self.momentum_error_uk,
                 'Q_dk' : self.momentum_error_dk, 
                 'h_Ik' : self.continuity_error_Ik,
-                'Q_ik' : self.momentum_error_ik}
+                'Q_ik' : self.momentum_error_ik, 
+                'Q_o' : self.momentum_error_o,
+                'Q_w' : self.momentum_error_w,
+                'Q_p' : self.momentum_error_p}
 
-    @property
-    def error_metric(self):
-        rtol = self.rtol
-        atol = self.atol
-        dt = self.model._dt
-        e = np.abs(self.error) * dt
-        # TODO: Is maximum correct here?
-        ewt = np.maximum(rtol * np.abs(self.magnitude), atol)
-        metric = (e / ewt).max()
-        return metric
+    #@property
+    #def error_metric(self):
+    #    rtol = self.rtol
+    #    atol = self.atol
+    #    dt = self.model._dt
+    #    e = np.abs(self.error) * dt
+    #    # TODO: Is maximum correct here?
+    #    ewt = np.maximum(rtol * np.abs(self.magnitude), atol)
+    #    metric = (e / ewt).max()
+    #    return metric
 
-    @property
-    def success(self):
-        error_metric = self.error_metric
-        condition = error_metric <= 1.
-        return condition
+    #@property
+    #def success(self):
+    #    error_metric = self.error_metric
+    #    condition = error_metric <= 1.
+    #    return condition
     
     #def _record_error(self, *args, **kwargs):
     #    t = self.model.t
     #    self.errors[t] = self.error
         
     def _compute_error(self, *args, **kwargs):
+        # Sign convention: coefficient on state variable associated with equation should be positive
         model = self.model
         # TODO: This could cause problems, need to make sure this stays updated at each step
         dt = model._dt
@@ -95,30 +90,26 @@ class ErrorTracker(BaseCallback):
             self.momentum_error_ik = momentum_error_ik(model, dt)
             self.momentum_error_uk = momentum_error_uk_2(model, dt)
             self.momentum_error_dk = momentum_error_dk_2(model, dt)
+            self.momentum_error_o = momentum_error_o(model, dt)
+            self.momentum_error_w = momentum_error_w(model, dt)
+            self.momentum_error_p = momentum_error_p(model, dt)
         else:
             pass
-        #self.momentum_error_w = momentum_error_w(model, dt)
-        # Use these for tsuperlink
-        #self.momentum_error_ik = momentum_error_ik_2(model, dt)
-        #self.momentum_error_uk = momentum_error_uk_3(model, dt)
-        #self.momentum_error_dk = momentum_error_dk_3(model, dt)
-        #self.momentum_error_o = 
-        #self.momentum_error_w = 
-        #self.momentum_error_p = 
 
-    def _compute_magnitudes(self, *args, **kwargs):
-        model = self.model
-        # TODO: This dt could cause problems, need to make sure this stays updated at each step
-        dt = model._dt
-        self.continuity_magnitude_j = continuity_magnitude_j(model, dt)
-        self.continuity_magnitude_Ik = continuity_magnitude_Ik(model, dt)
-        self.momentum_magnitude_uk = momentum_magnitude_uk(model, dt)
-        self.momentum_magnitude_dk = momentum_magnitude_dk(model, dt)
-        self.momentum_magnitude_ik = momentum_magnitude_ik(model, dt)
+    #def _compute_magnitudes(self, *args, **kwargs):
+    #    model = self.model
+    #    # TODO: This dt could cause problems, need to make sure this stays updated at each step
+    #    dt = model._dt
+    #    self.continuity_magnitude_j = continuity_magnitude_j(model, dt)
+    #    self.continuity_magnitude_Ik = continuity_magnitude_Ik(model, dt)
+    #    self.momentum_magnitude_uk = momentum_magnitude_uk(model, dt)
+    #    self.momentum_magnitude_dk = momentum_magnitude_dk(model, dt)
+    #    self.momentum_magnitude_ik = momentum_magnitude_ik(model, dt)
 
     def __on_step_end__(self, *args, **kwargs):
-        self._compute_error(*args, **kwargs)
-        self._compute_magnitudes(*args, **kwargs)
+        #self._compute_error(*args, **kwargs)
+        #self._compute_magnitudes(*args, **kwargs)
+        pass
 
 
 class ConditionTracker(BaseCallback):
@@ -281,12 +272,12 @@ class ConvergenceTracker(BaseCallback):
 
     def _compute_prior_guess(self):
         state = self.model.return_state()
-        x_old = {k : v for k, v in state.items() if v.size > 0}
+        x_old = {k : v for k, v in state.items()}
         return x_old
     
     def _compute_next_guess(self):
         state = self.model.return_state()
-        x_new = {k : v for k, v in state.items() if v.size > 0}
+        x_new = {k : v for k, v in state.items()}
         return x_new
 
     def _compute_guess_difference(self, x_old, x_new):
@@ -363,14 +354,19 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
     def _compute_gradients(self, errs):
         bc = self.model.bc
         # TODO: Keys don't necessarily make sense for err
-        err_Ik, err_ik, err_uk, err_dk, err_j = (errs['h_Ik'], errs['Q_ik'], errs['Q_uk'],
-                                                errs['Q_dk'], errs['H_j'])
+        err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p = (errs['h_Ik'], errs['Q_ik'], 
+                                                                      errs['Q_uk'], errs['Q_dk'], 
+                                                                      errs['H_j'], 
+                                                                      errs['Q_o'], errs['Q_w'], errs['Q_p'])
         g_Ik = grad_Ik(self.model, err_Ik, err_ik, err_uk, err_dk, err_j)
         g_ik = grad_ik(self.model, err_Ik, err_ik, err_uk, err_dk, err_j)
         g_uk = grad_uk(self.model, err_Ik, err_ik, err_uk, err_dk, err_j)
         g_dk = grad_dk(self.model, err_Ik, err_ik, err_uk, err_dk, err_j)
-        g_j = grad_j(self.model, err_Ik, err_ik, err_uk, err_dk, err_j, bc)
-        gs = {'h_Ik' : g_Ik, 'Q_ik' : g_ik, 'Q_uk' : g_uk, 'Q_dk' : g_dk, 'H_j' : g_j}
+        g_j = grad_j(self.model, err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p, bc)
+        g_o = grad_o(self.model, err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p, bc)
+        g_w = grad_w(self.model, err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p, bc)
+        g_p = grad_p(self.model, err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p, bc)
+        gs = {'h_Ik' : g_Ik, 'Q_ik' : g_ik, 'Q_uk' : g_uk, 'Q_dk' : g_dk, 'H_j' : g_j, 'Q_o' : g_o, 'Q_w' : g_w, 'Q_p' : g_p}
         return gs
     
     def _compute_newton_decrement(self, grads, dx):
@@ -392,7 +388,8 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
             self.error_queue = []
             self.decrement_queue = []
             self.success = False
-            for k in range(num_iter):
+            #for k in range(num_iter):
+            while True:
                 # TODO: Rename this to step count
                 self.model.iter_count -= 1
                 # Get x_{k}
@@ -411,7 +408,7 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                 self.x_new = self._compute_next_guess()
                 # Get Δx
                 self.dx = self._compute_guess_difference(self.x_old, self.x_new)
-                # Compute newton decrement λ(x_{k}) = ∇f(x_{k}) Δx
+                # Compute newton decrement λ²(x_{k}) = ∇f(x_{k}) Δx
                 newton_decrement = self._compute_newton_decrement(self.grads, self.dx)
                 # Ensure step size doesn't violate CFL condition
                 self.step_ratio = self._compute_step_ratio(self.dx)
@@ -448,81 +445,127 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                 if self.success:
                     break
                 else:
-                    self.model.t -= dt
+                    if iter_elapsed < num_iter:
+                        self.model.t -= dt
+                        continue
+                    else:
+                        break
         self.model.iter_elapsed = iter_elapsed 
         # Enforce minimum depth
         self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.model.min_depth)
         self.model.h_Ik = np.maximum(self.model.h_Ik, self.model.min_depth)
 
-
-class LegacyConvergenceTracker(BaseCallback):
-    def __init__(self, model):
+class CFLTracker(BaseCallback):
+    def __init__(self, model, safety_factor=1., dt_min=1., dt_max=1800):
         self.model = model
-        self.prior_guess = 0.
-        self.next_guess = 0.
-        self.learning_rate = 0.5
-        self.min_depth = 1e-5
-
-    def _convergence_met(self, prior_guess, next_guess, head_tol=0.0015):
-        e = np.abs(next_guess - prior_guess)
-        condition = e.max() <= head_tol
-        return condition
-
-    def _compute_prior_guess(self):
-        return self.model.H_j
+        self.safety_factor = safety_factor
+        self.dt_min = dt_min
+        self.dt_max = dt_max
     
-    def _compute_next_guess(self):
-        return self.model.H_j
-
-    def _set_states(self, prior_states, next_states):
+    def cfl_timestep(self):
         model = self.model
-        alpha = self.learning_rate
-        for state_name in next_states:
-            prior_state = prior_states[state_name]
-            next_state = next_states[state_name]
-            updated_state = (1 - alpha) * prior_state + (alpha) * next_state
-            setattr(model, state_name, updated_state)
+        safety_factor = self.safety_factor
+        dt_min = self.dt_min
+        dt_max = self.dt_max
+        _dx_ik = model._dx_ik
+        _dx_uk = model._dx_uk
+        _dx_dk = model._dx_dk
+        _u_ik = model._u_ik
+        _u_uk = model._u_uk
+        _u_dk = model._u_dk
+        dt_ik = np.abs(safety_factor * _dx_ik / _u_ik).min()
+        dt_uk = np.abs(safety_factor * _dx_uk / _u_uk).min()
+        dt_dk = np.abs(safety_factor * _dx_dk / _u_dk).min()
+        dt = min(dt_ik, dt_uk, dt_dk)
+        dt = min(max(dt, dt_min), dt_max)
+        return dt
 
-    def __on_step_end__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
-                        first_time=False, implicit=True, banded=None, first_iter=True,
-                        num_iter=1, rtol=None, atol=None, head_tol=0.0015):
-        self.prior_guess = self._compute_prior_guess() 
-
-    def __on_step_end__(self, H_bc=None, Q_in=None, Q_0Ik=None, u_o=None, u_w=None, u_p=None, dt=None,
-                        first_time=False, implicit=True, banded=None, first_iter=True,
-                        num_iter=1, rtol=None, atol=None, head_tol=0.0015):
-        # Perform fixed-point iteration until convergence
-        iter_elapsed = 1
-        if (num_iter > 0):
-            self.next_guess = self._compute_next_guess()
-            convergence_met = self._convergence_met(self.prior_guess, self.next_guess, head_tol=head_tol)
-            if not convergence_met:
-                for _ in range(num_iter):
-                    # TODO: Rename this to step count
-                    self.model.iter_count -= 1
-                    self.model.t -= dt
-                    self.prior_guess = self._compute_prior_guess()
-                    self.prior_states = self.model.return_state()
-                    self.model.H_j = np.maximum(self.model.H_j, self.model._z_inv_j + self.min_depth)
-                    self.model.h_Ik = np.maximum(self.model.h_Ik, self.min_depth)
-                    try:
-                        self.model._setup_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                            first_time=first_time, implicit=implicit, banded=banded,
-                                            first_iter=False)
-                        self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
-                                            first_time=first_time, implicit=implicit, banded=banded,
-                                            first_iter=False)
-                    except:
-                        self.model.load_state()
-                        raise
-                    self.next_guess = self._compute_next_guess()
-                    self.next_states = self.model.return_state()
-                    iter_elapsed += 1
-                    convergence_met = self._convergence_met(self.prior_guess, self.next_guess, head_tol=head_tol)
-                    self._set_states(self.prior_states, self.next_states)
-                    if convergence_met:
-                        break
-        self.model.iter_elapsed = iter_elapsed 
+#class EmptyingTracker(BaseCallback):
+#    def __init__(self, model, dt_min=1., dt_max=120.):
+#        self.model = model
+#
+#    def superjunction_net_flux(self, M, _Q_uk, _Q_dk, _Q_o, _Q_w, _Q_p, _Q_in, _Q_bc,
+#                            _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp):
+#        num = np.zeros(M, dtype=np.float64)
+#        num[:] += _Q_in
+#        numba_add_at(num, _J_uk, -_Q_uk)
+#        numba_add_at(num, _J_dk, _Q_dk)
+#        numba_add_at(num, _J_uo, -_Q_o)
+#        numba_add_at(num, _J_do, _Q_o)
+#        numba_add_at(num, _J_uw, -_Q_w)
+#        numba_add_at(num, _J_dw, _Q_w)
+#        numba_add_at(num, _J_up, -_Q_p)
+#        numba_add_at(num, _J_dp, _Q_p)
+#        # TODO: Need to add Q_bc?
+#        num[:] += _Q_bc
+#        return num
+#
+#    def superjunction_volume(self, M, H_j, z_inv_j, _A_sj, _A_uk, _A_dk, _theta_uk, _theta_dk, _dx_uk, _dx_dk, _J_uk, _J_dk):
+#        num = np.zeros(M, dtype=np.float64)
+#        # TODO: generalize this for non-cylindrical geometries
+#        num[:] += _A_sj * (H_j - z_inv_j)
+#        numba_add_at(num, _J_uk, _A_uk * _dx_uk * _theta_uk / 2)
+#        numba_add_at(num, _J_dk, _A_dk * _dx_dk * _theta_dk / 2)
+#        return num
+#
+#    def junction_net_flux(self, _Q_ik, _Q_uk, _Q_dk, _Q_0Ik, _kI, 
+#                          _forward_I_i, _backward_I_i, _is_start, _is_end):
+#        N = _kI.size
+#        num = np.zeros(N, dtype=np.float64)
+#        for I in range(N):
+#            k = _kI[I]
+#            if _is_start[I]:
+#                i = _forward_I_i[I]
+#                num[I] = -_Q_ik[i] + _Q_uk[k]
+#            elif _is_end[I]:
+#                im1 = _backward_I_i[I]
+#                num[I] = -_Q_dk[k] + _Q_ik[im1]
+#            else:
+#                i = _forward_I_i[I]
+#                im1 = i - 1
+#                num[I] = -_Q_ik[i] + _Q_ik[im1]
+#            num[I] += _Q_0Ik[I]
+#        return num
+#
+#    def junction_volume(self, _A_ik, _dx_ik, _A_uk, _dx_uk, _A_dk, _dx_dk, _h_Ik, _A_SIk, 
+#                    _kI, _forward_I_i, _backward_I_i, _is_start, _is_end):
+#        N = _kI.size
+#        num = np.zeros(N, dtype=np.float64)
+#        for I in range(N):
+#            k = _kI[I]
+#            if _is_start[I]:
+#                i = _forward_I_i[I]
+#                num[I] = (_A_ik[i] * _dx_ik[i] + _A_uk[k] * _dx_uk[k]) / 2
+#            elif _is_end[I]:
+#                im1 = _backward_I_i[I]
+#                num[I] = (_A_dk[k] * _dx_dk[k] + _A_ik[im1] * _dx_ik[im1]) / 2
+#            else:
+#                i = _forward_I_i[I]
+#                im1 = i - 1
+#                num[I] = (_A_ik[i] * _dx_ik[i] + _A_ik[im1] * _dx_ik[im1]) / 2
+#            num[I] += _A_SIk[I] * _h_Ik[I]
+#        return num
+#
+#    def emptying_time(self):
+#        model = self.model
+#        flux_j = self.superjunction_net_flux(model.M, model.Q_uk, model.Q_dk, 
+#                                             model.Q_o, model.Q_w, model.Q_p, model._Q_in, model._Q_bc,
+#                                             model._J_uk, model._J_dk, model._J_uo, model._J_do, 
+#                                             model._J_uw, model._J_dw, model._J_up, model._J_dp)
+#        vol_j = self.superjunction_volume(model.M, model.H_j, model._z_inv_j, model._A_sj, 
+#                                          model._A_uk, model._A_dk, model._theta_uk, model._theta_dk, 
+#                                          model._dx_uk, model._dx_dk, model._J_uk, model._J_dk)
+#        flux_I = self.junction_net_flux(model._Q_ik, model._Q_uk, model._Q_dk, model._Q_0Ik, model._kI, 
+#                                        model.forward_I_i, model.backward_I_i, model._is_start, model._is_end)
+#        vol_I = self.junction_volume(model._A_ik, model._dx_ik, model._A_uk, model._dx_uk, model._A_dk, model._dx_dk,
+#                                     model._h_Ik, model._A_SIk, model._kI, model.forward_I_i, model.backward_I_i, 
+#                                     model._is_start, model._is_end)
+#        emptying_ratio_j = -1 / (flux_j[~model.bc] / vol_j[~model.bc])
+#        emptying_ratio_I = -1 / (flux_I / vol_I)
+#        emptying_times_j = np.where(emptying_ratio_j > 0., emptying_ratio_j, np.inf)
+#        emptying_times_I = np.where(emptying_ratio_I > 0., emptying_ratio_I, np.inf)
+#        dt = min(emptying_times_j.min(), emptying_times_I.min())
+#        return dt
 
 class PerformanceTracker(BaseCallback):
     def __init__(self, model):
@@ -540,6 +583,7 @@ class PerformanceTracker(BaseCallback):
 
     def __on_step_end__(self, *args, **kwargs):
         self.step_end_time = perf_counter()
+
 
 def continuity_error_j(model, dt):
     """
@@ -568,41 +612,44 @@ def continuity_error_j(model, dt):
     error[bc] = 0.
     return error
 
-def continuity_magnitude_j(model, dt):
-    mag = np.zeros(model.M)
-    H_j_next = model.H_j
-    H_j_prev = model.states['H_j']
-    mag += model.A_sj / dt
-    np.add.at(mag, model._J_uk, model._B_uk * model._dx_uk * model._theta_uk / 2 / dt)
-    np.add.at(mag, model._J_dk, model._B_dk * model._dx_dk * model._theta_dk / 2 / dt)
-    mag *= np.maximum(np.abs(H_j_next), np.abs(H_j_prev))
-    return mag
+#def continuity_magnitude_j(model, dt):
+#    mag = np.zeros(model.M)
+#    H_j_next = model.H_j
+#    H_j_prev = model.states['H_j']
+#    mag += model.A_sj / dt
+#    np.add.at(mag, model._J_uk, model._B_uk * model._dx_uk * model._theta_uk / 2 / dt)
+#    np.add.at(mag, model._J_dk, model._B_dk * model._dx_dk * model._theta_dk / 2 / dt)
+#    mag *= np.maximum(np.abs(H_j_next), np.abs(H_j_prev))
+#    return mag
 
-def continuity_increment_j(model, dt):
-    inc = np.zeros(model.M)
-    H_j_next = model.H_j
-    H_j_prev = model.states['H_j']
-    inc += model.A_sj / dt
-    np.add.at(inc, model._J_uk, model._B_uk * model._dx_uk * model._theta_uk / 2 / dt)
-    np.add.at(inc, model._J_dk, model._B_dk * model._dx_dk * model._theta_dk / 2 / dt)
-    inc *= (H_j_next - H_j_prev)
-    return inc
+#def continuity_increment_j(model, dt):
+#    inc = np.zeros(model.M)
+#    H_j_next = model.H_j
+#    H_j_prev = model.states['H_j']
+#    inc += model.A_sj / dt
+#    np.add.at(inc, model._J_uk, model._B_uk * model._dx_uk * model._theta_uk / 2 / dt)
+#    np.add.at(inc, model._J_dk, model._B_dk * model._dx_dk * model._theta_dk / 2 / dt)
+#    inc *= (H_j_next - H_j_prev)
+#    return inc
 
-def momentum_error_uk(model, dt):
-    error = np.zeros(model.NK)
-    g = 9.81
-    Q_uk_next = model.Q_uk
-    h_uk_next = model._h_uk
-    H_juk_next = model.H_j[model._J_uk]
-    error += g * model._A_uk * model._kappa_uk * Q_uk_next
-    error += g * model._A_uk * model._lambda_uk * H_juk_next
-    error += g * model._A_uk * model._mu_uk
-    error -= g * model._A_uk * h_uk_next
-    # Friction and local losses
-    #error += 0.
-    return error
+#def momentum_error_uk(model, dt):
+#    error = np.zeros(model.NK)
+#    g = 9.81
+#    Q_uk_next = model.Q_uk
+#    h_uk_next = model._h_uk
+#    H_juk_next = model.H_j[model._J_uk]
+#    error += g * model._A_uk * model._kappa_uk * Q_uk_next
+#    error += g * model._A_uk * model._lambda_uk * H_juk_next
+#    error += g * model._A_uk * model._mu_uk
+#    error -= g * model._A_uk * h_uk_next
+#    # Friction and local losses
+#    #error += 0.
+#    return error
 
 def momentum_error_uk_2(model, dt):
+    """
+    err = [b_uk Q_uk + c_uk Q_1k] - [P_uk + g A_uuk theta_uk H_juk - A_duk h_uk] 
+    """
     error = np.zeros(model.NK)
     g = 9.81
     Q_1k_next = model.Q_ik[model._i_1k]
@@ -621,41 +668,44 @@ def momentum_error_uk_2(model, dt):
     return error
 
 # To be used with tsuperlink
-def momentum_error_uk_3(model, dt):
-    error = np.zeros(model.NK)
-    Q_uk_next = model.Q_uk
-    h_uk_next = model._h_uk
-    H_juk_next = model.H_j[model._J_uk]
-    a_uk = model._a_uk
-    b_uk = model._b_uk
-    c_uk = model._c_uk
-    P_uk = model._P_uk
-    LHS = a_uk * H_juk_next + b_uk * Q_uk_next + c_uk * h_uk_next
-    RHS = P_uk
-    error = LHS - RHS
-    return error
+#def momentum_error_uk_3(model, dt):
+#    error = np.zeros(model.NK)
+#    Q_uk_next = model.Q_uk
+#    h_uk_next = model._h_uk
+#    H_juk_next = model.H_j[model._J_uk]
+#    a_uk = model._a_uk
+#    b_uk = model._b_uk
+#    c_uk = model._c_uk
+#    P_uk = model._P_uk
+#    LHS = a_uk * H_juk_next + b_uk * Q_uk_next + c_uk * h_uk_next
+#    RHS = P_uk
+#    error = LHS - RHS
+#    return error
 
-def momentum_magnitude_uk(model, dt):
-    Q_uk_next = model.Q_uk
-    Q_uk_prev = model.states['Q_uk']
-    mag = np.maximum(np.abs(Q_uk_next), np.abs(Q_uk_prev))
-    return mag
+#def momentum_magnitude_uk(model, dt):
+#    Q_uk_next = model.Q_uk
+#    Q_uk_prev = model.states['Q_uk']
+#    mag = np.maximum(np.abs(Q_uk_next), np.abs(Q_uk_prev))
+#    return mag
 
-def momentum_error_dk(model, dt):
-    error = np.zeros(model.NK)
-    g = 9.81
-    Q_dk_next = model.Q_dk
-    h_dk_next = model._h_dk
-    H_jdk_next = model.H_j[model._J_dk]
-    error += g * model._A_dk * model._kappa_dk * Q_dk_next
-    error += g * model._A_dk * model._lambda_dk * H_jdk_next
-    error += g * model._A_dk * model._mu_dk
-    error -= g * model._A_dk * h_dk_next
-    # Friction and local losses
-    #error += 0.
-    return error
+#def momentum_error_dk(model, dt):
+#    error = np.zeros(model.NK)
+#    g = 9.81
+#    Q_dk_next = model.Q_dk
+#    h_dk_next = model._h_dk
+#    H_jdk_next = model.H_j[model._J_dk]
+#    error += g * model._A_dk * model._kappa_dk * Q_dk_next
+#    error += g * model._A_dk * model._lambda_dk * H_jdk_next
+#    error += g * model._A_dk * model._mu_dk
+#    error -= g * model._A_dk * h_dk_next
+#    # Friction and local losses
+#    #error += 0.
+#    return error
 
 def momentum_error_dk_2(model, dt):
+    """
+    err = [b_dk Q_dk + a_dk Q_nk] - [P_dk + g A_udk h_dk - A_ddk theta_dk H_jdk] 
+    """
     error = np.zeros(model.NK)
     g = 9.81
     Q_dk_next = model.Q_dk
@@ -675,39 +725,43 @@ def momentum_error_dk_2(model, dt):
     return error
 
 # To be used with tsuperlink
-def momentum_error_dk_3(model, dt):
-    error = np.zeros(model.NK)
-    Q_dk_next = model.Q_dk
-    h_dk_next = model._h_dk
-    H_jdk_next = model.H_j[model._J_dk]
-    a_dk = model._a_dk
-    b_dk = model._b_dk
-    c_dk = model._c_dk
-    P_dk = model._P_dk
-    LHS = a_dk * h_dk_next + b_dk * Q_dk_next + c_dk * H_jdk_next
-    RHS = P_dk
-    error = LHS - RHS
-    return error
+#def momentum_error_dk_3(model, dt):
+#    error = np.zeros(model.NK)
+#    Q_dk_next = model.Q_dk
+#    h_dk_next = model._h_dk
+#    H_jdk_next = model.H_j[model._J_dk]
+#    a_dk = model._a_dk
+#    b_dk = model._b_dk
+#    c_dk = model._c_dk
+#    P_dk = model._P_dk
+#    LHS = a_dk * h_dk_next + b_dk * Q_dk_next + c_dk * H_jdk_next
+#    RHS = P_dk
+#    error = LHS - RHS
+#    return error
 
-def momentum_magnitude_dk(model, dt):
-    Q_dk_next = model.Q_dk
-    Q_dk_prev = model.states['Q_dk']
-    mag = np.maximum(np.abs(Q_dk_next), np.abs(Q_dk_prev))
-    return mag
+#def momentum_magnitude_dk(model, dt):
+#    Q_dk_next = model.Q_dk
+#    Q_dk_prev = model.states['Q_dk']
+#    mag = np.maximum(np.abs(Q_dk_next), np.abs(Q_dk_prev))
+#    return mag
 
 def momentum_error_o(model, dt):
-    error = np.zeros(model.n_o)
-    raise NotImplementedError
+    H_juo = model.H_j[model._J_uo]
+    H_jdo = model.H_j[model._J_do]
+    error = model.Q_o - model._alpha_o * H_juo - model._beta_o * H_jdo - model._chi_o
+    return error
 
 def momentum_error_w(model, dt):
     H_juw = model.H_j[model._J_uw]
     H_jdw = model.H_j[model._J_dw]
-    error = model._alpha_w * H_juw + model._beta_w * H_jdw + model._chi_w - model.Q_w
-    raise NotImplementedError
+    error = model.Q_w - model._alpha_w * H_juw - model._beta_w * H_jdw - model._chi_w
+    return error
 
 def momentum_error_p(model, dt):
-    error = np.zeros(model.n_p)
-    raise NotImplementedError
+    H_jup = model.H_j[model._J_up]
+    H_jdp = model.H_j[model._J_dp]
+    error = model.Q_p - model._alpha_p * H_jup - model._beta_p * H_jdp - model._chi_p
+    return error
 
 def continuity_error_Ik(model, dt):
     """
@@ -727,13 +781,10 @@ def continuity_error_Ik(model, dt):
     error[_I_internal] += model._Q_ik[model.forward_I_i[_I_internal]]
     return error
 
-def continuity_magnitude_Ik(model, dt):
-    h_Ik_next = model.h_Ik
-    h_Ik_prev = model.states['h_Ik']
-    mag = model._E_Ik * dt * np.maximum(np.abs(h_Ik_next), np.abs(h_Ik_prev))
-    return mag
-
 def momentum_error_ik(model, dt):
+    """
+    err = [a_ik Q_im1k + b_ik Q_ik + c_ik Q_ip1k] - [P_ik + g A_uik h_Ik - g A_dik h_Ip1k]
+    """
     error = np.zeros(model._i.size)
     _i_1k = model._i_1k
     _i_nk = model._i_nk
@@ -761,21 +812,15 @@ def momentum_error_ik(model, dt):
     return error
 
 # To be used with tsuperlink
-def momentum_error_ik_2(model, dt):
-    error = np.zeros(model._i.size)
-    Q_ik_next = model.Q_ik
-    h_Ik_next = model.h_Ik
-    error -= model._P_ik
-    error += model._a_ik * h_Ik_next[model._Ik]
-    error += model._b_ik * Q_ik_next
-    error += model._c_ik * h_Ik_next[model._Ip1k]
-    return error
-
-def momentum_magnitude_ik(model, dt):
-    Q_ik_next = model.Q_ik
-    Q_ik_prev = model.states['Q_ik']
-    mag = np.maximum(np.abs(Q_ik_next), np.abs(Q_ik_prev))
-    return mag
+#def momentum_error_ik_2(model, dt):
+#    error = np.zeros(model._i.size)
+#    Q_ik_next = model.Q_ik
+#    h_Ik_next = model.h_Ik
+#    error -= model._P_ik
+#    error += model._a_ik * h_Ik_next[model._Ik]
+#    error += model._b_ik * Q_ik_next
+#    error += model._c_ik * h_Ik_next[model._Ip1k]
+#    return error
 
 def compute_error(model, dt):
     error_j = continuity_error_j(model, dt)
@@ -784,6 +829,7 @@ def compute_error(model, dt):
     error = np.concatenate([error_j, error_Ik, error_ik])
     return error
 
+# TODO: Does this include contribution of attached superlinks?
 def volume_j(model):
     # Import instance variables
     _functional = model._functional              # Superlinks with functional area curves

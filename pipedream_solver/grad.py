@@ -58,6 +58,7 @@ def jac_prod_j(model, Ik, ik, uk, dk, j):
     jac_prod *= j
     np.add.at(jac_prod, model._J_uk, uk)
     np.subtract.at(jac_prod, model._J_dk, dk)
+    # TODO: Implement orifices, weirs, pumps
     #np.add.at(jac_prod, model._J_uo, o)
     #np.subtract.at(jac_prod, model._J_do, o)
     #np.add.at(jac_prod, model._J_uw, w)
@@ -99,10 +100,41 @@ def grad_dk(model, err_Ik, err_ik, err_uk, err_dk, err_j):
     _grad_dk[:] = (1 * err_Ik)[model._is_end] + (-1 * err_j)[model._J_dk] + (err_dk * model._b_dk) + (err_ik * model._c_ik)[model._link_end]
     return _grad_dk
 
-def grad_j(model, err_Ik, err_ik, err_uk, err_dk, err_j, bc):
+def grad_j(model, err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p, bc):
     g = 9.81
     _grad_j = np.zeros(err_j.size, dtype=np.float64)
-    np.add.at(_grad_j, model._J_uk, err_j[model._J_uk] * ((model._A_sj[model._J_uk] + model._theta_uk * model._B_uk * model._dx_uk / 2) / model._dt) + (err_uk * (-g * model._A_uk * model._theta_uk)))
-    np.add.at(_grad_j, model._J_dk, err_j[model._J_dk] * ((model._A_sj[model._J_dk] + model._theta_dk * model._B_dk * model._dx_dk / 2) / model._dt) + (err_dk * (g * model._A_dk * model._theta_dk)))
+    # TODO: Should A_sj appear multiple times?
+    # Can possibly start with A_sj / dt and then add to it?
+    # Or is the goal to differentiate all equations with respect to H_j and sum them?
+    _grad_j[:] = err_j * model._A_sj / model._dt
+    np.add.at(_grad_j, model._J_uk, err_j[model._J_uk] * ((model._theta_uk * model._B_uk * model._dx_uk / 2) / model._dt) + (err_uk * (-g * model._A_uk * model._theta_uk)))
+    np.add.at(_grad_j, model._J_dk, err_j[model._J_dk] * ((model._theta_dk * model._B_dk * model._dx_dk / 2) / model._dt) + (err_dk * (g * model._A_dk * model._theta_dk)))
+    #np.add.at(_grad_j, model._J_uk, err_j[model._J_uk] * ((model._A_sj[model._J_uk] + model._theta_uk * model._B_uk * model._dx_uk / 2) / model._dt) + (err_uk * (-g * model._A_uk * model._theta_uk)))
+    #np.add.at(_grad_j, model._J_dk, err_j[model._J_dk] * ((model._A_sj[model._J_dk] + model._theta_dk * model._B_dk * model._dx_dk / 2) / model._dt) + (err_dk * (g * model._A_dk * model._theta_dk)))
+    # Check signs on these, and check err vec used
+    np.add.at(_grad_j, model._J_uo, err_o * (-model._alpha_o))
+    np.add.at(_grad_j, model._J_do, err_o * (-model._beta_o))
+    np.add.at(_grad_j, model._J_uw, err_w * (-model._alpha_w))
+    np.add.at(_grad_j, model._J_dw, err_w * (-model._beta_w))
+    np.add.at(_grad_j, model._J_up, err_p * (-model._alpha_p))
+    np.add.at(_grad_j, model._J_dp, err_p * (-model._beta_p))
     _grad_j[bc] = err_j[bc]
     return _grad_j
+
+def grad_o(model, err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p, bc):
+    _grad_o = np.zeros(err_o.size, dtype=np.float64)
+    # TODO: Check signs on these...
+    _grad_o[:] = (1 * err_j)[model._J_uo] + (-1 * err_j)[model._J_do] + (1 * err_o)
+    return _grad_o
+
+def grad_w(model, err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p, bc):
+    _grad_w = np.zeros(err_w.size, dtype=np.float64)
+    # TODO: Check signs on these...
+    _grad_w[:] = (1 * err_j)[model._J_uw] + (-1 * err_j)[model._J_dw] + (1 * err_w)
+    return _grad_w
+
+def grad_p(model, err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p, bc):
+    _grad_p = np.zeros(err_p.size, dtype=np.float64)
+    # TODO: Check signs on these...
+    _grad_p[:] = (1 * err_j)[model._J_up] + (-1 * err_j)[model._J_dp] + (1 * err_p)
+    return _grad_p
