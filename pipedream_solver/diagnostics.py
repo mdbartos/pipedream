@@ -5,6 +5,7 @@ from pipedream_solver._nsuperlink import junction_numerator, junction_denominato
 from pipedream_solver.callbacks import BaseCallback
 from pipedream_solver.grad import grad_Ik, grad_ik, grad_uk, grad_dk, grad_j, grad_o, grad_w, grad_p
 from pipedream_solver.ngrad import numba_continuity_error_j, numba_continuity_error_Ik, numba_momentum_error_ik, numba_momentum_error_uk, numba_momentum_error_dk, numba_momentum_error_o, numba_momentum_error_w, numba_momentum_error_p
+from pipedream_solver.ngrad import numba_grad_j, numba_grad_uk, numba_grad_dk, numba_grad_Ik, numba_grad_ik, numba_grad_o, numba_grad_w, numba_grad_p
 from time import perf_counter
 
 from numba import njit, prange
@@ -438,6 +439,77 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
         gs = {'h_Ik' : g_Ik, 'Q_ik' : g_ik, 'Q_uk' : g_uk, 'Q_dk' : g_dk, 'H_j' : g_j, 'Q_o' : g_o, 'Q_w' : g_w, 'Q_p' : g_p}
         return gs
     
+    def _numba_compute_gradients(self, errs):
+        # TODO: Keys don't necessarily make sense for err
+        model = self.model
+        err_Ik, err_ik, err_uk, err_dk, err_j, err_o, err_w, err_p = (errs['h_Ik'], errs['Q_ik'], 
+                                                                      errs['Q_uk'], errs['Q_dk'], 
+                                                                      errs['H_j'], 
+                                                                      errs['Q_o'], errs['Q_w'], errs['Q_p'])
+        _dt = model._dt
+        _bc = model.bc
+        _A_sj = model._A_sj
+        _B_uk = model._B_uk
+        _B_dk = model._B_dk
+        _E_Ik = model._E_Ik
+        _a_ik = model._a_ik
+        _b_ik = model._b_ik
+        _c_ik = model._c_ik
+        _b_uk = model._b_uk
+        _c_uk = model._c_uk
+        _a_dk = model._a_dk
+        _b_dk = model._b_dk
+        _A_uik = model._A_uik
+        _A_dik = model._A_dik
+        _A_uuk = model._A_uuk
+        _A_udk = model._A_udk
+        _A_duk = model._A_duk
+        _A_ddk = model._A_ddk
+        _dx_uk = model._dx_uk
+        _dx_dk = model._dx_dk
+        _theta_uk = model._theta_uk
+        _theta_dk = model._theta_dk
+        _alpha_o = model._alpha_o
+        _beta_o = model._beta_o
+        _alpha_w = model._alpha_w
+        _beta_w = model._beta_w
+        _alpha_p = model._alpha_p
+        _beta_p = model._beta_p
+        _J_uk = model._J_uk
+        _J_dk = model._J_dk
+        _J_uo = model._J_uo
+        _J_do = model._J_do
+        _J_uw = model._J_uw
+        _J_dw = model._J_dw
+        _J_up = model._J_up
+        _J_dp = model._J_dp
+        _is_start = model._is_start
+        _is_end = model._is_end
+        _link_start = model._link_start
+        _link_end = model._link_end
+        _forward_I_i = model.forward_I_i
+        _backward_I_i = model.backward_I_i
+        _ki = model._ki
+        _kI = model._kI
+        _Im1k = model._Ik
+        _Ip1k = model._Ip1k
+        g_j = numba_grad_j(err_j, err_uk, err_dk, err_o, err_w, err_p, 
+                           _A_sj, _B_uk, _B_dk, _dx_uk, _dx_dk, _A_uuk, _A_ddk, _theta_uk, _theta_dk,
+                           _alpha_o, _beta_o, _alpha_w, _beta_w, _alpha_p, _beta_p,
+                           _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp,
+                           _bc, _dt)
+        g_uk = numba_grad_uk(err_Ik, err_ik, err_uk, err_j, _a_ik, _b_uk, _J_uk, _is_start, _link_start)
+        g_dk = numba_grad_dk(err_Ik, err_ik, err_dk, err_j, _c_ik, _b_dk, _J_dk, _is_end, _link_end)
+        g_Ik = numba_grad_Ik(err_Ik, err_ik, err_uk, err_dk, _E_Ik, _A_uik, _A_dik, _A_duk, _A_udk, 
+            _forward_I_i, _backward_I_i, _is_start, _is_end, _kI)
+        g_ik = numba_grad_ik(err_Ik, err_ik, err_uk, err_dk, _a_ik, _b_ik, _c_ik, _c_uk, _a_dk, 
+                             _link_start, _link_end, _ki, _Im1k, _Ip1k)
+        g_o = numba_grad_o(err_j, err_o, _J_uo, _J_do)
+        g_w = numba_grad_w(err_j, err_w, _J_uw, _J_dw)
+        g_p = numba_grad_p(err_j, err_p, _J_up, _J_dp)
+        gs = {'h_Ik' : g_Ik, 'Q_ik' : g_ik, 'Q_uk' : g_uk, 'Q_dk' : g_dk, 'H_j' : g_j, 'Q_o' : g_o, 'Q_w' : g_w, 'Q_p' : g_p}
+        return gs
+    
     def _compute_newton_decrement(self, grads, dx):
         assert grads.keys() == dx.keys()
         newton_decrement = 0.
@@ -467,7 +539,7 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                 self.model.error_tracker._numba_compute_error()
                 err_old = self.model.error_tracker.errors
                 # Compute ∇f(x_{k})
-                self.grads = self._compute_gradients(err_old)
+                self.grads = self._numba_compute_gradients(err_old)
                 err_norm_old = norm_2_squared(err_old) / 2
                 # Solve for model states x_{k+1} = x_{k} - ∇²f(x_{k}⁻¹ ∇f(x_{k})
                 self.model._solve_step(H_bc=H_bc, Q_in=Q_in, Q_0Ik=Q_0Ik, u_o=u_o, u_w=u_w, u_p=u_p, dt=dt,
