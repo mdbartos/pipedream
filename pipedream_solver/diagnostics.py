@@ -4,6 +4,7 @@ from pipedream_solver._nsuperlink import numba_compute_functional_storage_volume
 from pipedream_solver._nsuperlink import junction_numerator, junction_denominator, superjunction_numerator, superjunction_denominator
 from pipedream_solver.callbacks import BaseCallback
 from pipedream_solver.grad import grad_Ik, grad_ik, grad_uk, grad_dk, grad_j, grad_o, grad_w, grad_p
+from pipedream_solver.ngrad import numba_continuity_error_j, numba_continuity_error_Ik, numba_momentum_error_ik, numba_momentum_error_uk, numba_momentum_error_dk, numba_momentum_error_o, numba_momentum_error_w, numba_momentum_error_p
 from time import perf_counter
 
 from numba import njit, prange
@@ -58,23 +59,6 @@ class ErrorTracker(BaseCallback):
                 'Q_w' : self.momentum_error_w,
                 'Q_p' : self.momentum_error_p}
 
-    #@property
-    #def error_metric(self):
-    #    rtol = self.rtol
-    #    atol = self.atol
-    #    dt = self.model._dt
-    #    e = np.abs(self.error) * dt
-    #    # TODO: Is maximum correct here?
-    #    ewt = np.maximum(rtol * np.abs(self.magnitude), atol)
-    #    metric = (e / ewt).max()
-    #    return metric
-
-    #@property
-    #def success(self):
-    #    error_metric = self.error_metric
-    #    condition = error_metric <= 1.
-    #    return condition
-    
     #def _record_error(self, *args, **kwargs):
     #    t = self.model.t
     #    self.errors[t] = self.error
@@ -96,15 +80,101 @@ class ErrorTracker(BaseCallback):
         else:
             pass
 
-    #def _compute_magnitudes(self, *args, **kwargs):
-    #    model = self.model
-    #    # TODO: This dt could cause problems, need to make sure this stays updated at each step
-    #    dt = model._dt
-    #    self.continuity_magnitude_j = continuity_magnitude_j(model, dt)
-    #    self.continuity_magnitude_Ik = continuity_magnitude_Ik(model, dt)
-    #    self.momentum_magnitude_uk = momentum_magnitude_uk(model, dt)
-    #    self.momentum_magnitude_dk = momentum_magnitude_dk(model, dt)
-    #    self.momentum_magnitude_ik = momentum_magnitude_ik(model, dt)
+    def _numba_compute_error(self, *args, **kwargs):
+        # Sign convention: coefficient on state variable associated with equation should be positive
+        model = self.model
+        # TODO: This could cause problems, need to make sure this stays updated at each step
+        if self.active:
+            _dt = model._dt
+            _bc = model.bc
+            _Q_in = model._Q_in
+            _H_j_next = model.H_j
+            _H_j_prev = model.states['H_j']
+            _Q_ik = model.Q_ik
+            _h_Ik = model.h_Ik
+            _Q_uk = model.Q_uk
+            _Q_dk = model.Q_dk
+            _Q_o = model.Q_o
+            _Q_w = model.Q_w
+            _Q_p = model.Q_p
+            _A_sj = model._A_sj
+            _B_uk = model._B_uk
+            _B_dk = model._B_dk
+            _E_Ik = model._E_Ik
+            _D_Ik = model._D_Ik
+            _a_ik = model._a_ik
+            _b_ik = model._b_ik
+            _c_ik = model._c_ik
+            _P_ik = model._P_ik
+            _b_uk = model._b_uk
+            _c_uk = model._c_uk
+            _a_dk = model._a_dk
+            _b_dk = model._b_dk
+            _A_uik = model._A_uik
+            _A_dik = model._A_dik
+            _A_uuk = model._A_uuk
+            _A_udk = model._A_udk
+            _A_duk = model._A_duk
+            _A_ddk = model._A_ddk
+            _dx_uk = model._dx_uk
+            _dx_dk = model._dx_dk
+            _P_uk = model._P_uk
+            _P_dk = model._P_dk
+            _theta_uk = model._theta_uk
+            _theta_dk = model._theta_dk
+            _alpha_o = model._alpha_o
+            _beta_o = model._beta_o
+            _chi_o = model._chi_o
+            _alpha_w = model._alpha_w
+            _beta_w = model._beta_w
+            _chi_w = model._chi_w
+            _alpha_p = model._alpha_p
+            _beta_p = model._beta_p
+            _chi_p = model._chi_p
+            _J_uk = model._J_uk
+            _J_dk = model._J_dk
+            _J_uo = model._J_uo
+            _J_do = model._J_do
+            _J_uw = model._J_uw
+            _J_dw = model._J_dw
+            _J_up = model._J_up
+            _J_dp = model._J_dp
+            _is_start = model._is_start
+            _is_end = model._is_end
+            _link_start = model._link_start
+            _link_end = model._link_end
+            _forward_I_i = model.forward_I_i
+            _backward_I_i = model.backward_I_i
+            _ki = model._ki
+            _kI = model._kI
+            _i_1k = model._i_1k
+            _I_1k = model._I_1k
+            _i_nk = model._i_nk
+            _I_Np1k = model._I_Np1k
+            # Derived variables
+            _Im1k = model._Ik
+            _Ip1k = model._Ip1k
+            _h_Im1k = _h_Ik[_Im1k]
+            _h_Ip1k = _h_Ik[_Ip1k]
+            # Compute errors
+            self.continuity_error_j = numba_continuity_error_j(_H_j_next, _H_j_prev, _A_sj, 
+                                                               _Q_in, _Q_uk, _Q_dk, _Q_o, _Q_w, _Q_p,
+                                                               _J_uk, _J_dk, _J_uo, _J_do, _J_uw, _J_dw, _J_up, _J_dp, 
+                                                               _B_uk, _B_dk, _dx_uk, _dx_dk, _theta_uk, _theta_dk,
+                                                               _bc, _dt)
+            self.continuity_error_Ik = numba_continuity_error_Ik(_h_Ik, _Q_ik, _Q_uk, _Q_dk, _E_Ik, _D_Ik, 
+                                                                 _is_start, _is_end, _forward_I_i, _backward_I_i, _kI)
+            self.momentum_error_ik = numba_momentum_error_ik(_Q_ik, _h_Im1k, _h_Ip1k, _Q_uk, _Q_dk, _A_uik, _A_dik,
+                                                             _a_ik, _b_ik, _c_ik, _P_ik, _ki, _link_start, _link_end)
+            self.momentum_error_uk = numba_momentum_error_uk(_Q_uk, _Q_ik, _H_j_next, _h_Ik, _b_uk, _c_uk, _P_uk, 
+                                                             _A_uuk, _A_duk, _theta_uk, _i_1k, _I_1k, _J_uk)
+            self.momentum_error_dk = numba_momentum_error_dk(_Q_dk, _Q_ik, _H_j_next, _h_Ik, _b_dk, _a_dk, _P_dk, 
+                                                             _A_udk, _A_ddk, _theta_dk, _i_nk, _I_Np1k, _J_dk)
+            self.momentum_error_o = numba_momentum_error_o(_Q_o, _H_j_next, _alpha_o, _beta_o, _chi_o, _J_uo, _J_do)
+            self.momentum_error_w = numba_momentum_error_w(_Q_w, _H_j_next, _alpha_w, _beta_w, _chi_w, _J_uw, _J_dw)
+            self.momentum_error_p = numba_momentum_error_p(_Q_p, _H_j_next, _alpha_p, _beta_p, _chi_p, _J_up, _J_dp)
+        else:
+            pass
 
     def __on_step_end__(self, *args, **kwargs):
         #self._compute_error(*args, **kwargs)
@@ -329,7 +399,6 @@ class ConvergenceTracker(BaseCallback):
                                             first_iter=False)
                     except:
                         self.model.iter_elapsed = iter_elapsed 
-                        #self.model.load_state()
                         raise
                     self.x_new = self._compute_next_guess()
                     self.dx = self._compute_guess_difference(self.x_old, self.x_new)
@@ -395,8 +464,8 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                 # Get x_{k}
                 self.x_old = self._compute_prior_guess()
                 # Compute f(x_{k})
-                self.model.error_tracker._compute_error()
-                err_old = copy.deepcopy(self.model.error_tracker.errors)
+                self.model.error_tracker._numba_compute_error()
+                err_old = self.model.error_tracker.errors
                 # Compute ∇f(x_{k})
                 self.grads = self._compute_gradients(err_old)
                 err_norm_old = norm_2_squared(err_old) / 2
@@ -425,8 +494,8 @@ class ExperimentalConvergenceTracker(ConvergenceTracker):
                                            first_time=first_time, implicit=implicit, banded=banded,
                                            first_iter=False)
                     # Recompute error
-                    self.model.error_tracker._compute_error()
-                    err_new = copy.deepcopy(self.model.error_tracker.errors)
+                    self.model.error_tracker._numba_compute_error()
+                    err_new = self.model.error_tracker.errors
                     err_norm_new = norm_2_squared(err_new) / 2
                     if err_norm_new <= err_norm_old - 1e-4 * adjusted_learning_rate * newton_decrement:
                         break
@@ -612,26 +681,6 @@ def continuity_error_j(model, dt):
     error[bc] = 0.
     return error
 
-#def continuity_magnitude_j(model, dt):
-#    mag = np.zeros(model.M)
-#    H_j_next = model.H_j
-#    H_j_prev = model.states['H_j']
-#    mag += model.A_sj / dt
-#    np.add.at(mag, model._J_uk, model._B_uk * model._dx_uk * model._theta_uk / 2 / dt)
-#    np.add.at(mag, model._J_dk, model._B_dk * model._dx_dk * model._theta_dk / 2 / dt)
-#    mag *= np.maximum(np.abs(H_j_next), np.abs(H_j_prev))
-#    return mag
-
-#def continuity_increment_j(model, dt):
-#    inc = np.zeros(model.M)
-#    H_j_next = model.H_j
-#    H_j_prev = model.states['H_j']
-#    inc += model.A_sj / dt
-#    np.add.at(inc, model._J_uk, model._B_uk * model._dx_uk * model._theta_uk / 2 / dt)
-#    np.add.at(inc, model._J_dk, model._B_dk * model._dx_dk * model._theta_dk / 2 / dt)
-#    inc *= (H_j_next - H_j_prev)
-#    return inc
-
 #def momentum_error_uk(model, dt):
 #    error = np.zeros(model.NK)
 #    g = 9.81
@@ -681,12 +730,6 @@ def momentum_error_uk_2(model, dt):
 #    RHS = P_uk
 #    error = LHS - RHS
 #    return error
-
-#def momentum_magnitude_uk(model, dt):
-#    Q_uk_next = model.Q_uk
-#    Q_uk_prev = model.states['Q_uk']
-#    mag = np.maximum(np.abs(Q_uk_next), np.abs(Q_uk_prev))
-#    return mag
 
 #def momentum_error_dk(model, dt):
 #    error = np.zeros(model.NK)

@@ -683,6 +683,8 @@ class SuperLink():
         self._X_Ik = np.zeros(self._I.size)
         self._Y_Ik = np.zeros(self._I.size)
         self._Z_Ik = np.zeros(self._I.size)
+        # Other indexers
+        self._I_internal = (~self._I_start) & (~self._I_end)
         # Head at superjunctions
         # self._z_inv_j = self.superjunctions['z_inv'].values.astype(np.float64)
         # self.H_j = self.superjunctions['h_0'].values.astype(np.float64) + self._z_inv_j
