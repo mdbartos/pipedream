@@ -1702,8 +1702,11 @@ class SuperLink():
         _storage_factory = {}
         _storage_indices = None
         # Separate storages into functional and tabular
-        _functional = (_storage_type.str.lower() == 'functional').values
-        _tabular = (_storage_type.str.lower() == 'tabular').values
+        # np.array(...) copies: under pandas >= 3 (Copy-on-Write) .values is a
+        # read-only view, which the eagerly-compiled numba kernels (boolean[:])
+        # refuse to accept. A writable copy is accepted under pandas 2 and 3.
+        _functional = np.array((_storage_type.str.lower() == 'functional').values)
+        _tabular = np.array((_storage_type.str.lower() == 'tabular').values)
         # All entries must either be function or tabular
         assert (_tabular.sum() + _functional.sum()) == _storage_type.shape[0]
         # Configure tabular storages
