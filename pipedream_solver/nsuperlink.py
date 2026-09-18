@@ -467,8 +467,8 @@ class nSuperLink(SuperLink):
             _storage_Vs = np.concatenate([_storage_Vs[i] for i in order])
             _storage_inds = np.asarray(_storage_inds)[order]
             _storage_lens = np.asarray(_storage_lens)[order]
-            _storage_js = sj_to_storage_ind.index.values
-            _storage_codes = sj_to_storage_ind.values
+            _storage_js = np.array(sj_to_storage_ind.index.values)
+            _storage_codes = np.array(sj_to_storage_ind.values)
         # Export instance variables
         self._storage_indices = _storage_indices
         self._storage_factory = _storage_factory
