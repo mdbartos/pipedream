@@ -457,7 +457,7 @@ class SuperLink():
             assert _Sf_method.isin(Sf_map).all()
         except:
             raise ValueError('Friction method must be one of cm, hw, dw.')
-        self._Sf_method_ik = _Sf_method.map(Sf_map).astype(np.int64).values
+        self._Sf_method_ik = np.array(_Sf_method.map(Sf_map).astype(np.int64).values)
         if 'roughness' in links:
             self._n_ik = links['roughness'].values.astype(np.float64)
         else:
@@ -1050,14 +1050,14 @@ class SuperLink():
         x = np.zeros(NJ)
         z = np.zeros(NJ)
         dx = np.zeros(NL)
-        h = junctions['h_0'].values
-        Q = links['Q_0'].values
+        h = np.array(junctions['h_0'].values)
+        Q = np.array(links['Q_0'].values)
         xx = x.reshape(-1, njunctions)
         zz = z.reshape(-1, njunctions)
         dxdx = dx.reshape(-1, nlinks)
         hh = h.reshape(-1, njunctions)
         QQ = Q.reshape(-1, nlinks)
-        dx_j = superlinks['dx'].values
+        dx_j = np.array(superlinks['dx'].values)
         _z_inv_uk = self._z_inv_uk
         _z_inv_dk = self._z_inv_dk
         _dx_uk = self._dx_uk
@@ -1593,8 +1593,8 @@ class SuperLink():
         """
         # Import instance variables
         transects = self.transects          # Table of transects
-        _shape_ik = self._shape_ik          # Shape of link ik
-        _shape_o = self._shape_o
+        _shape_ik = pd.Series(self._shape_ik)   # Shape of link ik
+        _shape_o = pd.Series(self._shape_o)
         _transect_ik = self._transect_ik    # Transect associated with link ik
         _link_start = self._link_start      # Link is first link in superlink k
         _link_end = self._link_end          # Link is last link in superlink k
@@ -1630,7 +1630,7 @@ class SuperLink():
         _geom_indices = pd.Series(_regular_shapes.index,
                                   index=_regular_shapes.str.lower().values)
         for geom in _unique_geom:
-            _ik_g = _geom_indices.loc[[geom]].values
+            _ik_g = np.array(_geom_indices.loc[[geom]].values)
             _geom_factory[geom] = _ik_g
             _uk_geom_factory[geom] = _ik_g[_link_start[_ik_g]]
             _dk_geom_factory[geom] = _ik_g[_link_end[_ik_g]]
@@ -1656,7 +1656,7 @@ class SuperLink():
             _unique_geom_o = set(_shape_o.str.lower().unique())
             _geom_indices_o = pd.Series(_shape_o.index, index=_shape_o.str.lower().values)
             for geom in _unique_geom_o:
-                _o_g = _geom_indices_o.loc[[geom]].values
+                _o_g = np.array(_geom_indices_o.loc[[geom]].values)
                 _geom_factory_o[geom] = _o_g
             _geom_codes_o = np.zeros(n_o, dtype=np.int64)
             for geom, indices in _geom_factory_o.items():
@@ -1702,8 +1702,11 @@ class SuperLink():
         _storage_factory = {}
         _storage_indices = None
         # Separate storages into functional and tabular
-        _functional = (_storage_type.str.lower() == 'functional').values
-        _tabular = (_storage_type.str.lower() == 'tabular').values
+        # np.array(...) copies: under pandas >= 3 (Copy-on-Write) .values is a
+        # read-only view, which the eagerly-compiled numba kernels (boolean[:])
+        # refuse to accept. A writable copy is accepted under pandas 2 and 3.
+        _functional = np.array((_storage_type.str.lower() == 'functional').values)
+        _tabular = np.array((_storage_type.str.lower() == 'tabular').values)
         # All entries must either be function or tabular
         assert (_tabular.sum() + _functional.sum()) == _storage_type.shape[0]
         # Configure tabular storages
@@ -1762,7 +1765,7 @@ class SuperLink():
         # Compute hydraulic geometry for irregular geometries
         if _has_irregular:
             for transect_name, generator in _transect_factory.items():
-                _ik_g = _transect_indices.loc[[transect_name]].values
+                _ik_g = np.array(_transect_indices.loc[[transect_name]].values)
                 _Ik_g = _Ik[_ik_g]
                 _Ip1k_g = _Ip1k[_ik_g]
                 _h_Ik_g = _h_Ik[_Ik_g]
@@ -1825,7 +1828,7 @@ class SuperLink():
         # Compute hydraulic geometry for irregular geometries
         if _uk_has_irregular:
             for transect_name, generator in _transect_factory.items():
-                _ik_g = _uk_transect_indices.loc[[transect_name]].values
+                _ik_g = np.array(_uk_transect_indices.loc[[transect_name]].values)
                 _ki_g = _ki[_ik_g]
                 _Ik_g = _Ik[_ik_g]
                 _h_Ik_g = _h_Ik[_Ik_g]
@@ -1884,7 +1887,7 @@ class SuperLink():
         # Compute hydraulic geometry for irregular geometries
         if _dk_has_irregular:
             for transect_name, generator in _transect_factory.items():
-                _ik_g = _dk_transect_indices.loc[[transect_name]].values
+                _ik_g = np.array(_dk_transect_indices.loc[[transect_name]].values)
                 _ki_g = _ki[_ik_g]
                 _Ip1k_g = _Ip1k[_ik_g]
                 _h_Ip1k_g = _h_Ik[_Ip1k_g]
@@ -1957,7 +1960,7 @@ class SuperLink():
                                                 _storage_c[_functional])
         if _tabular.any():
             for storage_name, generator in _storage_factory.items():
-                _j_g = _storage_indices.loc[[storage_name]].values
+                _j_g = np.array(_storage_indices.loc[[storage_name]].values)
                 _A_sj[_j_g] = generator.A_sj(_h_j[_j_g])
         # Export instance variables
         self._A_sj = _A_sj
@@ -1988,7 +1991,7 @@ class SuperLink():
                                                 _storage_c[_functional])
         if _tabular.any():
             for storage_name, generator in _storage_factory.items():
-                _j_g = _storage_indices.loc[[storage_name]].values
+                _j_g = np.array(_storage_indices.loc[[storage_name]].values)
                 _V_sj[_j_g] = generator.V_sj(_h_j[_j_g])
         # Export instance variables
         self._V_sj = _V_sj
