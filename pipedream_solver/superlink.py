@@ -1593,8 +1593,8 @@ class SuperLink():
         """
         # Import instance variables
         transects = self.transects          # Table of transects
-        _shape_ik = self._shape_ik          # Shape of link ik
-        _shape_o = self._shape_o
+        _shape_ik = pd.Series(self._shape_ik)   # Shape of link ik
+        _shape_o = pd.Series(self._shape_o)
         _transect_ik = self._transect_ik    # Transect associated with link ik
         _link_start = self._link_start      # Link is first link in superlink k
         _link_end = self._link_end          # Link is last link in superlink k
